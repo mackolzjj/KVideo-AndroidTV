@@ -38,11 +38,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
+
+      # 每个 runner 都是全新环境，Gradle 会各自生成一把 ~/.android/debug.keystore，
+      # 同包名不同签名会被 Android 拒绝覆盖安装。这里缓存并固定同一把调试密钥；
+      # assembleDebug 默认就读取该文件，无需改 gradle 脚本、无需配置 Secret。
+      - name: Reuse stable debug keystore
+        uses: actions/cache@v6
+        with:
+          path: ~/.android/debug.keystore
+          key: kvideo-debug-keystore-v1
+
+      - name: Ensure stable debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -storetype JKS \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=KVideo Debug,O=KVideo,C=CN" >/dev/null 2>&1
+          fi
+          ls -l "$HOME/.android/debug.keystore"
 
       # ubuntu-latest 预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
       # 并在 sdkmanager --licenses 的交互提示处退出 1，故直接使用预装 SDK。
