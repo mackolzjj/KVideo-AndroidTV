@@ -78,7 +78,7 @@ jobs:
       - name: Resolve APK version name
         id: apk_version
         run: |
-          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n 1)"
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n 1 | tr -d '\r\n ')"
           if [ -z "$version_name" ]; then
             echo "::error::versionName not found in app/build.gradle.kts"
             exit 1
