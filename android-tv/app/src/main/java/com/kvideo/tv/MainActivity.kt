@@ -152,9 +152,11 @@ class MainActivity : ComponentActivity() {
     var made = 0;
     for (var k = 0; k < dockDefs.length; k++) {
       var def = dockDefs[k];
-      if (slot.querySelector('[data-kvideo-dock="' + def.key + '"]')) continue;
       var src = document.querySelector(def.sel);
       if (!src) continue;
+      var existing = document.querySelector('[data-kvideo-dock="' + def.key + '"]');
+      if (existing && existing.parentNode === slot) continue;
+      if (existing) existing.parentNode.removeChild(existing);
       var b = document.createElement('button');
       b.type = 'button';
       b.setAttribute('data-kvideo-dock', def.key);
