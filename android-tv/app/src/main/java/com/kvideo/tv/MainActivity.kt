@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
   var CLS = 'kvideo-chrome-hidden';
   var READY_CLS = 'kvideo-menu-ready';
   var FAIL_CLS = 'kvideo-dock-failed';
+  var NATIVE_ATTR = 'data-kvideo-native';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
 
@@ -150,8 +151,10 @@ class MainActivity : ComponentActivity() {
     BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
       'display:inline-flex;align-items:center;justify-content:center;' +
       'border-radius:999px;padding:0;margin:0;cursor:pointer;' +
-      'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
-      'background:var(--glass-bg,rgba(127,127,127,.12));' +
+      // 播放页会把 --glass-bg/--glass-border 设成透明，圆钮会退化成裸图标，
+      // 和原生按钮糊在同一行；这里固定中性底色与描边，不依赖网页变量。
+      'border:1px solid rgba(127,127,127,.34) !important;' +
+      'background:rgba(127,127,127,.14) !important;' +
       'color:var(--text-color,inherit);font:inherit;' +
       '-webkit-tap-highlight-color:transparent;' +
       'transition:transform .16s ease,border-color .16s ease,color .16s ease;}' +
@@ -185,6 +188,8 @@ class MainActivity : ComponentActivity() {
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
     prefixed('html.' + READY_CLS + ' ', [NATIVE_NAV, NATIVE_HEADER]) +
+      '{display:none !important;}' +
+    prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
       '{display:none !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
@@ -237,11 +242,48 @@ class MainActivity : ComponentActivity() {
     for (var i = 0; i < themeSels.length; i++) out.push(q(themeSels[i]));
     return out;
   }
+  function themeBg(el) {
+    try {
+      var bg = String(window.getComputedStyle(el).backgroundColor || '');
+      var p = bg.indexOf('(');
+      if (p < 0) return null;
+      var parts = bg.slice(p + 1, bg.indexOf(')', p)).split(',');
+      if (parts.length < 3) return null;
+      return { r: parseInt(parts[0], 10) || 0, g: parseInt(parts[1], 10) || 0,
+               b: parseInt(parts[2], 10) || 0,
+               a: parts.length > 3 ? (parseFloat(parts[3]) || 0) : 1 };
+    } catch (e) { return null; }
+  }
+  function isActiveTheme(el) {
+    if (!el) return false;
+    var cls = String(el.className || '');
+    if (cls.indexOf('scale-105') >= 0) return true;
+    if (el.getAttribute('aria-pressed') === 'true' ||
+        el.getAttribute('aria-current') === 'true') return true;
+    if (el.hasAttribute('data-active') || el.hasAttribute('data-selected')) return true;
+    // 不用裸 'active'：Tailwind 的 active:xxx 变体会让三个按钮全部误判
+    if (cls.indexOf('is-active') >= 0 || cls.indexOf('is-selected') >= 0 ||
+        cls.indexOf('bg-blue') >= 0 || cls.indexOf('text-blue') >= 0 ||
+        cls.indexOf('border-blue') >= 0 || cls.indexOf('bg-primary') >= 0 ||
+        cls.indexOf('text-primary') >= 0) return true;
+    return false;
+  }
   function themeIndex() {
     var nodes = themeNodes();
-    for (var i = 0; i < nodes.length; i++) {
-      if (nodes[i] && String(nodes[i].className).indexOf('scale-105') >= 0) return i;
+    var flags = [], i, c, sc, best = -1, bestScore = 0;
+    for (i = 0; i < nodes.length; i++) {
+      flags.push(isActiveTheme(nodes[i]));
+      c = themeBg(nodes[i]);
+      if (c) {
+        // 播放页用蓝色实心圆标当前档；按 alpha x 蓝色强度选，不依赖 class 命名
+        sc = c.a * Math.max(0, c.b - Math.max(c.r, c.g));
+        if (sc > bestScore) { bestScore = sc; best = i; }
+      }
     }
+    var hits = 0, only = -1;
+    for (i = 0; i < flags.length; i++) { if (flags[i]) { hits++; only = i; } }
+    if (hits === 1) return only;
+    if (bestScore > 40) return best;
     return -1;
   }
   function cycleTheme() {
@@ -314,9 +356,11 @@ class MainActivity : ComponentActivity() {
     if (!root) return;
     var b = root.querySelector('[data-kvideo-act="theme"]');
     if (!b) return;
-    var nodes = themeNodes();
+    // 原生按钮里的 svg 常带固定白色，塞进浅色圆钮会看不见；改用自带图标，
+    // 同时让 moon / monitor 真正反映当前主题档位。
     var idx = themeIndex();
-    var html = (idx >= 0 && nodes[idx]) ? nodes[idx].innerHTML : ICON.sun;
+    var icons = [ICON.sun, ICON.moon, ICON.monitor];
+    var html = icons[idx >= 0 ? idx : 0];
     if (b.innerHTML !== html) b.innerHTML = html;
   }
 
@@ -367,6 +411,38 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  // 播放页顶栏结构与首页不同：右侧控件组不一定带 flex-shrink-0，
+  // 纯 class 选择器会漏掉它们，原生主题三档、设置齿轮和注入菜单会挤在一行。
+  function pickRow(bar) {
+    var rows = bar.querySelectorAll('[class*="justify-between"]');
+    var best = null, score = -1;
+    for (var i = 0; i < rows.length; i++) {
+      var el = rows[i];
+      var r = el.getBoundingClientRect();
+      if (r.height < 16 || r.width < 100) continue;
+      var s = r.width + el.children.length * 40;
+      if (s > score) { score = s; best = el; }
+    }
+    return best || bar.querySelector('div[class*="flex"]') || bar;
+  }
+  function hideNativeControls(row, m) {
+    var kids = row.children;
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (!el || el.nodeType !== 1 || el === m ||
+          el.hasAttribute('data-kvideo-menu') || i === 0) continue;
+      var hasCtl = (el.matches && el.matches('button,a[aria-label]')) ||
+                   (el.querySelector && el.querySelector('button,a[aria-label]'));
+      if (hasCtl && !el.hasAttribute(NATIVE_ATTR)) el.setAttribute(NATIVE_ATTR, '1');
+    }
+    // 兜底：逐个隐藏行内原生按钮，包括叠在行首 logo 上的齿轮圆钮。
+    var all = row.querySelectorAll('button');
+    for (var j = 0; j < all.length; j++) {
+      if (!m.contains(all[j]) && !all[j].hasAttribute(NATIVE_ATTR)) {
+        all[j].setAttribute(NATIVE_ATTR, '1');
+      }
+    }
+  }
   function syncMenu() {
     var bar = null;
     var navs = document.querySelectorAll(NAV + ',' + HEADER);
@@ -378,10 +454,10 @@ class MainActivity : ComponentActivity() {
       }
     }
     if (!bar) { armFallback(); return; }
-    var row = bar.querySelector('[class*="justify-between"]') ||
-              bar.querySelector('div[class*="flex"]') || bar;
+    var row = pickRow(bar);
     var m = ensureRoot();
     if (m.parentNode !== row) row.appendChild(m);
+    hideNativeControls(row, m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeIcon();
@@ -431,6 +507,7 @@ class MainActivity : ComponentActivity() {
         floatsHidden: hiddenCount,
         theme: themeIndex(),
         fallback: document.documentElement.classList.contains(FAIL_CLS),
+        nativeHidden: document.querySelectorAll('[' + NATIVE_ATTR + ']').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         docked: document.querySelectorAll('[data-kvideo-menu]').length
       };
