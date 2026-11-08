@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
     private var customView: View? = null
     private var customViewCallback: CustomViewCallback? = null
     private var wasSetupVisibleBeforeFullscreen = false
+    private var viewsReady = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +74,7 @@ class MainActivity : ComponentActivity() {
         openButton = findViewById(R.id.open_button)
         saveButton = findViewById(R.id.save_button)
         settingsButton = findViewById(R.id.settings_button)
+        viewsReady = true
         settingsButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
         }
@@ -144,7 +146,7 @@ class MainActivity : ComponentActivity() {
                     fullscreenContainer.visibility = View.VISIBLE
                     webView.visibility = View.GONE
                     setupContainer.visibility = View.GONE
-                    settingsButton.visibility = View.GONE
+                    updateSettingsButton()
                     requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     applySystemBars(true)
                 }
@@ -185,6 +187,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * Manifest 声明了 configChanges="orientation|..."，旋转不会重建 Activity，
+     * 因此齿轮的显隐必须在这里同步。手机横屏几乎就是在看视频：底部整条都是
+     * 播放控制区，右下角按钮既挡全屏/倍速/进度条，右手握持又容易误触。
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (viewsReady) {
+            updateSettingsButton()
+            applySystemBars(customView != null)
+        }
     }
 
     override fun onResume() {
@@ -230,7 +245,7 @@ class MainActivity : ComponentActivity() {
 
     private fun loadConfiguredUrl(url: String) {
         setupContainer.visibility = View.GONE
-        settingsButton.visibility = View.VISIBLE
+        updateSettingsButton()
         statusText.text = getString(R.string.status_ready)
         webView.loadUrl(url)
     }
@@ -256,7 +271,7 @@ class MainActivity : ComponentActivity() {
 
         statusText.text = message
         setupContainer.visibility = View.VISIBLE
-        settingsButton.visibility = View.GONE
+        updateSettingsButton()
         urlInput.requestFocus()
     }
 
@@ -271,6 +286,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isSetupVisible(): Boolean = setupContainer.visibility == View.VISIBLE
+
+    /**
+     * 齿轮只在「竖屏 + 网页可见 + 未进入全屏播放 + 非设置页」时出现。
+     * 横屏一律隐藏，避免压住播放控制条；转回竖屏会自动恢复。
+     * 横屏下仍可用返回键（或外接键盘菜单键）回到设置页。
+     */
+    private fun shouldShowSettingsButton(): Boolean =
+        viewsReady &&
+            !isSetupVisible() &&
+            customView == null &&
+            webView.visibility == View.VISIBLE &&
+            resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+
+    private fun updateSettingsButton() {
+        settingsButton.visibility =
+            if (shouldShowSettingsButton()) View.VISIBLE else View.GONE
+    }
 
     private fun normalizeUrl(rawUrl: String): String {
         val trimmed = rawUrl.trim()
@@ -331,7 +363,7 @@ class MainActivity : ComponentActivity() {
         if (restoreSetup) {
             setupContainer.visibility = View.VISIBLE
         }
-        settingsButton.visibility = if (restoreSetup) View.GONE else View.VISIBLE
+        updateSettingsButton()
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
         wasSetupVisibleBeforeFullscreen = false

@@ -9,10 +9,12 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- 手机端：右下角悬浮操作按钮（FAB 习惯）。
+    <!-- 手机端：竖屏右下角悬浮操作按钮（FAB 习惯）。
          放在 bottom|end 而非 top|end，避免压住 KVideo 网页自带的顶部图标工具条。
-         48dp 触摸目标 + 点击水波纹 + contentDescription；网页显示时才出现，
-         全屏播放与设置页均由 MainActivity 隐藏。 -->
+         横屏（基本是看视频）由 MainActivity 自动隐藏：底栏左右两侧都可能是
+         播放控制（左侧播放/进度条起点、右侧全屏/倍速），挪到左下角仍会挡；
+         转回竖屏自动恢复。48dp 触摸目标 + 点击水波纹 + contentDescription；
+         全屏播放与设置页同样隐藏。 -->
     <ImageButton
         android:id="@+id/settings_button"
         android:layout_width="48dp"
