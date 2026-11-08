@@ -56,9 +56,13 @@ class MainActivity : ComponentActivity() {
          *    在顶部条右侧注入一个观看历史代理圆钮，点击转发给原按钮的 click()；
          *    停靠成功后才隐藏原悬浮圆钮，顶部条消失时自动回落，功能不会丢。
          *    不搬动 React 管理的节点，避免重排时 removeChild 报错。
-         * 4. 代理按钮是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复。
+         * 4. 代理按钮直接复制同排原生圆钮（「设置」或「我的收藏」）的 className，
+         *    尺寸、圆框、玻璃底、hover 与它们完全一致；插在「设置」之后、主题
+         *    切换胶囊之前，由父级 gap 统一间距。拿不到原生样式时用 32px 兜底，
+         *    图标统一 18px（宽屏 20px），不再出现没框、偏小、贴最右的孤立图标。
+         * 5. 代理按钮是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复。
          *    fixed 悬浮钮带 inline 坐标，用 opacity 隐藏而不用 transform 位移。
-         * 5. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
+         * 6. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
          *    视口高；MutationObserver 用「节流立即扫 + 尾部补扫」避免高频 DOM
          *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
          */
@@ -90,6 +94,13 @@ class MainActivity : ComponentActivity() {
   ];
   var floats = favorites.concat(history);
   var dockSel = 'button[' + DOCK_ATTR + ']';
+  // 同排原生圆钮：优先「设置」，其次「我的收藏」，用于复制尺寸与玻璃圆框样式
+  var refSels = [
+    'a[aria-label="设置"]',
+    'a[aria-label="我的收藏"]',
+    'button[aria-label="设置"]',
+    'button[aria-label="我的收藏"]'
+  ];
   function prefixed(prefix, list) {
     var out = [];
     for (var i = 0; i < list.length; i++) out.push(prefix + list[i]);
@@ -105,19 +116,19 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + '{display:none !important;}' +
     prefixed('html.' + DOCK_CLS + ' ', history) + '{display:none !important;}' +
     dockSel + '{' +
-      'width:30px;height:30px;flex:0 0 auto;' +
-      'display:inline-flex;align-items:center;justify-content:center;' +
-      'padding:0;margin:0;border-radius:999px;cursor:pointer;' +
+      'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;' +
+      'padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;' +
+    '}' +
+    // 尺寸、圆框、底色、hover 由复制来的原生 class 决定；只有找不到参考圆钮
+    // 时才用这套贴近 w-8 h-8 的兜底，避免再出现没框又偏小的孤立图标。
+    dockSel + '.kvideo-dock-fallback{' +
+      'width:32px;height:32px;border-radius:999px;' +
       'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
       'background:var(--glass-bg,rgba(127,127,127,.12));' +
       'color:var(--text-color,inherit);' +
-      '-webkit-tap-highlight-color:transparent;' +
     '}' +
-    dockSel + ' svg{width:16px;height:16px;}' +
-    '@media (max-width:420px){' +
-      dockSel + '{width:27px;height:27px;}' +
-      dockSel + ' svg{width:15px;height:15px;}' +
-    '}';
+    dockSel + ' svg{width:18px;height:18px;flex:0 0 auto;}' +
+    '@media (min-width:640px){' + dockSel + ' svg{width:20px;height:20px;}}';
   (document.head || document.documentElement).appendChild(style);
 
   function mark() {
@@ -152,13 +163,37 @@ class MainActivity : ComponentActivity() {
     var src = document.querySelector(history[0]);
     if (!bar || !src) {
       document.documentElement.classList.remove(DOCK_CLS);
+      var orphan = document.querySelector(dockSel);
+      if (orphan && (!orphan.closest || !orphan.closest('nav,header'))) {
+        orphan.parentNode.removeChild(orphan);
+      }
       return;
     }
     var row = bar.querySelector('[class*="justify-between"]');
     var slot = row ? row.lastElementChild : null;
     if (!slot || !slot.appendChild) slot = bar.querySelector('[class*="flex"]') || bar;
+
+    // styleRef 提供原生圆钮 class；anchor 决定插在「设置」之后、主题胶囊之前
+    var styleRef = null, anchor = null;
+    for (var k = 0; k < refSels.length; k++) {
+      var cand = slot.querySelector(refSels[k]) || bar.querySelector(refSels[k]);
+      if (!cand) continue;
+      if (!styleRef) styleRef = cand;
+      if (!anchor && cand.parentNode === slot) anchor = cand;
+      if (styleRef && anchor) break;
+    }
+
     var existing = document.querySelector(dockSel);
     if (existing && existing.parentNode === slot) {
+      if (styleRef && existing.className !== styleRef.className) {
+        existing.className = styleRef.className;
+      }
+      // 只在位置不对时搬运，避免 MutationObserver 反复触发 childList 变更
+      if (anchor) {
+        if (anchor.nextSibling !== existing) slot.insertBefore(existing, anchor.nextSibling);
+      } else if (existing !== slot.lastElementChild) {
+        slot.appendChild(existing);
+      }
       document.documentElement.classList.add(DOCK_CLS);
       return;
     }
@@ -168,6 +203,7 @@ class MainActivity : ComponentActivity() {
     b.setAttribute(DOCK_ATTR, '1');
     b.setAttribute('aria-label', '观看历史');
     b.title = '观看历史';
+    b.className = styleRef ? styleRef.className : 'kvideo-dock-fallback';
     b.innerHTML = src.innerHTML;
     b.addEventListener('click', function (ev) {
       ev.preventDefault();
@@ -175,7 +211,8 @@ class MainActivity : ComponentActivity() {
       var target = document.querySelector(history[0]);
       if (target) target.click();
     });
-    slot.appendChild(b);
+    if (anchor) slot.insertBefore(b, anchor.nextSibling);
+    else slot.appendChild(b);
     document.documentElement.classList.add(DOCK_CLS);
   }
 
@@ -208,6 +245,8 @@ class MainActivity : ComponentActivity() {
                marked: document.querySelectorAll('[' + ATTR + ']').length,
                matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length,
                floats: document.querySelectorAll(floats.join(',')).length,
+               dockRef: document.querySelectorAll(
+                 'a[aria-label="设置"],a[aria-label="我的收藏"]').length,
                docked: document.querySelectorAll(dockSel).length };
     }
   };
