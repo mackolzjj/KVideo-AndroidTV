@@ -47,24 +47,28 @@ class MainActivity : ComponentActivity() {
         private const val SWIPE_THRESHOLD_DP = 48f
 
         /**
-         * 注入到网页：统一控制贴顶 sticky 导航条与「观看历史」悬浮圆钮。
+         * 注入到网页：统一控制贴顶 sticky 导航条、悬浮圆钮与观看历史入口。
          * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中顶部条，Next.js 客户端
          *    渲染、SPA 换页、React 重建节点都能立刻生效，不依赖注入时机。
          * 2. 顶部条原生已有「我的收藏」Heart 入口（/favorites），所以同名的
          *    「打开收藏夹」悬浮圆钮是重复入口，常驻 display:none 隐藏。
-         * 3. 观看历史没有其它入口（/history 不存在、收藏页无历史 tab），保留
-         *    它的悬浮圆钮，但纳入手势：上滑随顶部条一起收起、下滑恢复。
-         *    fixed 元素带 inline 坐标，用 opacity 隐藏而不用 transform 位移。
-         * 4. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
-         *    视口高，容纳状态栏留白、safe-area 与外层 padding。
-         * 5. MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
-         *    唯一的 debounce 无限推迟。sticky 元素仍占位，内容不会突然跳动。
+         * 3. 观看历史没有其它入口（/history 不存在、收藏页无历史 tab）。dock()
+         *    在顶部条右侧注入一个观看历史代理圆钮，点击转发给原按钮的 click()；
+         *    停靠成功后才隐藏原悬浮圆钮，顶部条消失时自动回落，功能不会丢。
+         *    不搬动 React 管理的节点，避免重排时 removeChild 报错。
+         * 4. 代理按钮是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复。
+         *    fixed 悬浮钮带 inline 坐标，用 opacity 隐藏而不用 transform 位移。
+         * 5. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
+         *    视口高；MutationObserver 用「节流立即扫 + 尾部补扫」避免高频 DOM
+         *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
   var ATTR = 'data-kvideo-topbar';
   var CLS = 'kvideo-chrome-hidden';
+  var DOCK_CLS = 'kvideo-history-docked';
+  var DOCK_ATTR = 'data-kvideo-history-dock';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
   var HIDE_FLOAT = 'opacity:0 !important;pointer-events:none !important;';
@@ -79,12 +83,13 @@ class MainActivity : ComponentActivity() {
     'button[aria-label="打开收藏夹"]',
     'button[title*="拖动可调整位置"][title*="收藏"]'
   ];
-  // 观看历史没有其它入口，保留它并纳入同一套手势
+  // 观看历史没有其它入口，停靠成功后才隐藏原悬浮圆钮
   var history = [
     'button[aria-label="打开观看历史"]',
     'button[title*="拖动可调整位置"][title*="历史"]'
   ];
   var floats = favorites.concat(history);
+  var dockSel = 'button[' + DOCK_ATTR + ']';
   function prefixed(prefix, list) {
     var out = [];
     for (var i = 0; i < list.length; i++) out.push(prefix + list[i]);
@@ -97,7 +102,22 @@ class MainActivity : ComponentActivity() {
       '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
     prefixed('html.' + CLS + ' ', history) + '{' + HIDE_FLOAT + '}' +
-    favorites.join(',') + '{display:none !important;}';
+    favorites.join(',') + '{display:none !important;}' +
+    prefixed('html.' + DOCK_CLS + ' ', history) + '{display:none !important;}' +
+    dockSel + '{' +
+      'width:30px;height:30px;flex:0 0 auto;' +
+      'display:inline-flex;align-items:center;justify-content:center;' +
+      'padding:0;margin:0;border-radius:999px;cursor:pointer;' +
+      'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
+      'background:var(--glass-bg,rgba(127,127,127,.12));' +
+      'color:var(--text-color,inherit);' +
+      '-webkit-tap-highlight-color:transparent;' +
+    '}' +
+    dockSel + ' svg{width:16px;height:16px;}' +
+    '@media (max-width:420px){' +
+      dockSel + '{width:27px;height:27px;}' +
+      dockSel + ' svg{width:15px;height:15px;}' +
+    '}';
   (document.head || document.documentElement).appendChild(style);
 
   function mark() {
@@ -119,13 +139,55 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  function dock() {
+    var bar = null;
+    var navs = document.querySelectorAll(sels[1] + ',' + sels[2]);
+    for (var i = 0; i < navs.length; i++) {
+      var r = navs[i].getBoundingClientRect();
+      if (r.width > 100 && r.height > 20 && r.top < 200 && r.bottom > 0) {
+        bar = navs[i];
+        break;
+      }
+    }
+    var src = document.querySelector(history[0]);
+    if (!bar || !src) {
+      document.documentElement.classList.remove(DOCK_CLS);
+      return;
+    }
+    var row = bar.querySelector('[class*="justify-between"]');
+    var slot = row ? row.lastElementChild : null;
+    if (!slot || !slot.appendChild) slot = bar.querySelector('[class*="flex"]') || bar;
+    var existing = document.querySelector(dockSel);
+    if (existing && existing.parentNode === slot) {
+      document.documentElement.classList.add(DOCK_CLS);
+      return;
+    }
+    if (existing) existing.parentNode.removeChild(existing);
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute(DOCK_ATTR, '1');
+    b.setAttribute('aria-label', '观看历史');
+    b.title = '观看历史';
+    b.innerHTML = src.innerHTML;
+    b.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      var target = document.querySelector(history[0]);
+      if (target) target.click();
+    });
+    slot.appendChild(b);
+    document.documentElement.classList.add(DOCK_CLS);
+  }
+
   var lastRun = 0;
   var tail = null;
   function schedule() {
     var now = Date.now();
-    if (now - lastRun >= 120) { lastRun = now; mark(); }
+    if (now - lastRun >= 120) { lastRun = now; mark(); dock(); }
     if (tail) clearTimeout(tail);
-    tail = setTimeout(function () { tail = null; lastRun = Date.now(); mark(); }, 200);
+    tail = setTimeout(function () {
+      tail = null; lastRun = Date.now(); mark(); dock();
+    }, 200);
   }
 
   var hidden = false;
@@ -134,20 +196,24 @@ class MainActivity : ComponentActivity() {
       hidden = !!v;
       document.documentElement.classList.toggle(CLS, hidden);
       mark();
+      dock();
     },
     sync: function () {
       document.documentElement.classList.toggle(CLS, hidden);
       mark();
+      dock();
     },
     debug: function () {
       return { hidden: hidden,
                marked: document.querySelectorAll('[' + ATTR + ']').length,
                matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length,
-               floats: document.querySelectorAll(floats.join(',')).length };
+               floats: document.querySelectorAll(floats.join(',')).length,
+               docked: document.querySelectorAll(dockSel).length };
     }
   };
 
   mark();
+  dock();
   new MutationObserver(function () { schedule(); })
     .observe(document.documentElement, { childList: true, subtree: true });
 })();
