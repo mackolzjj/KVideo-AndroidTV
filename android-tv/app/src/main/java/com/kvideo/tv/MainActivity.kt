@@ -70,14 +70,15 @@ class MainActivity : ComponentActivity() {
          *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
          * 8. 窄屏（<=520px）紧凑排版：上游左侧 logo 组是 min-w-0、右侧按钮组
          *    是 flex-shrink-0，直播入口按账号权限回来再叠加两个代理圆钮后，
-         *    右侧会向左溢出压住 logo。这里统一把圆钮收到 28px、svg 收到 16px、
-         *    间距收到 4px，并隐藏已被 truncate 得看不见的站点标题。
+         *    右侧会向左溢出压住 logo。这里不再写死圆钮尺寸，交回上游原生的
+         *    w-8 h-8（32px），只把图标放大到 20px、间距收到 3px，并隐藏已被
+         *    truncate 得看不见的站点标题；<=380px 的超窄屏回落到 28px/18px。
          * 9. 壳层右下角 FAB 的功能是设置 App 连接的服务器地址，与网页自带的
          *    「设置 ⚙」(/settings) 不同。这里同样停靠一个代理按钮到顶部条，
          *    并按功能生成链环/连接图标（lucide Link）以免两个齿轮混淆；点击经
-         *    KVideoAndroid.openAppSettings() 打开壳层设置页。代理在位时通过
-         *    setAppSettingsDocked(true) 让右下角 FAB 让位，顶部条缺失或代理被
-         *    移除时回落显示，保证设置入口不丢。
+         *    KVideoAndroid.openAppSettings() 打开壳层设置页。右下角 FAB 默认
+         *    隐藏，不再随 dock() 的中间态来回闪；只有 1.5s 内两个代理按钮都
+         *    插不上（如网页加载失败、顶部条不存在）才回落显示，保证入口不丢。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
@@ -144,22 +145,30 @@ class MainActivity : ComponentActivity() {
 
   // 窄屏一行塞不下：上游左侧 logo 组是 min-w-0，右侧按钮组是 flex-shrink-0。
   // 直播入口按账号权限回来后，再叠加两个代理圆钮，右侧会向左溢出，
-  // 把「直播」圆框压到紫色 logo 上。这里统一把圆钮收到 28px、间距收到 4px，
-  // 并隐藏已被 truncate 得看不见的站点标题，整行等比变紧凑而不是互相重叠。
+  // 把「直播」圆框压到紫色 logo 上。上游圆钮本来就是 w-8 h-8（32px），
+  // 上一版强行压到 28px 只为省空间，代价是整排图标偏小。现在不再覆盖圆钮
+  // 尺寸，只放大内部 svg、收紧 gap 并隐藏看不见的站点标题：按钮仍由上游
+  // class 统一控制，图标明显变大，整行宽度也不比 28px 版本多出多少。
   var ROW = NAV + ' div[class*="justify-between"]';
   var RIGHT = ROW + ' > div[class*="flex-shrink-0"]';
+  var ROUND = RIGHT + ' a[aria-label],' +
+              RIGHT + ' button[aria-label],' +
+              prefixed(NAV + ' ', dockSels);
+  var ROUND_ICON = RIGHT + ' svg,' + dockIconSel;
   var COMPACT =
     '@media (max-width:520px){' +
-      ROW + '{gap:4px !important;}' +
+      ROW + '{gap:3px !important;}' +
       ROW + ' > a h1{display:none !important;}' +
-      RIGHT + '{gap:4px !important;min-width:0;flex-shrink:1 !important;}' +
-      RIGHT + ' a[aria-label],' +
-      RIGHT + ' button[aria-label],' +
-      prefixed(NAV + ' ', dockSels) + '{' +
-        'width:28px !important;height:28px !important;' +
-        'min-width:28px;min-height:28px;flex:0 0 auto;}' +
+      RIGHT + '{gap:3px !important;min-width:0;flex-shrink:1 !important;}' +
       RIGHT + ' > div{gap:2px !important;}' +
-      RIGHT + ' svg{width:16px !important;height:16px !important;}' +
+      ROUND_ICON + '{width:20px !important;height:20px !important;}' +
+    '}' +
+    '@media (max-width:380px){' +
+      ROUND + '{' +
+        'width:28px !important;height:28px !important;' +
+        'min-width:28px;min-height:28px;}' +
+      ROUND_ICON + '{width:18px !important;height:18px !important;}' +
+      RIGHT + '{gap:2px !important;}' +
     '}';
 
   var style = document.createElement('style');
@@ -184,8 +193,8 @@ class MainActivity : ComponentActivity() {
       'background:var(--glass-bg,rgba(127,127,127,.12));' +
       'color:var(--text-color,inherit);' +
     '}' +
-    dockIconSel + '{width:18px;height:18px;flex:0 0 auto;}' +
-    '@media (min-width:640px){' + dockIconSel + '{width:20px;height:20px;}}' +
+    dockIconSel + '{width:20px;height:20px;flex:0 0 auto;}' +
+    '@media (min-width:640px){' + dockIconSel + '{width:22px;height:22px;}}' +
     COMPACT;
   (document.head || document.documentElement).appendChild(style);
 
@@ -194,17 +203,20 @@ class MainActivity : ComponentActivity() {
     if (failTimer) return;
     failTimer = setTimeout(function () {
       failTimer = null;
-      if (!document.querySelector(histSel)) {
+      if (!document.querySelector(appSel) && !document.querySelector(histSel)) {
         document.documentElement.classList.add(FAIL_CLS);
+        notifyAppDock(false);
       }
     }, 1500);
   }
   function disarmFallback() {
     if (failTimer) { clearTimeout(failTimer); failTimer = null; }
     document.documentElement.classList.remove(FAIL_CLS);
+    notifyAppDock(true);
   }
 
-  // 顶部条代理按钮在位时通知壳层隐藏右下角 FAB；状态变化才通知，避免抖动。
+  // 右下角 FAB 默认隐藏。只在「确实插不上代理按钮」时才通知壳层恢复它，
+  // 不再让 SPA 换页时顶部条的瞬时缺失把 FAB 放回来；通知失败允许下次重试。
   var lastDockState = null;
   function notifyAppDock(ok) {
     if (lastDockState === ok) return;
@@ -212,7 +224,7 @@ class MainActivity : ComponentActivity() {
     try {
       var bridge = window.KVideoAndroid;
       if (bridge && bridge.setAppSettingsDocked) bridge.setAppSettingsDocked(ok);
-    } catch (e) {}
+    } catch (e) { lastDockState = null; }
   }
 
   function mark() {
@@ -296,9 +308,8 @@ class MainActivity : ComponentActivity() {
       }
     }
     if (!bar) {
-      // 页面切换的中间态常见，不要立刻恢复悬浮钮；交给兜底计时器判断。
+      // 页面切换的中间态常见，不要立刻恢复悬浮钮或 FAB；交给兜底计时器判断。
       armFallback();
-      notifyAppDock(false);
       var orphans = document.querySelectorAll(anyDockSel);
       for (var j = 0; j < orphans.length; j++) {
         var orphan = orphans[j];
@@ -338,7 +349,6 @@ class MainActivity : ComponentActivity() {
 
     if (hist) disarmFallback();
     else armFallback();
-    notifyAppDock(!!app);
   }
 
   var lastRun = 0;
@@ -407,8 +417,8 @@ class MainActivity : ComponentActivity() {
     private var wasSetupVisibleBeforeFullscreen = false
     private var viewsReady = false
     private var chromeHiddenByGesture = false
-    // 顶部条已停靠「应用设置」代理按钮时，右下角 FAB 让位；代理消失则自动回落
-    private var appSettingsDocked = false
+    // 右下角 FAB 默认隐藏；只有页面顶部条持续渲染不出来时才回落显示
+    private var appSettingsDocked = true
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
@@ -656,7 +666,7 @@ class MainActivity : ComponentActivity() {
     /**
      * 手机习惯：像浏览器地址栏，上滑内容时一起收起「网页顶部工具条」，下滑再展开。
      * 显隐只由手势决定，不跟随横竖屏或播放画面；全屏播放与设置页仍强制隐藏。
-     * 右下角 FAB 只在顶部条的「应用设置」代理按钮没插上时才作为回落入口显示。
+     * 右下角 FAB 默认隐藏，只在网页顶部条渲染失败时才作为回落入口显示。
      */
     private fun shouldShowSettingsButton(): Boolean =
         viewsReady &&
@@ -839,7 +849,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class AndroidPlayerBridge {
-        /** 顶部条代理按钮插上后隐藏右下角 FAB；页面/顶部条异常时恢复，入口不丢。 */
+        /** 顶部条代理按钮在位时隐藏右下角 FAB；持续插不上时恢复，入口不丢。 */
         @JavascriptInterface
         fun setAppSettingsDocked(docked: Boolean) {
             runOnUiThread {
