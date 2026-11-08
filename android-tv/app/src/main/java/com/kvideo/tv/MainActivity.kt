@@ -47,15 +47,16 @@ class MainActivity : ComponentActivity() {
         private const val SWIPE_THRESHOLD_DP = 48f
 
         /**
-         * 注入到网页：把贴顶的 sticky 导航条（上游 Navbar / PlayerNavbar）收起。
-         * 两条保险：
-         * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中，Next.js 客户端渲染、
-         *    SPA 换页、React 重建节点都能立刻生效，不依赖注入时机；
-         * 2. mark() 给识别出的贴顶元素打 data-kvideo-topbar，覆盖上游改版后
-         *    类名变化的情况。几何判断放宽到 25% 视口高，容纳状态栏留白、
-         *    safe-area 与外层 padding（上游 nav 带 pt-4，rect.top 不再是 0）。
-         * MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
-         * 唯一的 debounce 无限推迟。sticky 元素仍占位，内容不会突然跳动。
+         * 注入到网页：把贴顶 sticky 导航条与「收藏夹 / 观看历史」悬浮圆钮一起收起。
+         * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中顶部条，Next.js 客户端
+         *    渲染、SPA 换页、React 重建节点都能立刻生效，不依赖注入时机。
+         * 2. 收藏夹 / 观看历史是 position:fixed 且位置可拖动的全局按钮，用
+         *    aria-label / title 命中；它们靠 opacity 隐藏，不能用 transform
+         *    位移（inline 坐标固定，只能挪动自身高度，移不出屏幕）。
+         * 3. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
+         *    视口高，容纳状态栏留白、safe-area 与外层 padding。
+         * 4. MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
+         *    唯一的 debounce 无限推迟。sticky 元素仍占位，内容不会突然跳动。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
@@ -64,22 +65,30 @@ class MainActivity : ComponentActivity() {
   var CLS = 'kvideo-chrome-hidden';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
+  var HIDE_FLOAT = 'opacity:0 !important;pointer-events:none !important;';
 
   var sels = [
     '[' + ATTR + ']',
     'nav[class*="sticky"][class*="top-0"]',
     'header[class*="sticky"][class*="top-0"]'
   ];
-  function prefixed(prefix) {
+  var floats = [
+    'button[aria-label="打开收藏夹"]',
+    'button[aria-label="打开观看历史"]',
+    'button[title*="拖动可调整位置"]'
+  ];
+  function prefixed(prefix, list) {
     var out = [];
-    for (var i = 0; i < sels.length; i++) out.push(prefix + sels[i]);
+    for (var i = 0; i < list.length; i++) out.push(prefix + list[i]);
     return out.join(',');
   }
   var style = document.createElement('style');
   style.id = 'kvideo-chrome-style';
   style.textContent =
-    sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
-    prefixed('html.' + CLS + ' ') + '{' + HIDE + '}';
+    sels.concat(floats).join(',') +
+      '{transition:transform .22s ease,opacity .22s ease !important;}' +
+    prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
+    prefixed('html.' + CLS + ' ', floats) + '{' + HIDE_FLOAT + '}';
   (document.head || document.documentElement).appendChild(style);
 
   function mark() {
@@ -124,7 +133,8 @@ class MainActivity : ComponentActivity() {
     debug: function () {
       return { hidden: hidden,
                marked: document.querySelectorAll('[' + ATTR + ']').length,
-               matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length };
+               matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length,
+               floats: document.querySelectorAll(floats.join(',')).length };
     }
   };
 
