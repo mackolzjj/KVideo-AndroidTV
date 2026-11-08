@@ -47,57 +47,84 @@ class MainActivity : ComponentActivity() {
         private const val SWIPE_THRESHOLD_DP = 48f
 
         /**
-         * 注入到网页：把贴顶的 sticky 导航条（上游 Navbar / PlayerNavbar）打上
-         * data-kvideo-topbar 标记，再用 html.kvideo-chrome-hidden 控制它上移淡出。
-         * 不写死 DOM 层级，靠「贴顶 + 横向铺满 + sticky/top-0」识别，SPA 换页由
-         * MutationObserver 重新扫描。sticky 元素仍占位，内容不会突然跳动。
+         * 注入到网页：把贴顶的 sticky 导航条（上游 Navbar / PlayerNavbar）收起。
+         * 两条保险：
+         * 1) 纯 CSS 按 nav/header 的 sticky + top-0 类名命中，Next.js 客户端渲染、
+         *    SPA 换页、React 重建节点都能立刻生效，不依赖注入时机；
+         * 2) mark() 给识别出的贴顶元素打 data-kvideo-topbar，覆盖上游改版后
+         *    类名变化的情况。几何判断放宽到 25% 视口高，容纳状态栏留白、
+         *    safe-area 与外层 padding（上游 nav 带 pt-4，rect.top 不再是 0）。
+         * MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
+         * 唯一的 debounce 无限推迟。sticky 元素仍占位，内容不会突然跳动。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
   var ATTR = 'data-kvideo-topbar';
+  var CLS = 'kvideo-chrome-hidden';
+  var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
+             'pointer-events:none !important;';
+
+  var sels = [
+    '[' + ATTR + ']',
+    'nav[class*="sticky"][class*="top-0"]',
+    'header[class*="sticky"][class*="top-0"]'
+  ];
+  function prefixed(prefix) {
+    var out = [];
+    for (var i = 0; i < sels.length; i++) out.push(prefix + sels[i]);
+    return out.join(',');
+  }
   var style = document.createElement('style');
   style.id = 'kvideo-chrome-style';
   style.textContent =
-    '[' + ATTR + ']{transition:transform .22s ease,opacity .22s ease !important;}' +
-    'html.kvideo-chrome-hidden [' + ATTR + ']{' +
-    'transform:translateY(-120%) !important;opacity:0 !important;' +
-    'pointer-events:none !important;}';
+    sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
+    prefixed('html.' + CLS + ' ') + '{' + HIDE + '}';
   (document.head || document.documentElement).appendChild(style);
 
   function mark() {
     var nodes = document.querySelectorAll(
-      'nav,header,[class*="navbar"],[class*="top-0"],[class*="topbar"]');
-    var w = window.innerWidth;
+      'nav,header,[class*="navbar"],[class*="topbar"],[class*="top-0"],[class*="sticky"]');
+    var w = window.innerWidth || document.documentElement.clientWidth;
+    var maxTop = Math.max(160, (window.innerHeight || 800) * 0.25);
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       var r = el.getBoundingClientRect();
-      if (r.top > 12 || r.top < -4 || r.height < 24 || r.height > 200) continue;
-      if (r.width < w * 0.5) continue;
+      if (r.width < w * 0.5 || r.height < 20 || r.height > 240) continue;
+      if (r.top > maxTop || r.top < -r.height) continue;
       var cls = (typeof el.className === 'string') ? el.className : '';
       var cs = window.getComputedStyle(el);
       var pinned = cs.position === 'sticky' || cs.position === 'fixed' ||
-                   cls.indexOf('sticky') >= 0 || cls.indexOf('top-0') >= 0;
+                   cls.indexOf('sticky') >= 0 || cls.indexOf('top-0') >= 0 ||
+                   cls.indexOf('navbar') >= 0 || cls.indexOf('topbar') >= 0;
       if (pinned) el.setAttribute(ATTR, '1');
     }
   }
 
-  var timer = null;
+  var lastRun = 0;
+  var tail = null;
   function schedule() {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(mark, 150);
+    var now = Date.now();
+    if (now - lastRun >= 120) { lastRun = now; mark(); }
+    if (tail) clearTimeout(tail);
+    tail = setTimeout(function () { tail = null; lastRun = Date.now(); mark(); }, 200);
   }
 
   var hidden = false;
   window.KVideoChrome = {
     setHidden: function (v) {
       hidden = !!v;
-      document.documentElement.classList.toggle('kvideo-chrome-hidden', hidden);
+      document.documentElement.classList.toggle(CLS, hidden);
       mark();
     },
     sync: function () {
-      document.documentElement.classList.toggle('kvideo-chrome-hidden', hidden);
+      document.documentElement.classList.toggle(CLS, hidden);
       mark();
+    },
+    debug: function () {
+      return { hidden: hidden,
+               marked: document.querySelectorAll('[' + ATTR + ']').length,
+               matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length };
     }
   };
 
