@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
     '[data-kvideo-menu] .kvideo-menu-popover button svg{width:18px;height:18px;}' +
     '@media (min-width:640px){' +
       BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
-    '@media (max-width:380px){' +
+    '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:5px;}' +
       '[data-kvideo-menu] .kvideo-menu-group{gap:4px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
@@ -213,9 +213,9 @@ class MainActivity : ComponentActivity() {
     return '<button type="button" data-kvideo-act="' + act + '">' + icon +
       '<span>' + label + '</span></button>';
   }
+  // 「直播」收进「更多」弹层：顶栏按钮过多会挤压左侧 logo。
   function menuHtml() {
     return '<div class="kvideo-menu-group" data-kvideo-group="content">' +
-        btn('live', '直播', ICON.tv) +
         btn('favorites', '我的收藏', ICON.heart) +
         btn('history', '观看历史', ICON.history) +
       '</div>' +
@@ -228,6 +228,7 @@ class MainActivity : ComponentActivity() {
         btn('theme2', '跟随系统', ICON.monitor) +
       '</div>' +
       '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
+        item('live', '直播', ICON.tv) +
         item('logout', '退出登录', ICON.logout) +
         item('websettings', '网站设置', ICON.gear) +
         item('appsettings', '应用设置', ICON.link) +
