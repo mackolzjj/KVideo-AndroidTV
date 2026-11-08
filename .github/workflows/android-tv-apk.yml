@@ -65,17 +65,14 @@ jobs:
           fi
           ls -l "$HOME/.android/debug.keystore"
 
-      # 一次性迁移：把缓存里的旧密钥导出，随后改为随仓库版本化（签名保持不变）。
-      - name: Stage debug keystore for export
-        run: cp "$HOME/.android/debug.keystore" "$GITHUB_WORKSPACE/kvideo-debug.keystore.export"
-
+      # 一次性迁移：把缓存里的旧密钥以 base64 导出，随后改为随仓库版本化（签名不变）。
+      # debug key 不是机密（密码固定为 android），日志输出仅用于这一次迁移。
       - name: Export debug keystore (one-time migration)
-        uses: actions/upload-artifact@v4
-        with:
-          name: kvideo-debug-keystore-export
-          path: kvideo-debug-keystore.export
-          if-no-files-found: error
-          retention-days: 1
+        run: |
+          echo "KVIDEO_KEYSTORE_B64_BEGIN"
+          base64 -w0 "$HOME/.android/debug.keystore"
+          echo ""
+          echo "KVIDEO_KEYSTORE_B64_END"
 
       # ubuntu-latest 预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
       # 并在 sdkmanager --licenses 的交互提示处退出 1，故直接使用预装 SDK。
