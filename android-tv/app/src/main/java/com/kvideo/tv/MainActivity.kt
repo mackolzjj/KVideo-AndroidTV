@@ -56,13 +56,18 @@ class MainActivity : ComponentActivity() {
          *    在顶部条右侧注入一个观看历史代理圆钮，点击转发给原按钮的 click()；
          *    停靠成功后才隐藏原悬浮圆钮，顶部条消失时自动回落，功能不会丢。
          *    不搬动 React 管理的节点，避免重排时 removeChild 报错。
-         * 4. 代理按钮直接复制同排原生圆钮（「设置」或「我的收藏」）的 className，
+         * 4. 隐藏不只依赖 html 上的 kvideo-history-docked class：dock() 每次成功
+         *    都把 display:none !important 直接写进原悬浮钮自身的 inline style，
+         *    失败时清除。页面重渲染换掉节点、或全局 class 状态丢失时，
+         *    MutationObserver 触发的 dock() 会重新应用，不会出现「代理已在
+         *    顶部条、原钮却还飘在画面里」。class 规则保留作双保险。
+         * 5. 代理按钮直接复制同排原生圆钮（「设置」或「我的收藏」）的 className，
          *    尺寸、圆框、玻璃底、hover 与它们完全一致；插在「设置」之后、主题
          *    切换胶囊之前，由父级 gap 统一间距。拿不到原生样式时用 32px 兜底，
          *    图标统一 18px（宽屏 20px），不再出现没框、偏小、贴最右的孤立图标。
-         * 5. 代理按钮是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复。
+         * 6. 代理按钮是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复。
          *    fixed 悬浮钮带 inline 坐标，用 opacity 隐藏而不用 transform 位移。
-         * 6. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
+         * 7. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
          *    视口高；MutationObserver 用「节流立即扫 + 尾部补扫」避免高频 DOM
          *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
          */
@@ -94,6 +99,18 @@ class MainActivity : ComponentActivity() {
   ];
   var floats = favorites.concat(history);
   var dockSel = 'button[' + DOCK_ATTR + ']';
+  function floatNodes() {
+    return document.querySelectorAll(history.join(','));
+  }
+  // 隐藏写进按钮自身，不再只依赖 html 上的 class 开关；React 换掉节点后
+  // dock() 会被 MutationObserver 再次调用并重新应用。
+  function syncFloatVisibility(hide) {
+    var nodes = floatNodes();
+    for (var i = 0; i < nodes.length; i++) {
+      if (hide) nodes[i].style.setProperty('display', 'none', 'important');
+      else nodes[i].style.removeProperty('display');
+    }
+  }
   // 同排原生圆钮：优先「设置」，其次「我的收藏」，用于复制尺寸与玻璃圆框样式
   var refSels = [
     'a[aria-label="设置"]',
@@ -163,6 +180,7 @@ class MainActivity : ComponentActivity() {
     var src = document.querySelector(history[0]);
     if (!bar || !src) {
       document.documentElement.classList.remove(DOCK_CLS);
+      syncFloatVisibility(false);
       var orphan = document.querySelector(dockSel);
       if (orphan && (!orphan.closest || !orphan.closest('nav,header'))) {
         orphan.parentNode.removeChild(orphan);
@@ -195,6 +213,7 @@ class MainActivity : ComponentActivity() {
         slot.appendChild(existing);
       }
       document.documentElement.classList.add(DOCK_CLS);
+      syncFloatVisibility(true);
       return;
     }
     if (existing) existing.parentNode.removeChild(existing);
@@ -214,6 +233,7 @@ class MainActivity : ComponentActivity() {
     if (anchor) slot.insertBefore(b, anchor.nextSibling);
     else slot.appendChild(b);
     document.documentElement.classList.add(DOCK_CLS);
+    syncFloatVisibility(true);
   }
 
   var lastRun = 0;
@@ -247,6 +267,13 @@ class MainActivity : ComponentActivity() {
                floats: document.querySelectorAll(floats.join(',')).length,
                dockRef: document.querySelectorAll(
                  'a[aria-label="设置"],a[aria-label="我的收藏"]').length,
+               floatsHidden: (function () {
+                 var n = floatNodes(), count = 0;
+                 for (var i = 0; i < n.length; i++) {
+                   if (n[i].style.getPropertyValue('display') === 'none') count++;
+                 }
+                 return count;
+               })(),
                docked: document.querySelectorAll(dockSel).length };
     }
   };
