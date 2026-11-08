@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "KVideo-TV"
+rootProject.name = "KVideo-Android"
 include(":app")

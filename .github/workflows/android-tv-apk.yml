@@ -1,4 +1,4 @@
-name: Android TV APK
+name: Android Phone APK
 
 on:
   workflow_dispatch:
@@ -20,16 +20,17 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-tv-apk-${{ github.ref }}
+  group: android-phone-apk-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build_android_tv_apk:
+  build_android_phone_apk:
     runs-on: ubuntu-latest
     env:
       KVIDEO_URL: ${{ inputs.kvideo_url || '' }}
     defaults:
       run:
+        # 目录名沿用上游 android-tv/，只是路径，产物面向手机
         working-directory: android-tv
 
     steps:
@@ -58,7 +59,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kvideo-android-tv-apk
+          name: kvideo-android-phone-apk
           path: android-tv/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -71,26 +72,26 @@ jobs:
           RELEASE_TITLE: ${{ inputs.release_title }}
         run: |
           release_notes="$(mktemp)"
-          effective_title="${RELEASE_TITLE:-Android TV APK ${RELEASE_TAG}}"
+          effective_title="${RELEASE_TITLE:-Android Phone APK ${RELEASE_TAG}}"
           default_url_text="${KVIDEO_URL:-未预置，首次启动时手动填写}"
 
           cat >"$release_notes" <<EOF
-          预构建的 Android TV APK。
+          预构建的 Android 手机 APK（Android 8.0+）。
 
           使用方式：
-          1. 下载并侧载安装 APK
-          2. 首次启动时输入你的 KVideo 地址
-          3. 保存后即可直接进入
+          1. 下载 APK 并在安卓手机上安装（需允许安装未知来源应用）
+          2. 首次启动时输入 KVideo 地址，或直接使用已预置的默认地址
+          3. 保存后即可直接进入；网页右上角「设置」可随时改地址
 
           构建提交：$GITHUB_SHA
           默认地址：$default_url_text
           EOF
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#KVideo-AndroidTV.apk" --clobber
+            gh release upload "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#KVideo-Android.apk" --clobber
             gh release edit "$RELEASE_TAG" --title "$effective_title" --notes-file "$release_notes"
           else
-            gh release create "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#KVideo-AndroidTV.apk" \
+            gh release create "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#KVideo-Android.apk" \
               --title "$effective_title" \
               --notes-file "$release_notes" \
               --target "$GITHUB_SHA"

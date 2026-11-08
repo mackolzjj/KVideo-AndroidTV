@@ -2,6 +2,7 @@ package com.kvideo.tv
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
@@ -26,6 +27,10 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var fullscreenContainer: FrameLayout
     private lateinit var urlInput: EditText
     private lateinit var statusText: TextView
+    private lateinit var settingsButton: View
     private lateinit var openButton: Button
     private lateinit var saveButton: Button
     private lateinit var prefs: android.content.SharedPreferences
@@ -56,10 +62,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        applyImmersiveMode()
-
         setContentView(R.layout.activity_main)
+        applySystemBars(false)
+        setupBackNavigation()
         webView = findViewById(R.id.webview)
         setupContainer = findViewById(R.id.setup_container)
         fullscreenContainer = findViewById(R.id.fullscreen_container)
@@ -67,6 +72,10 @@ class MainActivity : ComponentActivity() {
         statusText = findViewById(R.id.status_text)
         openButton = findViewById(R.id.open_button)
         saveButton = findViewById(R.id.save_button)
+        settingsButton = findViewById(R.id.settings_button)
+        settingsButton.setOnClickListener {
+            showSetup(getString(R.string.status_settings_hint))
+        }
 
         saveButton.setOnClickListener {
             openConfiguredUrl()
@@ -102,6 +111,9 @@ class MainActivity : ComponentActivity() {
                 cacheMode = WebSettings.LOAD_DEFAULT
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 databaseEnabled = true
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
             }
 
             webViewClient = WebViewClient()
@@ -132,7 +144,9 @@ class MainActivity : ComponentActivity() {
                     fullscreenContainer.visibility = View.VISIBLE
                     webView.visibility = View.GONE
                     setupContainer.visibility = View.GONE
-                    applyImmersiveMode()
+                    settingsButton.visibility = View.GONE
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    applySystemBars(true)
                 }
 
                 override fun onHideCustomView() {
@@ -152,61 +166,36 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (!isSetupVisible() && keyCode == KeyEvent.KEYCODE_BACK && customView != null) {
-            exitCustomFullscreen()
-            return true
-        }
-
+        // 少数设备/外接键盘仍有菜单键，保留它作为设置页快捷入口
         if (!isSetupVisible() && (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS)) {
             showSetup(getString(R.string.status_settings_hint))
-            return true
-        }
-
-        // Map D-pad center to Enter for spatial navigation
-        if (!isSetupVisible() && keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-            webView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
             return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (!isSetupVisible() && keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-            webView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
-            return true
-        }
-        return super.onKeyUp(keyCode, event)
-    }
-
-    @Deprecated("Use OnBackPressedDispatcher")
-    override fun onBackPressed() {
-        if (customView != null) {
-            exitCustomFullscreen()
-            return
-        }
-
-        if (isSetupVisible()) {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-            return
-        }
-
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            showSetup(getString(R.string.status_settings_hint))
-        }
+    private fun setupBackNavigation() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    customView != null -> exitCustomFullscreen()
+                    isSetupVisible() -> finish()
+                    webView.canGoBack() -> webView.goBack()
+                    else -> showSetup(getString(R.string.status_settings_hint))
+                }
+            }
+        })
     }
 
     override fun onResume() {
         super.onResume()
-        applyImmersiveMode()
+        applySystemBars(customView != null)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            applyImmersiveMode()
+            applySystemBars(customView != null)
         }
     }
 
@@ -217,7 +206,7 @@ class MainActivity : ComponentActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         dispatchPictureInPictureChange(isInPictureInPictureMode)
         if (!isInPictureInPictureMode) {
-            applyImmersiveMode()
+            applySystemBars(customView != null)
         }
     }
 
@@ -241,6 +230,7 @@ class MainActivity : ComponentActivity() {
 
     private fun loadConfiguredUrl(url: String) {
         setupContainer.visibility = View.GONE
+        settingsButton.visibility = View.VISIBLE
         statusText.text = getString(R.string.status_ready)
         webView.loadUrl(url)
     }
@@ -266,6 +256,7 @@ class MainActivity : ComponentActivity() {
 
         statusText.text = message
         setupContainer.visibility = View.VISIBLE
+        settingsButton.visibility = View.GONE
         urlInput.requestFocus()
     }
 
@@ -309,16 +300,24 @@ class MainActivity : ComponentActivity() {
         return (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
     }
 
-    private fun applyImmersiveMode() {
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        )
+    /**
+     * 手机端：平时显示状态栏与导航栏（可下拉通知、使用手势返回），
+     * 只在网页视频进入全屏时隐藏系统栏并保持屏幕常亮。
+     */
+    private fun applySystemBars(immersive: Boolean) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.setAppearanceLightStatusBars(false)
+        controller.setAppearanceLightNavigationBars(false)
+
+        if (immersive) {
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private fun exitCustomFullscreen() {
@@ -327,13 +326,16 @@ class MainActivity : ComponentActivity() {
         fullscreenContainer.visibility = View.GONE
         customView = null
         webView.visibility = View.VISIBLE
-        if (wasSetupVisibleBeforeFullscreen) {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        val restoreSetup = wasSetupVisibleBeforeFullscreen
+        if (restoreSetup) {
             setupContainer.visibility = View.VISIBLE
         }
+        settingsButton.visibility = if (restoreSetup) View.GONE else View.VISIBLE
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
         wasSetupVisibleBeforeFullscreen = false
-        applyImmersiveMode()
+        applySystemBars(false)
     }
 
     private fun isPictureInPictureSupported(): Boolean {

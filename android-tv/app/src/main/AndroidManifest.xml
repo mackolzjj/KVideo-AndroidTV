@@ -4,20 +4,17 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <uses-feature
-        android:name="android.software.leanback"
-        android:required="false" />
-
+    <!-- 手机端：触摸屏是必需设备，不再声明 leanback（Android TV）特性 -->
     <uses-feature
         android:name="android.hardware.touchscreen"
-        android:required="false" />
+        android:required="true" />
 
     <application
         android:allowBackup="true"
-        android:banner="@drawable/tv_banner"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:resizeableActivity="true"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
@@ -26,19 +23,13 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
             android:exported="true"
             android:screenOrientation="unspecified"
             android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Leanback launcher (Android TV home) -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-
-            <!-- Standard launcher fallback -->
+            <!-- 手机桌面入口；不再注册 LEANBACK_LAUNCHER -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

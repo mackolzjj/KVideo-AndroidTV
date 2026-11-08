@@ -1,7 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 手机端平时保留状态栏/导航栏；只有全屏播放时由 MainActivity 临时隐藏 -->
     <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowFullscreen">true</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">false</item>
         <item name="android:colorBackground">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>
