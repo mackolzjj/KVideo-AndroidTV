@@ -46,164 +46,297 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "KVideoMainActivity"
         private const val SWIPE_THRESHOLD_DP = 48f
 
-                        /**
-         * 注入到网页：统一控制贴顶 sticky 导航条、悬浮圆钮与壳层设置入口。
-         * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中顶部条，Next.js 客户端
-         *    渲染、SPA 换页、React 重建节点都能立刻生效，不依赖注入时机。
-         * 2. 顶部条原生已有「我的收藏」Heart 入口（/favorites），所以同名的
-         *    「打开收藏夹」悬浮圆钮是重复入口，常驻 display:none 隐藏。
-         * 3. 观看历史没有其它入口（/history 不存在、收藏页无历史 tab）。dock()
-         *    在顶部条右侧注入一个观看历史代理圆钮，点击转发给原按钮的 click()；
-         *    不搬动 React 管理的节点，避免重排时 removeChild 报错。
-         * 4. 原历史悬浮圆钮改成 CSS 默认 display:none，不依赖任何 class 开关、
-         *    inline style 或 dock() 的成功状态；display:none 的元素仍能响应
-         *    程序化 click()，代理按钮的功能转发照常工作。只有 1.5s 内始终
-         *    插不上代理按钮时，才加 kvideo-dock-failed 恢复原入口。
-         * 5. 代理按钮直接复制同排原生圆钮（「设置」或「我的收藏」）的 className，
-         *    尺寸、圆框、玻璃底、hover 与它们完全一致；插在「设置」之后、主题
-         *    切换胶囊之前，由父级 gap 统一间距。拿不到原生样式时用 32px 兜底，
-         *    图标统一 18px（宽屏 20px），不再出现没框、偏小、贴最右的孤立图标。
-         * 6. 代理按钮是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复。
-         *    fixed 悬浮钮带 inline 坐标，用 opacity 隐藏而不用 transform 位移。
-         * 7. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
-         *    视口高；MutationObserver 用「节流立即扫 + 尾部补扫」避免高频 DOM
-         *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
-         * 8. 窄屏（<=520px）紧凑排版：上游左侧 logo 组是 min-w-0、右侧按钮组
-         *    是 flex-shrink-0，直播入口按账号权限回来再叠加两个代理圆钮后，
-         *    右侧会向左溢出压住 logo。这里不再写死圆钮尺寸，交回上游原生的
-         *    w-8 h-8（32px），只把图标放大到 20px、间距收到 3px，并隐藏已被
-         *    truncate 得看不见的站点标题；<=380px 的超窄屏回落到 28px/18px。
-         * 9. 壳层右下角 FAB 的功能是设置 App 连接的服务器地址，与网页自带的
-         *    「设置 ⚙」(/settings) 不同。这里同样停靠一个代理按钮到顶部条，
-         *    并按功能生成链环/连接图标（lucide Link）以免两个齿轮混淆；点击经
-         *    KVideoAndroid.openAppSettings() 打开壳层设置页。右下角 FAB 默认
-         *    隐藏，不再随 dock() 的中间态来回闪；只有 1.5s 内两个代理按钮都
-         *    插不上（如网页加载失败、顶部条不存在）才回落显示，保证入口不丢。
+                                /**
+         * 注入到网页：把顶部菜单重排为「内容组 + 分隔线 + 工具组 + 更多」。
+         * 1. 方案 A：一行只留 5 个元素。内容组＝直播 / 我的收藏 / 观看历史，
+         *    工具组＝更多 / 主题；更多里收拢退出登录、网站设置、应用设置。
+         *    主题由三钮并列改为单钮循环切换，省下的空间用于放大圆钮与图标。
+         * 2. 不搬动 React 管理的节点：用 CSS 隐藏 nav 里 justify-between 行的
+         *    原生右侧按钮组，再往同一行插入自建菜单 DOM；所有功能通过
+         *    click() 转发给原按钮，应用设置走 KVideoAndroid.openAppSettings()。
+         *    display:none 的节点仍能响应程序化 click()，功能一个不删。
+         * 3. 原生右侧组只在 html.kvideo-menu-ready 时隐藏；菜单插不上时移除
+         *    该 class，原生按钮自动回落。1.5s 兜底再加 kvideo-dock-failed
+         *    恢复历史悬浮钮与右下角 FAB，保证入口永不丢失。
+         * 4. 收藏悬浮圆钮是重复入口（顶部条已有 /favorites），常驻隐藏；
+         *    历史悬浮钮在菜单就位时隐藏，由顶部「观看历史」代理点击转发。
+         * 5. 直播受账号 iptv_access 权限控制，原生入口不存在时菜单里也不显示。
+         *    主题当前状态取原生按钮 className 的 scale-105，点击切到下一档。
+         * 6. 菜单是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复；收起时
+         *    自动关闭「更多」弹出层。圆钮 36px / 图标 24px，宽屏 40px，
+         *    380px 以下超窄屏回落 32px / 20px，避免再次挤到紫色 logo 上。
+         * 7. mark() 给贴顶元素打 data-kvideo-topbar 兜底；MutationObserver 用
+         *    「节流立即扫 + 尾部补扫」，syncMenu() 稳态不产生 DOM 变更。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
+
   var ATTR = 'data-kvideo-topbar';
+  var NAV = 'nav[class*="sticky"][class*="top-0"]';
+  var HEADER = 'header[class*="sticky"][class*="top-0"]';
+  var NATIVE_NAV = NAV + ' div[class*="justify-between"] > ' +
+                   'div[class*="flex-shrink-0"]:not([data-kvideo-menu])';
+  var NATIVE_HEADER = HEADER + ' div[class*="justify-between"] > ' +
+                      'div[class*="flex-shrink-0"]:not([data-kvideo-menu])';
   var CLS = 'kvideo-chrome-hidden';
+  var READY_CLS = 'kvideo-menu-ready';
   var FAIL_CLS = 'kvideo-dock-failed';
-  var DOCK_ATTR = 'data-kvideo-history-dock';
-  var APP_DOCK_ATTR = 'data-kvideo-app-settings-dock';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
-  var HIDE_FLOAT = 'opacity:0 !important;pointer-events:none !important;';
 
-  var NAV = 'nav[class*="sticky"][class*="top-0"]';
-  var sels = [
-    '[' + ATTR + ']',
-    NAV,
-    'header[class*="sticky"][class*="top-0"]'
-  ];
-  // 顶部条原生已有「我的收藏」Heart 入口，这个悬浮圆钮是重复入口，常驻隐藏
+  // 两个可拖动的全局悬浮圆钮：收藏是重复入口，历史由顶部菜单代理
   var favorites = [
     'button[aria-label="打开收藏夹"]',
     'button[title*="拖动可调整位置"][title*="收藏"]'
   ];
-  // 观看历史没有其它入口，顶部条里注入代理按钮后，原悬浮圆钮默认隐藏
   var history = [
     'button[aria-label="打开观看历史"]',
     'button[title*="拖动可调整位置"][title*="历史"]'
   ];
-  var floats = favorites.concat(history);
-  var histSel = 'button[' + DOCK_ATTR + ']';
-  var appSel = 'button[' + APP_DOCK_ATTR + ']';
-  var anyDockSel = histSel + ',' + appSel;
-  var dockSels = [histSel, appSel];
-  var dockIconSel = histSel + ' svg,' + appSel + ' svg';
-  var fallbackSel = histSel + '.kvideo-dock-fallback,' +
-                    appSel + '.kvideo-dock-fallback';
-  function floatNodes() {
-    return document.querySelectorAll(history.join(','));
-  }
-  // 同排原生圆钮：优先「设置」，其次「我的收藏」，用于复制尺寸与玻璃圆框样式
-  var refSels = [
-    'a[aria-label="设置"]',
-    'a[aria-label="我的收藏"]',
-    'button[aria-label="设置"]',
-    'button[aria-label="我的收藏"]'
+  var themeSels = [
+    'button[aria-label="设为浅色主题"]',
+    'button[aria-label="设为深色主题"]',
+    'button[aria-label="设为系统主题"]'
   ];
+
+  function q(sel) { return document.querySelector(sel); }
   function prefixed(prefix, list) {
     var out = [];
     for (var i = 0; i < list.length; i++) out.push(prefix + list[i]);
     return out.join(',');
   }
-
-  // 右下角 FAB 的功能是「设置 App 连接的服务器地址」，和网页自带的「设置 ⚙」
-  // （/settings）不是一回事。这里按功能生成一枚链环/连接图标，避免两个齿轮混淆。
-  // lucide Link 路径，线性描边风格与顶部条其它图标一致，颜色继承 currentColor。
-  var APP_ICON =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  function svg(paths) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
       'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
-      'aria-hidden="true">' +
-      '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>' +
-      '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>' +
-    '</svg>';
+      'aria-hidden="true">' + paths + '</svg>';
+  }
 
-  // 窄屏一行塞不下：上游左侧 logo 组是 min-w-0，右侧按钮组是 flex-shrink-0。
-  // 直播入口按账号权限回来后，再叠加两个代理圆钮，右侧会向左溢出，
-  // 把「直播」圆框压到紫色 logo 上。上游圆钮本来就是 w-8 h-8（32px），
-  // 上一版强行压到 28px 只为省空间，代价是整排图标偏小。现在不再覆盖圆钮
-  // 尺寸，只放大内部 svg、收紧 gap 并隐藏看不见的站点标题：按钮仍由上游
-  // class 统一控制，图标明显变大，整行宽度也不比 28px 版本多出多少。
-  var ROW = NAV + ' div[class*="justify-between"]';
-  var RIGHT = ROW + ' > div[class*="flex-shrink-0"]';
-  var ROUND = RIGHT + ' a[aria-label],' +
-              RIGHT + ' button[aria-label],' +
-              prefixed(NAV + ' ', dockSels);
-  var ROUND_ICON = RIGHT + ' svg,' + dockIconSel;
-  var COMPACT =
-    '@media (max-width:520px){' +
-      ROW + '{gap:3px !important;}' +
-      ROW + ' > a h1{display:none !important;}' +
-      RIGHT + '{gap:3px !important;min-width:0;flex-shrink:1 !important;}' +
-      RIGHT + ' > div{gap:2px !important;}' +
-      ROUND_ICON + '{width:20px !important;height:20px !important;}' +
-    '}' +
-    '@media (max-width:380px){' +
-      ROUND + '{' +
-        'width:28px !important;height:28px !important;' +
-        'min-width:28px;min-height:28px;}' +
-      ROUND_ICON + '{width:18px !important;height:18px !important;}' +
-      RIGHT + '{gap:2px !important;}' +
-    '}';
+  // 全部按功能现画的 lucide 风格线性图标，颜色继承 currentColor
+  var ICON = {
+    tv: svg('<rect x="2" y="7" width="20" height="15" rx="2"/>' +
+            '<polyline points="17 2 12 7 7 2"/>'),
+    heart: svg('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1' +
+               'a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/>'),
+    history: svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>' +
+                 '<path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>'),
+    more: svg('<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/>' +
+              '<circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>' +
+              '<circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>'),
+    sun: svg('<circle cx="12" cy="12" r="4"/>' +
+             '<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4' +
+             'M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+    moon: svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
+    monitor: svg('<rect x="2" y="3" width="20" height="14" rx="2"/>' +
+                 '<path d="M8 21h8M12 17v4"/>'),
+    logout: svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
+                '<polyline points="16 17 21 12 16 7"/>' +
+                '<line x1="21" y1="12" x2="9" y2="12"/>'),
+    gear: svg('<circle cx="12" cy="12" r="3"/>' +
+              '<path d="M12 2.5v2.3M12 19.2v2.3M2.5 12h2.3M19.2 12h2.3' +
+              'M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6' +
+              'M6.8 17.2l-1.6 1.6"/>'),
+    link: svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/>' +
+              '<path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/>')
+  };
 
-  var style = document.createElement('style');
-  style.id = 'kvideo-chrome-style';
-  style.textContent =
-    sels.concat(floats).join(',') +
-      '{transition:transform .22s ease,opacity .22s ease !important;}' +
-    prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
-    prefixed('html.' + CLS + ' ', history) + '{' + HIDE_FLOAT + '}' +
-    // 默认就隐藏，不依赖任何 class 开关或 dock() 的成功状态；display:none 的
-    // 按钮仍可被程序化 click() 触发，代理按钮的功能转发不受影响。
-    favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
-    // 只有代理按钮确实一直插不上（1.5s 后仍不存在）才恢复原入口，避免功能丢失。
-    prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    anyDockSel + '{' +
-      'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;' +
-      'padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;' +
-    '}' +
-    fallbackSel + '{' +
-      'width:32px;height:32px;border-radius:999px;' +
+  var BTN = '[data-kvideo-menu] button';
+  var MENU_CSS =
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:0 0 auto;' +
+      'position:relative;margin-left:auto;min-width:0;}' +
+    '[data-kvideo-menu] .kvideo-menu-group{display:flex;align-items:center;gap:6px;}' +
+    '[data-kvideo-menu] .kvideo-menu-sep{width:1px;height:22px;flex:0 0 auto;' +
+      'background:var(--glass-border,rgba(127,127,127,.35));margin:0 2px;}' +
+    BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
+      'display:inline-flex;align-items:center;justify-content:center;' +
+      'border-radius:999px;padding:0;margin:0;cursor:pointer;' +
       'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
       'background:var(--glass-bg,rgba(127,127,127,.12));' +
-      'color:var(--text-color,inherit);' +
-    '}' +
-    dockIconSel + '{width:20px;height:20px;flex:0 0 auto;}' +
-    '@media (min-width:640px){' + dockIconSel + '{width:22px;height:22px;}}' +
-    COMPACT;
-  (document.head || document.documentElement).appendChild(style);
+      'color:var(--text-color,inherit);font:inherit;' +
+      '-webkit-tap-highlight-color:transparent;' +
+      'transition:transform .16s ease,border-color .16s ease,color .16s ease;}' +
+    BTN + ':active{transform:scale(.9);}' +
+    BTN + '[data-kvideo-active="1"]{border-color:var(--accent-color,#3b82f6);' +
+      'color:var(--accent-color,#3b82f6);}' +
+    BTN + ' svg{width:24px;height:24px;flex:0 0 auto;}' +
+    '[data-kvideo-menu] [hidden]{display:none !important;}' +
+    '[data-kvideo-menu] .kvideo-menu-popover{' +
+      'position:absolute;top:calc(100% + 10px);right:0;z-index:3000;' +
+      'min-width:172px;padding:6px;display:flex;flex-direction:column;gap:2px;' +
+      'border-radius:16px;border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
+      'background:var(--glass-bg,rgba(32,32,36,.94));' +
+      'backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);' +
+      'box-shadow:0 12px 32px rgba(0,0,0,.3);}' +
+    '[data-kvideo-menu] .kvideo-menu-popover button{' +
+      'width:100%;height:40px;min-height:40px;border:0;border-radius:10px;' +
+      'background:transparent;justify-content:flex-start;gap:10px;padding:0 10px;' +
+      'font-size:14px;white-space:nowrap;}' +
+    '[data-kvideo-menu] .kvideo-menu-popover button svg{width:18px;height:18px;}' +
+    '@media (min-width:640px){' +
+      BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
+    '@media (max-width:380px){' +
+      '[data-kvideo-menu]{gap:5px;}' +
+      '[data-kvideo-menu] .kvideo-menu-group{gap:4px;}' +
+      BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
+      BTN + ' svg{width:20px;height:20px;}}';
+
+  var sels = ['[' + ATTR + ']', NAV, HEADER];
+  var CSS =
+    sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
+    prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
+    prefixed('html.' + READY_CLS + ' ', [NATIVE_NAV, NATIVE_HEADER]) +
+      '{display:none !important;}' +
+    favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
+    prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
+    MENU_CSS;
+
+  function btn(act, label, icon) {
+    return '<button type="button" data-kvideo-act="' + act + '" ' +
+      'aria-label="' + label + '" title="' + label + '">' + icon + '</button>';
+  }
+  function item(act, label, icon) {
+    return '<button type="button" data-kvideo-act="' + act + '">' + icon +
+      '<span>' + label + '</span></button>';
+  }
+  function menuHtml() {
+    return '<div class="kvideo-menu-group" data-kvideo-group="content">' +
+        btn('live', '直播', ICON.tv) +
+        btn('favorites', '我的收藏', ICON.heart) +
+        btn('history', '观看历史', ICON.history) +
+      '</div>' +
+      '<span class="kvideo-menu-sep"></span>' +
+      '<div class="kvideo-menu-group" data-kvideo-group="tools">' +
+        btn('more', '更多', ICON.more) +
+        btn('theme', '切换主题', ICON.sun) +
+      '</div>' +
+      '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
+        item('logout', '退出登录', ICON.logout) +
+        item('websettings', '网站设置', ICON.gear) +
+        item('appsettings', '应用设置', ICON.link) +
+      '</div>';
+  }
+
+  var root = null;
+  function ensureRoot() {
+    root = q('[data-kvideo-menu]');
+    if (root) return root;
+    root = document.createElement('div');
+    root.setAttribute('data-kvideo-menu', '1');
+    root.className = 'kvideo-menu';
+    root.innerHTML = menuHtml();
+    root.addEventListener('click', onClick);
+    return root;
+  }
+
+  function clickNative(sel) {
+    var el = q(sel);
+    if (el) { try { el.click(); } catch (e) {} }
+  }
+  function themeNodes() {
+    var out = [];
+    for (var i = 0; i < themeSels.length; i++) out.push(q(themeSels[i]));
+    return out;
+  }
+  function themeIndex() {
+    var nodes = themeNodes();
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i] && String(nodes[i].className).indexOf('scale-105') >= 0) return i;
+    }
+    return -1;
+  }
+  function cycleTheme() {
+    var nodes = themeNodes();
+    var idx = themeIndex();
+    var next = nodes[idx < 0 ? 0 : (idx + 1) % nodes.length];
+    if (next) { try { next.click(); } catch (e) {} }
+  }
+
+  function popEl() { return root ? root.querySelector('[data-kvideo-popover]') : null; }
+  function moreEl() { return root ? root.querySelector('[data-kvideo-act="more"]') : null; }
+  function setPopover(open) {
+    var p = popEl(), m = moreEl();
+    if (p) p.hidden = !open;
+    if (m) {
+      m.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) m.setAttribute('data-kvideo-active', '1');
+      else m.removeAttribute('data-kvideo-active');
+    }
+  }
+  function closePopover() { setPopover(false); }
+  function togglePopover() {
+    var p = popEl();
+    setPopover(!!(p && p.hidden));
+  }
+
+  function onClick(ev) {
+    var t = ev.target;
+    var b = (t && t.closest) ? t.closest('[data-kvideo-act]') : null;
+    if (!b || !root.contains(b)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    var act = b.getAttribute('data-kvideo-act');
+    if (act === 'more') { togglePopover(); return; }
+    closePopover();
+    if (act === 'live') clickNative('a[aria-label="直播"]');
+    else if (act === 'favorites') clickNative('a[aria-label="我的收藏"]');
+    else if (act === 'history') clickNative(history[0]);
+    else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
+    else if (act === 'websettings') clickNative('a[aria-label="设置"]');
+    else if (act === 'appsettings') {
+      try {
+        if (window.KVideoAndroid && window.KVideoAndroid.openAppSettings) {
+          window.KVideoAndroid.openAppSettings();
+        }
+      } catch (e) {}
+    } else if (act === 'theme') cycleTheme();
+  }
+
+  // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
+  function syncAvailability() {
+    if (!root) return;
+    var checks = {
+      live: 'a[aria-label="直播"]',
+      favorites: 'a[aria-label="我的收藏"]',
+      history: history[0],
+      logout: 'button[aria-label="退出登录"]',
+      websettings: 'a[aria-label="设置"]',
+      theme: themeSels[0]
+    };
+    for (var act in checks) {
+      if (!Object.prototype.hasOwnProperty.call(checks, act)) continue;
+      var b = root.querySelector('[data-kvideo-act="' + act + '"]');
+      if (!b) continue;
+      var want = q(checks[act]) ? '' : 'none';
+      if (b.style.display !== want) b.style.display = want;
+    }
+  }
+  function syncThemeIcon() {
+    if (!root) return;
+    var b = root.querySelector('[data-kvideo-act="theme"]');
+    if (!b) return;
+    var nodes = themeNodes();
+    var idx = themeIndex();
+    var html = (idx >= 0 && nodes[idx]) ? nodes[idx].innerHTML : ICON.sun;
+    if (b.innerHTML !== html) b.innerHTML = html;
+  }
 
   var failTimer = null;
+  var lastDockState = null;
+  function notifyAppDock(ok) {
+    if (lastDockState === ok) return;
+    lastDockState = ok;
+    try {
+      var bridge = window.KVideoAndroid;
+      if (bridge && bridge.setAppSettingsDocked) bridge.setAppSettingsDocked(ok);
+    } catch (e) { lastDockState = null; }
+  }
   function armFallback() {
     if (failTimer) return;
     failTimer = setTimeout(function () {
       failTimer = null;
-      if (!document.querySelector(appSel) && !document.querySelector(histSel)) {
+      var m = q('[data-kvideo-menu]');
+      if (!m || !m.parentNode) {
+        document.documentElement.classList.remove(READY_CLS);
         document.documentElement.classList.add(FAIL_CLS);
         notifyAppDock(false);
       }
@@ -213,18 +346,6 @@ class MainActivity : ComponentActivity() {
     if (failTimer) { clearTimeout(failTimer); failTimer = null; }
     document.documentElement.classList.remove(FAIL_CLS);
     notifyAppDock(true);
-  }
-
-  // 右下角 FAB 默认隐藏。只在「确实插不上代理按钮」时才通知壳层恢复它，
-  // 不再让 SPA 换页时顶部条的瞬时缺失把 FAB 放回来；通知失败允许下次重试。
-  var lastDockState = null;
-  function notifyAppDock(ok) {
-    if (lastDockState === ok) return;
-    lastDockState = ok;
-    try {
-      var bridge = window.KVideoAndroid;
-      if (bridge && bridge.setAppSettingsDocked) bridge.setAppSettingsDocked(ok);
-    } catch (e) { lastDockState = null; }
   }
 
   function mark() {
@@ -246,60 +367,9 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  // 通用停靠：不搬 React 管理的节点，只在顶部条右侧新建一个代理按钮。
-  function ensureButton(spec, slot, styleRef) {
-    var existing = document.querySelector(spec.sel);
-    if (!existing || existing.parentNode !== slot) {
-      if (existing) existing.parentNode.removeChild(existing);
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute(spec.attr, '1');
-      b.setAttribute('aria-label', spec.label);
-      b.title = spec.title;
-      b.className = styleRef ? styleRef.className : 'kvideo-dock-fallback';
-      b.innerHTML = spec.html;
-      b.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        spec.onClick();
-      });
-      slot.appendChild(b);
-      existing = b;
-    } else if (styleRef && existing.className !== styleRef.className) {
-      existing.className = styleRef.className;
-    }
-    return existing;
-  }
-
-  var appSpec = {
-    sel: appSel,
-    attr: APP_DOCK_ATTR,
-    label: '应用设置',
-    title: '应用设置 · 服务器地址',
-    html: APP_ICON,
-    onClick: function () {
-      try {
-        if (window.KVideoAndroid && window.KVideoAndroid.openAppSettings) {
-          window.KVideoAndroid.openAppSettings();
-        }
-      } catch (e) {}
-    }
-  };
-  var histSpec = {
-    sel: histSel,
-    attr: DOCK_ATTR,
-    label: '观看历史',
-    title: '观看历史',
-    html: '',
-    onClick: function () {
-      var target = document.querySelector(history[0]);
-      if (target) target.click();
-    }
-  };
-
-  function dock() {
+  function syncMenu() {
     var bar = null;
-    var navs = document.querySelectorAll(sels[1] + ',' + sels[2]);
+    var navs = document.querySelectorAll(NAV + ',' + HEADER);
     for (var i = 0; i < navs.length; i++) {
       var r = navs[i].getBoundingClientRect();
       if (r.width > 100 && r.height > 20 && r.top < 200 && r.bottom > 0) {
@@ -307,58 +377,25 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) {
-      // 页面切换的中间态常见，不要立刻恢复悬浮钮或 FAB；交给兜底计时器判断。
-      armFallback();
-      var orphans = document.querySelectorAll(anyDockSel);
-      for (var j = 0; j < orphans.length; j++) {
-        var orphan = orphans[j];
-        if (!orphan.closest || !orphan.closest('nav,header')) {
-          orphan.parentNode.removeChild(orphan);
-        }
-      }
-      return;
-    }
-    var row = bar.querySelector('[class*="justify-between"]');
-    var slot = row ? row.lastElementChild : null;
-    if (!slot || !slot.appendChild) slot = bar.querySelector('[class*="flex"]') || bar;
-
-    // styleRef 提供原生圆钮 class；anchor 决定插在「设置」之后、主题胶囊之前
-    var styleRef = null, anchor = null;
-    for (var k = 0; k < refSels.length; k++) {
-      var cand = slot.querySelector(refSels[k]) || bar.querySelector(refSels[k]);
-      if (!cand) continue;
-      if (!styleRef) styleRef = cand;
-      if (!anchor && cand.parentNode === slot) anchor = cand;
-      if (styleRef && anchor) break;
-    }
-
-    var app = ensureButton(appSpec, slot, styleRef);
-    var src = document.querySelector(history[0]);
-    var hist = null;
-    if (src) {
-      histSpec.html = src.innerHTML;
-      hist = ensureButton(histSpec, slot, styleRef);
-    }
-
-    // 固定顺序：设置 -> 应用设置 -> 观看历史 -> 主题切换胶囊。
-    // 只在位置不对时搬运，稳态下不产生 DOM 变更，不会让观察器无限循环。
-    if (anchor && anchor.nextSibling !== app) slot.insertBefore(app, anchor.nextSibling);
-    if (app && hist && app.nextSibling !== hist) slot.insertBefore(hist, app.nextSibling);
-    if (app && !hist && !anchor && app !== slot.lastElementChild) slot.appendChild(app);
-
-    if (hist) disarmFallback();
-    else armFallback();
+    if (!bar) { armFallback(); return; }
+    var row = bar.querySelector('[class*="justify-between"]') ||
+              bar.querySelector('div[class*="flex"]') || bar;
+    var m = ensureRoot();
+    if (m.parentNode !== row) row.appendChild(m);
+    document.documentElement.classList.add(READY_CLS);
+    syncAvailability();
+    syncThemeIcon();
+    disarmFallback();
   }
 
   var lastRun = 0;
   var tail = null;
   function schedule() {
     var now = Date.now();
-    if (now - lastRun >= 120) { lastRun = now; mark(); dock(); }
+    if (now - lastRun >= 120) { lastRun = now; mark(); syncMenu(); }
     if (tail) clearTimeout(tail);
     tail = setTimeout(function () {
-      tail = null; lastRun = Date.now(); mark(); dock();
+      tail = null; lastRun = Date.now(); mark(); syncMenu();
     }, 200);
   }
 
@@ -367,36 +404,51 @@ class MainActivity : ComponentActivity() {
     setHidden: function (v) {
       hidden = !!v;
       document.documentElement.classList.toggle(CLS, hidden);
+      if (hidden) closePopover();
       mark();
-      dock();
+      syncMenu();
     },
     sync: function () {
       document.documentElement.classList.toggle(CLS, hidden);
       mark();
-      dock();
+      syncMenu();
     },
     debug: function () {
-      return { hidden: hidden,
-               marked: document.querySelectorAll('[' + ATTR + ']').length,
-               matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length,
-               floats: document.querySelectorAll(floats.join(',')).length,
-               dockRef: document.querySelectorAll(
-                 'a[aria-label="设置"],a[aria-label="我的收藏"]').length,
-               floatsHidden: (function () {
-                 var n = floatNodes(), count = 0;
-                 for (var i = 0; i < n.length; i++) {
-                   if (window.getComputedStyle(n[i]).display === 'none') count++;
-                 }
-                 return count;
-               })(),
-               fallback: document.documentElement.classList.contains(FAIL_CLS),
-               appDocked: document.querySelectorAll(appSel).length,
-               docked: document.querySelectorAll(histSel).length };
+      var floats = document.querySelectorAll(history.join(','));
+      var hiddenCount = 0;
+      for (var i = 0; i < floats.length; i++) {
+        if (window.getComputedStyle(floats[i]).display === 'none') hiddenCount++;
+      }
+      return {
+        hidden: hidden,
+        marked: document.querySelectorAll('[' + ATTR + ']').length,
+        matched: document.querySelectorAll(NAV + ',' + HEADER).length,
+        menu: document.querySelectorAll('[data-kvideo-menu]').length,
+        menuReady: document.documentElement.classList.contains(READY_CLS),
+        buttons: document.querySelectorAll('[data-kvideo-act]').length,
+        floats: document.querySelectorAll(
+          favorites.join(',') + ',' + history.join(',')).length,
+        floatsHidden: hiddenCount,
+        theme: themeIndex(),
+        fallback: document.documentElement.classList.contains(FAIL_CLS),
+        appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
+        docked: document.querySelectorAll('[data-kvideo-menu]').length
+      };
     }
   };
 
+  var style = document.createElement('style');
+  style.id = 'kvideo-chrome-style';
+  style.textContent = CSS;
+  (document.head || document.documentElement).appendChild(style);
+
+  document.addEventListener('click', function (ev) {
+    if (root && root.contains(ev.target)) return;
+    closePopover();
+  }, true);
+
   mark();
-  dock();
+  syncMenu();
   new MutationObserver(function () { schedule(); })
     .observe(document.documentElement, { childList: true, subtree: true });
 })();
