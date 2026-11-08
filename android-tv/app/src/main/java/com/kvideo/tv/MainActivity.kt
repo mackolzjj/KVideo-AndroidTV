@@ -49,9 +49,9 @@ class MainActivity : ComponentActivity() {
         /**
          * 注入到网页：把贴顶的 sticky 导航条（上游 Navbar / PlayerNavbar）收起。
          * 两条保险：
-         * 1) 纯 CSS 按 nav/header 的 sticky + top-0 类名命中，Next.js 客户端渲染、
+         * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中，Next.js 客户端渲染、
          *    SPA 换页、React 重建节点都能立刻生效，不依赖注入时机；
-         * 2) mark() 给识别出的贴顶元素打 data-kvideo-topbar，覆盖上游改版后
+         * 2. mark() 给识别出的贴顶元素打 data-kvideo-topbar，覆盖上游改版后
          *    类名变化的情况。几何判断放宽到 25% 视口高，容纳状态栏留白、
          *    safe-area 与外层 padding（上游 nav 带 pt-4，rect.top 不再是 0）。
          * MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
