@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
       'background:var(--glass-border,rgba(127,127,127,.35));margin:0 2px;}' +
     BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
       'display:inline-flex;align-items:center;justify-content:center;' +
-      'border-radius:999px;padding:0;margin:0;cursor:pointer;' +
+      'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
       // 播放页会把 --glass-bg/--glass-border 设成透明，圆钮会退化成裸图标，
       // 和原生按钮糊在同一行；这里固定中性底色与描边，不依赖网页变量。
       'border:1px solid rgba(127,127,127,.34) !important;' +
@@ -162,6 +162,11 @@ class MainActivity : ComponentActivity() {
     BTN + '[data-kvideo-active="1"]{border-color:var(--accent-color,#3b82f6);' +
       'color:var(--accent-color,#3b82f6);}' +
     BTN + ' svg{width:24px;height:24px;flex:0 0 auto;}' +
+    // 播放页对 button 有全局重置（border-radius:0），用更高特异性兜底
+    '[data-kvideo-menu] button[data-kvideo-act]{' +
+      'border-radius:999px !important;' +
+      'border:1px solid rgba(127,127,127,.34) !important;' +
+      'background:rgba(127,127,127,.14) !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     '[data-kvideo-menu] .kvideo-menu-popover{' +
       'position:absolute;top:calc(100% + 10px);right:0;z-index:3000;' +
@@ -427,20 +432,29 @@ class MainActivity : ComponentActivity() {
   }
   function hideNativeControls(row, m) {
     var kids = row.children;
-    for (var i = 0; i < kids.length; i++) {
-      var el = kids[i];
+    var first = kids.length ? kids[0] : null;
+    var i, j, el, b, all, brandBtns, hasCtl;
+    for (i = 0; i < kids.length; i++) {
+      el = kids[i];
       if (!el || el.nodeType !== 1 || el === m ||
           el.hasAttribute('data-kvideo-menu') || i === 0) continue;
-      var hasCtl = (el.matches && el.matches('button,a[aria-label]')) ||
-                   (el.querySelector && el.querySelector('button,a[aria-label]'));
+      // 品牌 / logo 容器：含图片、首页链接或 logo class 时保留，哪怕不在行首
+      if (el.querySelector && el.querySelector('img,a[href="/"]')) continue;
+      if (String(el.className || '').indexOf('logo') >= 0) continue;
+      hasCtl = (el.matches && el.matches('button,a[aria-label]')) ||
+               (el.querySelector && el.querySelector('button,a[aria-label]'));
       if (hasCtl && !el.hasAttribute(NATIVE_ATTR)) el.setAttribute(NATIVE_ATTR, '1');
     }
-    // 兜底：逐个隐藏行内原生按钮，包括叠在行首 logo 上的齿轮圆钮。
-    var all = row.querySelectorAll('button');
-    for (var j = 0; j < all.length; j++) {
-      if (!m.contains(all[j]) && !all[j].hasAttribute(NATIVE_ATTR)) {
-        all[j].setAttribute(NATIVE_ATTR, '1');
-      }
+    // 兜底：逐个隐藏行内原生按钮，但保住 logo / 返回按钮。
+    // 1.1.5 在这里无差别打标，把本身是 button 的 logo 一起藏了。
+    all = row.querySelectorAll('button');
+    brandBtns = (first && first.querySelectorAll) ? first.querySelectorAll('button') : [];
+    for (j = 0; j < all.length; j++) {
+      b = all[j];
+      if (m.contains(b) || b.hasAttribute(NATIVE_ATTR)) continue;
+      if (brandBtns.length && b === brandBtns[0]) continue;
+      if (b.querySelector && b.querySelector('img')) continue;
+      b.setAttribute(NATIVE_ATTR, '1');
     }
   }
   function syncMenu() {
