@@ -24,6 +24,17 @@ android {
         buildConfigField("String", "DEFAULT_KVIDEO_URL", "\"$defaultKVideoUrl\"")
     }
 
+    // 不依赖 Gradle 自动生成的默认 debug key：显式指向仓库提供的固定密钥，
+    // 否则每次构建签名都变，Android 会拒绝覆盖安装。
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

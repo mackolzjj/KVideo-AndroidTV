@@ -44,35 +44,18 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # 每个 runner 都是全新环境，Gradle 会各自生成一把 ~/.android/debug.keystore，
-      # 同包名不同签名会被 Android 拒绝覆盖安装。这里缓存并固定同一把调试密钥；
-      # assembleDebug 默认就读取该文件，无需改 gradle 脚本、无需配置 Secret。
-      - name: Reuse stable debug keystore
-        uses: actions/cache@v6
-        with:
-          path: ~/.android/debug.keystore
-          key: kvideo-debug-keystore-v1
-
-      - name: Ensure stable debug keystore
+      # 固定 debug 签名密钥随仓库版本化。
+      # 实测 Gradle 并不会读取 ~/.android/debug.keystore：runner 上每次构建都会
+      # 自动生成一把新的默认 debug key，导致签名逐次变化、覆盖安装必然失败。
+      # 这里把密钥解码到 app/ 目录，由 build.gradle.kts 的 signingConfigs.debug
+      # 显式引用，才能真正固定签名；也不再依赖 7 天未访问即被清理的 Actions 缓存。
+      # debug key 不是机密：密码固定为 android，仅用于开发签名，不用于应用商店分发。
+      - name: Restore fixed debug keystore
         run: |
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -storetype JKS \
-              -keystore "$HOME/.android/debug.keystore" \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=KVideo Debug,O=KVideo,C=CN" >/dev/null 2>&1
-          fi
-          ls -l "$HOME/.android/debug.keystore"
-
-      # 一次性迁移：把缓存里的旧密钥以 base64 导出，随后改为随仓库版本化（签名不变）。
-      # debug key 不是机密（密码固定为 android），日志输出仅用于这一次迁移。
-      - name: Export debug keystore (one-time migration)
-        run: |
-          echo "KVIDEO_KEYSTORE_B64_BEGIN"
-          base64 -w0 "$HOME/.android/debug.keystore"
-          echo ""
-          echo "KVIDEO_KEYSTORE_B64_END"
+          base64 -d "$GITHUB_WORKSPACE/.github/debug-keystore.b64" > app/debug.keystore
+          keytool -list -keystore app/debug.keystore \
+            -storepass android -alias androiddebugkey >/dev/null
+          ls -l app/debug.keystore
 
       # ubuntu-latest 预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
       # 并在 sdkmanager --licenses 的交互提示处退出 1，故直接使用预装 SDK。
@@ -130,8 +113,9 @@ jobs:
           2. 首次启动时输入 KVideo 地址，或直接使用已预置的默认地址
           3. 保存后即可直接进入；顶部条「更多 → 应用设置」可随时改地址
 
-          本包为 debug 签名（非应用商店正式签名），签名密钥随仓库版本化，
-          后续版本可直接覆盖安装，无需卸载、不会丢已保存的地址。
+          本包为 debug 签名（非应用商店正式签名）。自 1.1.4 起签名密钥固定并
+          随仓库版本化，后续版本可直接覆盖安装，无需卸载、不会丢已保存的地址。
+          注意：v1.1.3 及更早版本签名不同，升级到本版需先卸载一次旧包。
 
           构建提交：$GITHUB_SHA
           默认地址：$default_url_text

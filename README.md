@@ -55,7 +55,9 @@
 
 产物：`kvideo-android-phone-apk-<versionName>-r<run_number>` artifact（debug APK）；填写 `release_tag` 时，Release 资产名为 `KVideo-Android-<versionName>.apk`。版本号直接从 `app/build.gradle.kts` 读取，不用手工同步。
 
-**签名**：debug 签名密钥以 base64 形式随仓库版本化在 `.github/debug-keystore.b64`，构建时还原到 `~/.android/debug.keystore`。它不依赖 Actions 缓存（缓存超过 7 天未访问会被自动清理），所以任意两次构建的签名一致，可直接覆盖安装、不会丢已保存的服务器地址。这把 key 只用于开发签名，密码是公开的 `android`，不是应用商店正式签名。
+**签名**：debug 签名密钥以 base64 形式随仓库版本化在 `.github/debug-keystore.b64`，构建时还原到 `android-tv/app/debug.keystore`，由 `build.gradle.kts` 的 `signingConfigs.debug` **显式引用**。既不依赖 7 天未访问即被清理的 Actions 缓存，也不依赖 Gradle 自动生成的默认 debug key（实测后者每次构建都会换一把，签名逐次变化），因此任意两次构建的签名一致，可直接覆盖安装、不会丢已保存的服务器地址。这把 key 只用于开发签名，密码是公开的 `android`，不是应用商店正式签名。
+
+> **升级注意**：`v1.1.3` 及更早版本每次构建都用了临时生成的默认 debug key，签名各不相同且未被保留。从 `1.1.4` 起签名才固定，所以从旧版升级时**需要先卸载一次旧包**（已保存的服务器地址会被清掉，重新填一次即可），此后所有版本都能直接覆盖安装。
 
 ### 本地命令行
 
@@ -67,12 +69,13 @@ cd android-tv
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-> 本地构建用的是 SDK 自动生成的 `~/.android/debug.keystore`，与 CI 的固定密钥不同，直接覆盖安装 CI 包会提示签名冲突。要保持一致，先按 workflow 里的方式把 `.github/debug-keystore.b64` 还原到本地。
+> 本地构建不会自动还原密钥。在 `android-tv/` 目录下先执行 `base64 -d ../.github/debug-keystore.b64 > app/debug.keystore` 再构建，否则 Gradle 会报找不到 keystore；不要用 SDK 自动生成的 `~/.android/debug.keystore`，签名会不一致、无法覆盖安装。
 
 ## 版本与发布
 
 - 每次发布前在 `android-tv/app/build.gradle.kts` 递增 `versionCode` 并更新 `versionName`；`versionCode` 只增不减，Android 靠它判断能否覆盖安装。
 - Release 的 tag 与 `versionName` 对齐（如 `v1.1.4`），资产名由 workflow 自动带出版本，避免手机里显示一个版本、Release 页写另一个版本。
+- 签名密钥固定在 `.github/debug-keystore.b64`，不要删除或重新生成；换密钥等于要求所有已安装用户卸载重装。
 - 当前版本以 `app/build.gradle.kts` 为准；已发布的版本见 [Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases)。
 
 ## 注意
