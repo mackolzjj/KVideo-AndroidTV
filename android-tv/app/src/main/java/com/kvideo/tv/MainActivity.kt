@@ -167,6 +167,11 @@ class MainActivity : ComponentActivity() {
       'border-radius:999px !important;' +
       'border:1px solid rgba(127,127,127,.34) !important;' +
       'background:rgba(127,127,127,.14) !important;}' +
+    // 当前主题档位（也用于「更多」展开态）：特异性要高于上面的兜底规则
+    '[data-kvideo-menu] button[data-kvideo-act][data-kvideo-active="1"]{' +
+      'border-color:var(--accent-color,#3b82f6) !important;' +
+      'color:var(--accent-color,#3b82f6) !important;' +
+      'background:rgba(59,130,246,.16) !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     '[data-kvideo-menu] .kvideo-menu-popover{' +
       'position:absolute;top:calc(100% + 10px);right:0;z-index:3000;' +
@@ -217,7 +222,10 @@ class MainActivity : ComponentActivity() {
       '<span class="kvideo-menu-sep"></span>' +
       '<div class="kvideo-menu-group" data-kvideo-group="tools">' +
         btn('more', '更多', ICON.more) +
-        btn('theme', '切换主题', ICON.sun) +
+        '<span class="kvideo-menu-sep"></span>' +
+        btn('theme0', '浅色主题', ICON.sun) +
+        btn('theme1', '深色主题', ICON.moon) +
+        btn('theme2', '跟随系统', ICON.monitor) +
       '</div>' +
       '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
         item('logout', '退出登录', ICON.logout) +
@@ -291,11 +299,9 @@ class MainActivity : ComponentActivity() {
     if (bestScore > 40) return best;
     return -1;
   }
-  function cycleTheme() {
+  function applyTheme(i) {
     var nodes = themeNodes();
-    var idx = themeIndex();
-    var next = nodes[idx < 0 ? 0 : (idx + 1) % nodes.length];
-    if (next) { try { next.click(); } catch (e) {} }
+    if (nodes[i]) { try { nodes[i].click(); } catch (e) {} }
   }
 
   function popEl() { return root ? root.querySelector('[data-kvideo-popover]') : null; }
@@ -335,7 +341,9 @@ class MainActivity : ComponentActivity() {
           window.KVideoAndroid.openAppSettings();
         }
       } catch (e) {}
-    } else if (act === 'theme') cycleTheme();
+    } else if (act === 'theme0' || act === 'theme1' || act === 'theme2') {
+      applyTheme(Number(act.slice(5)));
+    }
   }
 
   // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
@@ -347,7 +355,9 @@ class MainActivity : ComponentActivity() {
       history: history[0],
       logout: 'button[aria-label="退出登录"]',
       websettings: 'a[aria-label="设置"]',
-      theme: themeSels[0]
+      theme0: themeSels[0],
+      theme1: themeSels[1],
+      theme2: themeSels[2]
     };
     for (var act in checks) {
       if (!Object.prototype.hasOwnProperty.call(checks, act)) continue;
@@ -357,16 +367,16 @@ class MainActivity : ComponentActivity() {
       if (b.style.display !== want) b.style.display = want;
     }
   }
-  function syncThemeIcon() {
+  function syncThemeState() {
     if (!root) return;
-    var b = root.querySelector('[data-kvideo-act="theme"]');
-    if (!b) return;
-    // 原生按钮里的 svg 常带固定白色，塞进浅色圆钮会看不见；改用自带图标，
-    // 同时让 moon / monitor 真正反映当前主题档位。
     var idx = themeIndex();
-    var icons = [ICON.sun, ICON.moon, ICON.monitor];
-    var html = icons[idx >= 0 ? idx : 0];
-    if (b.innerHTML !== html) b.innerHTML = html;
+    for (var i = 0; i < 3; i++) {
+      var b = root.querySelector('[data-kvideo-act="theme' + i + '"]');
+      if (!b) continue;
+      var has = b.hasAttribute('data-kvideo-active');
+      if (i === idx && !has) b.setAttribute('data-kvideo-active', '1');
+      else if (i !== idx && has) b.removeAttribute('data-kvideo-active');
+    }
   }
 
   var failTimer = null;
@@ -474,7 +484,7 @@ class MainActivity : ComponentActivity() {
     hideNativeControls(row, m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
-    syncThemeIcon();
+    syncThemeState();
     disarmFallback();
   }
 
@@ -522,6 +532,7 @@ class MainActivity : ComponentActivity() {
         theme: themeIndex(),
         fallback: document.documentElement.classList.contains(FAIL_CLS),
         nativeHidden: document.querySelectorAll('[' + NATIVE_ATTR + ']').length,
+        themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         docked: document.querySelectorAll('[data-kvideo-menu]').length
       };
