@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "KVideoMainActivity"
         private const val SWIPE_THRESHOLD_DP = 48f
 
-        /**
+                /**
          * 注入到网页：统一控制贴顶 sticky 导航条、悬浮圆钮与观看历史入口。
          * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中顶部条，Next.js 客户端
          *    渲染、SPA 换页、React 重建节点都能立刻生效，不依赖注入时机。
@@ -54,13 +54,11 @@ class MainActivity : ComponentActivity() {
          *    「打开收藏夹」悬浮圆钮是重复入口，常驻 display:none 隐藏。
          * 3. 观看历史没有其它入口（/history 不存在、收藏页无历史 tab）。dock()
          *    在顶部条右侧注入一个观看历史代理圆钮，点击转发给原按钮的 click()；
-         *    停靠成功后才隐藏原悬浮圆钮，顶部条消失时自动回落，功能不会丢。
          *    不搬动 React 管理的节点，避免重排时 removeChild 报错。
-         * 4. 隐藏不只依赖 html 上的 kvideo-history-docked class：dock() 每次成功
-         *    都把 display:none !important 直接写进原悬浮钮自身的 inline style，
-         *    失败时清除。页面重渲染换掉节点、或全局 class 状态丢失时，
-         *    MutationObserver 触发的 dock() 会重新应用，不会出现「代理已在
-         *    顶部条、原钮却还飘在画面里」。class 规则保留作双保险。
+         * 4. 原历史悬浮圆钮改成 CSS 默认 display:none，不依赖任何 class 开关、
+         *    inline style 或 dock() 的成功状态；display:none 的元素仍能响应
+         *    程序化 click()，代理按钮的功能转发照常工作。只有 1.5s 内始终
+         *    插不上代理按钮时，才加 kvideo-dock-failed 恢复原入口。
          * 5. 代理按钮直接复制同排原生圆钮（「设置」或「我的收藏」）的 className，
          *    尺寸、圆框、玻璃底、hover 与它们完全一致；插在「设置」之后、主题
          *    切换胶囊之前，由父级 gap 统一间距。拿不到原生样式时用 32px 兜底，
@@ -70,21 +68,26 @@ class MainActivity : ComponentActivity() {
          * 7. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
          *    视口高；MutationObserver 用「节流立即扫 + 尾部补扫」避免高频 DOM
          *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
+         * 8. 窄屏（<=520px）紧凑排版：上游左侧 logo 组是 min-w-0、右侧按钮组
+         *    是 flex-shrink-0，直播入口按账号权限回来再叠加历史代理圆钮后，
+         *    右侧会向左溢出压住 logo。这里统一把圆钮收到 28px、svg 收到 16px、
+         *    间距收到 4px，并隐藏已被 truncate 得看不见的站点标题。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
   var ATTR = 'data-kvideo-topbar';
   var CLS = 'kvideo-chrome-hidden';
-  var DOCK_CLS = 'kvideo-history-docked';
+  var FAIL_CLS = 'kvideo-dock-failed';
   var DOCK_ATTR = 'data-kvideo-history-dock';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
   var HIDE_FLOAT = 'opacity:0 !important;pointer-events:none !important;';
 
+  var NAV = 'nav[class*="sticky"][class*="top-0"]';
   var sels = [
     '[' + ATTR + ']',
-    'nav[class*="sticky"][class*="top-0"]',
+    NAV,
     'header[class*="sticky"][class*="top-0"]'
   ];
   // 顶部条原生已有「我的收藏」Heart 入口，这个悬浮圆钮是重复入口，常驻隐藏
@@ -92,7 +95,7 @@ class MainActivity : ComponentActivity() {
     'button[aria-label="打开收藏夹"]',
     'button[title*="拖动可调整位置"][title*="收藏"]'
   ];
-  // 观看历史没有其它入口，停靠成功后才隐藏原悬浮圆钮
+  // 观看历史没有其它入口，顶部条里注入代理按钮后，原悬浮圆钮默认隐藏
   var history = [
     'button[aria-label="打开观看历史"]',
     'button[title*="拖动可调整位置"][title*="历史"]'
@@ -101,15 +104,6 @@ class MainActivity : ComponentActivity() {
   var dockSel = 'button[' + DOCK_ATTR + ']';
   function floatNodes() {
     return document.querySelectorAll(history.join(','));
-  }
-  // 隐藏写进按钮自身，不再只依赖 html 上的 class 开关；React 换掉节点后
-  // dock() 会被 MutationObserver 再次调用并重新应用。
-  function syncFloatVisibility(hide) {
-    var nodes = floatNodes();
-    for (var i = 0; i < nodes.length; i++) {
-      if (hide) nodes[i].style.setProperty('display', 'none', 'important');
-      else nodes[i].style.removeProperty('display');
-    }
   }
   // 同排原生圆钮：优先「设置」，其次「我的收藏」，用于复制尺寸与玻璃圆框样式
   var refSels = [
@@ -123,6 +117,27 @@ class MainActivity : ComponentActivity() {
     for (var i = 0; i < list.length; i++) out.push(prefix + list[i]);
     return out.join(',');
   }
+
+  // 窄屏一行塞不下：上游左侧 logo 组是 min-w-0，右侧按钮组是 flex-shrink-0。
+  // 直播入口按账号权限回来后，再叠加这个历史代理圆钮，右侧会向左溢出，
+  // 把「直播」圆框压到紫色 logo 上。这里统一把圆钮收到 28px、间距收到 4px，
+  // 并隐藏已被 truncate 得看不见的站点标题，整行等比变紧凑而不是互相重叠。
+  var ROW = NAV + ' div[class*="justify-between"]';
+  var RIGHT = ROW + ' > div[class*="flex-shrink-0"]';
+  var COMPACT =
+    '@media (max-width:520px){' +
+      ROW + '{gap:4px !important;}' +
+      ROW + ' > a h1{display:none !important;}' +
+      RIGHT + '{gap:4px !important;min-width:0;flex-shrink:1 !important;}' +
+      RIGHT + ' a[aria-label],' +
+      RIGHT + ' button[aria-label],' +
+      NAV + ' ' + dockSel + '{' +
+        'width:28px !important;height:28px !important;' +
+        'min-width:28px;min-height:28px;flex:0 0 auto;}' +
+      RIGHT + ' > div{gap:2px !important;}' +
+      RIGHT + ' svg{width:16px !important;height:16px !important;}' +
+    '}';
+
   var style = document.createElement('style');
   style.id = 'kvideo-chrome-style';
   style.textContent =
@@ -130,14 +145,15 @@ class MainActivity : ComponentActivity() {
       '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
     prefixed('html.' + CLS + ' ', history) + '{' + HIDE_FLOAT + '}' +
-    favorites.join(',') + '{display:none !important;}' +
-    prefixed('html.' + DOCK_CLS + ' ', history) + '{display:none !important;}' +
+    // 默认就隐藏，不依赖任何 class 开关或 dock() 的成功状态；display:none 的
+    // 按钮仍可被程序化 click() 触发，代理按钮的功能转发不受影响。
+    favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
+    // 只有代理按钮确实一直插不上（1.5s 后仍不存在）才恢复原入口，避免功能丢失。
+    prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     dockSel + '{' +
       'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;' +
       'padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;' +
     '}' +
-    // 尺寸、圆框、底色、hover 由复制来的原生 class 决定；只有找不到参考圆钮
-    // 时才用这套贴近 w-8 h-8 的兜底，避免再出现没框又偏小的孤立图标。
     dockSel + '.kvideo-dock-fallback{' +
       'width:32px;height:32px;border-radius:999px;' +
       'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
@@ -145,8 +161,24 @@ class MainActivity : ComponentActivity() {
       'color:var(--text-color,inherit);' +
     '}' +
     dockSel + ' svg{width:18px;height:18px;flex:0 0 auto;}' +
-    '@media (min-width:640px){' + dockSel + ' svg{width:20px;height:20px;}}';
+    '@media (min-width:640px){' + dockSel + ' svg{width:20px;height:20px;}}' +
+    COMPACT;
   (document.head || document.documentElement).appendChild(style);
+
+  var failTimer = null;
+  function armFallback() {
+    if (failTimer) return;
+    failTimer = setTimeout(function () {
+      failTimer = null;
+      if (!document.querySelector(dockSel)) {
+        document.documentElement.classList.add(FAIL_CLS);
+      }
+    }, 1500);
+  }
+  function disarmFallback() {
+    if (failTimer) { clearTimeout(failTimer); failTimer = null; }
+    document.documentElement.classList.remove(FAIL_CLS);
+  }
 
   function mark() {
     var nodes = document.querySelectorAll(
@@ -179,8 +211,8 @@ class MainActivity : ComponentActivity() {
     }
     var src = document.querySelector(history[0]);
     if (!bar || !src) {
-      document.documentElement.classList.remove(DOCK_CLS);
-      syncFloatVisibility(false);
+      // 页面切换的中间态常见，不要立刻恢复悬浮钮；交给兜底计时器判断。
+      armFallback();
       var orphan = document.querySelector(dockSel);
       if (orphan && (!orphan.closest || !orphan.closest('nav,header'))) {
         orphan.parentNode.removeChild(orphan);
@@ -212,8 +244,7 @@ class MainActivity : ComponentActivity() {
       } else if (existing !== slot.lastElementChild) {
         slot.appendChild(existing);
       }
-      document.documentElement.classList.add(DOCK_CLS);
-      syncFloatVisibility(true);
+      disarmFallback();
       return;
     }
     if (existing) existing.parentNode.removeChild(existing);
@@ -232,8 +263,7 @@ class MainActivity : ComponentActivity() {
     });
     if (anchor) slot.insertBefore(b, anchor.nextSibling);
     else slot.appendChild(b);
-    document.documentElement.classList.add(DOCK_CLS);
-    syncFloatVisibility(true);
+    disarmFallback();
   }
 
   var lastRun = 0;
@@ -270,10 +300,11 @@ class MainActivity : ComponentActivity() {
                floatsHidden: (function () {
                  var n = floatNodes(), count = 0;
                  for (var i = 0; i < n.length; i++) {
-                   if (n[i].style.getPropertyValue('display') === 'none') count++;
+                   if (window.getComputedStyle(n[i]).display === 'none') count++;
                  }
                  return count;
                })(),
+               fallback: document.documentElement.classList.contains(FAIL_CLS),
                docked: document.querySelectorAll(dockSel).length };
     }
   };
