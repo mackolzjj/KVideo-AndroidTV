@@ -9,23 +9,24 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- 手机端可见的设置入口（网页显示时才出现，全屏播放与设置页都隐藏） -->
-    <TextView
+    <!-- 手机端：右下角悬浮操作按钮（FAB 习惯）。
+         放在 bottom|end 而非 top|end，避免压住 KVideo 网页自带的顶部图标工具条。
+         48dp 触摸目标 + 点击水波纹 + contentDescription；网页显示时才出现，
+         全屏播放与设置页均由 MainActivity 隐藏。 -->
+    <ImageButton
         android:id="@+id/settings_button"
-        android:layout_width="wrap_content"
-        android:layout_height="36dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="12dp"
-        android:layout_marginEnd="12dp"
-        android:alpha="0.6"
-        android:background="#66101115"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:alpha="0.72"
+        android:background="@drawable/bg_settings_button"
         android:contentDescription="@string/settings_button"
-        android:gravity="center"
-        android:minWidth="56dp"
-        android:paddingHorizontal="10dp"
-        android:text="@string/settings_button"
-        android:textColor="#FFFFFF"
-        android:textSize="13sp"
+        android:foreground="?android:attr/selectableItemBackgroundBorderless"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_settings_24"
         android:visibility="gone" />
 
     <ScrollView
