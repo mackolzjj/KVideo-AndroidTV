@@ -46,8 +46,8 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "KVideoMainActivity"
         private const val SWIPE_THRESHOLD_DP = 48f
 
-                /**
-         * 注入到网页：统一控制贴顶 sticky 导航条、悬浮圆钮与观看历史入口。
+                        /**
+         * 注入到网页：统一控制贴顶 sticky 导航条、悬浮圆钮与壳层设置入口。
          * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中顶部条，Next.js 客户端
          *    渲染、SPA 换页、React 重建节点都能立刻生效，不依赖注入时机。
          * 2. 顶部条原生已有「我的收藏」Heart 入口（/favorites），所以同名的
@@ -69,9 +69,15 @@ class MainActivity : ComponentActivity() {
          *    视口高；MutationObserver 用「节流立即扫 + 尾部补扫」避免高频 DOM
          *    变化把唯一的 debounce 无限推迟。sticky 元素仍占位，内容不跳动。
          * 8. 窄屏（<=520px）紧凑排版：上游左侧 logo 组是 min-w-0、右侧按钮组
-         *    是 flex-shrink-0，直播入口按账号权限回来再叠加历史代理圆钮后，
+         *    是 flex-shrink-0，直播入口按账号权限回来再叠加两个代理圆钮后，
          *    右侧会向左溢出压住 logo。这里统一把圆钮收到 28px、svg 收到 16px、
          *    间距收到 4px，并隐藏已被 truncate 得看不见的站点标题。
+         * 9. 壳层右下角 FAB 的功能是设置 App 连接的服务器地址，与网页自带的
+         *    「设置 ⚙」(/settings) 不同。这里同样停靠一个代理按钮到顶部条，
+         *    并按功能生成链环/连接图标（lucide Link）以免两个齿轮混淆；点击经
+         *    KVideoAndroid.openAppSettings() 打开壳层设置页。代理在位时通过
+         *    setAppSettingsDocked(true) 让右下角 FAB 让位，顶部条缺失或代理被
+         *    移除时回落显示，保证设置入口不丢。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
@@ -80,6 +86,7 @@ class MainActivity : ComponentActivity() {
   var CLS = 'kvideo-chrome-hidden';
   var FAIL_CLS = 'kvideo-dock-failed';
   var DOCK_ATTR = 'data-kvideo-history-dock';
+  var APP_DOCK_ATTR = 'data-kvideo-app-settings-dock';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
   var HIDE_FLOAT = 'opacity:0 !important;pointer-events:none !important;';
@@ -101,7 +108,13 @@ class MainActivity : ComponentActivity() {
     'button[title*="拖动可调整位置"][title*="历史"]'
   ];
   var floats = favorites.concat(history);
-  var dockSel = 'button[' + DOCK_ATTR + ']';
+  var histSel = 'button[' + DOCK_ATTR + ']';
+  var appSel = 'button[' + APP_DOCK_ATTR + ']';
+  var anyDockSel = histSel + ',' + appSel;
+  var dockSels = [histSel, appSel];
+  var dockIconSel = histSel + ' svg,' + appSel + ' svg';
+  var fallbackSel = histSel + '.kvideo-dock-fallback,' +
+                    appSel + '.kvideo-dock-fallback';
   function floatNodes() {
     return document.querySelectorAll(history.join(','));
   }
@@ -118,8 +131,19 @@ class MainActivity : ComponentActivity() {
     return out.join(',');
   }
 
+  // 右下角 FAB 的功能是「设置 App 连接的服务器地址」，和网页自带的「设置 ⚙」
+  // （/settings）不是一回事。这里按功能生成一枚链环/连接图标，避免两个齿轮混淆。
+  // lucide Link 路径，线性描边风格与顶部条其它图标一致，颜色继承 currentColor。
+  var APP_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+      'aria-hidden="true">' +
+      '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>' +
+      '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>' +
+    '</svg>';
+
   // 窄屏一行塞不下：上游左侧 logo 组是 min-w-0，右侧按钮组是 flex-shrink-0。
-  // 直播入口按账号权限回来后，再叠加这个历史代理圆钮，右侧会向左溢出，
+  // 直播入口按账号权限回来后，再叠加两个代理圆钮，右侧会向左溢出，
   // 把「直播」圆框压到紫色 logo 上。这里统一把圆钮收到 28px、间距收到 4px，
   // 并隐藏已被 truncate 得看不见的站点标题，整行等比变紧凑而不是互相重叠。
   var ROW = NAV + ' div[class*="justify-between"]';
@@ -131,7 +155,7 @@ class MainActivity : ComponentActivity() {
       RIGHT + '{gap:4px !important;min-width:0;flex-shrink:1 !important;}' +
       RIGHT + ' a[aria-label],' +
       RIGHT + ' button[aria-label],' +
-      NAV + ' ' + dockSel + '{' +
+      prefixed(NAV + ' ', dockSels) + '{' +
         'width:28px !important;height:28px !important;' +
         'min-width:28px;min-height:28px;flex:0 0 auto;}' +
       RIGHT + ' > div{gap:2px !important;}' +
@@ -150,18 +174,18 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     // 只有代理按钮确实一直插不上（1.5s 后仍不存在）才恢复原入口，避免功能丢失。
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    dockSel + '{' +
+    anyDockSel + '{' +
       'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;' +
       'padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;' +
     '}' +
-    dockSel + '.kvideo-dock-fallback{' +
+    fallbackSel + '{' +
       'width:32px;height:32px;border-radius:999px;' +
       'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
       'background:var(--glass-bg,rgba(127,127,127,.12));' +
       'color:var(--text-color,inherit);' +
     '}' +
-    dockSel + ' svg{width:18px;height:18px;flex:0 0 auto;}' +
-    '@media (min-width:640px){' + dockSel + ' svg{width:20px;height:20px;}}' +
+    dockIconSel + '{width:18px;height:18px;flex:0 0 auto;}' +
+    '@media (min-width:640px){' + dockIconSel + '{width:20px;height:20px;}}' +
     COMPACT;
   (document.head || document.documentElement).appendChild(style);
 
@@ -170,7 +194,7 @@ class MainActivity : ComponentActivity() {
     if (failTimer) return;
     failTimer = setTimeout(function () {
       failTimer = null;
-      if (!document.querySelector(dockSel)) {
+      if (!document.querySelector(histSel)) {
         document.documentElement.classList.add(FAIL_CLS);
       }
     }, 1500);
@@ -178,6 +202,17 @@ class MainActivity : ComponentActivity() {
   function disarmFallback() {
     if (failTimer) { clearTimeout(failTimer); failTimer = null; }
     document.documentElement.classList.remove(FAIL_CLS);
+  }
+
+  // 顶部条代理按钮在位时通知壳层隐藏右下角 FAB；状态变化才通知，避免抖动。
+  var lastDockState = null;
+  function notifyAppDock(ok) {
+    if (lastDockState === ok) return;
+    lastDockState = ok;
+    try {
+      var bridge = window.KVideoAndroid;
+      if (bridge && bridge.setAppSettingsDocked) bridge.setAppSettingsDocked(ok);
+    } catch (e) {}
   }
 
   function mark() {
@@ -199,6 +234,57 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  // 通用停靠：不搬 React 管理的节点，只在顶部条右侧新建一个代理按钮。
+  function ensureButton(spec, slot, styleRef) {
+    var existing = document.querySelector(spec.sel);
+    if (!existing || existing.parentNode !== slot) {
+      if (existing) existing.parentNode.removeChild(existing);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute(spec.attr, '1');
+      b.setAttribute('aria-label', spec.label);
+      b.title = spec.title;
+      b.className = styleRef ? styleRef.className : 'kvideo-dock-fallback';
+      b.innerHTML = spec.html;
+      b.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        spec.onClick();
+      });
+      slot.appendChild(b);
+      existing = b;
+    } else if (styleRef && existing.className !== styleRef.className) {
+      existing.className = styleRef.className;
+    }
+    return existing;
+  }
+
+  var appSpec = {
+    sel: appSel,
+    attr: APP_DOCK_ATTR,
+    label: '应用设置',
+    title: '应用设置 · 服务器地址',
+    html: APP_ICON,
+    onClick: function () {
+      try {
+        if (window.KVideoAndroid && window.KVideoAndroid.openAppSettings) {
+          window.KVideoAndroid.openAppSettings();
+        }
+      } catch (e) {}
+    }
+  };
+  var histSpec = {
+    sel: histSel,
+    attr: DOCK_ATTR,
+    label: '观看历史',
+    title: '观看历史',
+    html: '',
+    onClick: function () {
+      var target = document.querySelector(history[0]);
+      if (target) target.click();
+    }
+  };
+
   function dock() {
     var bar = null;
     var navs = document.querySelectorAll(sels[1] + ',' + sels[2]);
@@ -209,13 +295,16 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    var src = document.querySelector(history[0]);
-    if (!bar || !src) {
+    if (!bar) {
       // 页面切换的中间态常见，不要立刻恢复悬浮钮；交给兜底计时器判断。
       armFallback();
-      var orphan = document.querySelector(dockSel);
-      if (orphan && (!orphan.closest || !orphan.closest('nav,header'))) {
-        orphan.parentNode.removeChild(orphan);
+      notifyAppDock(false);
+      var orphans = document.querySelectorAll(anyDockSel);
+      for (var j = 0; j < orphans.length; j++) {
+        var orphan = orphans[j];
+        if (!orphan.closest || !orphan.closest('nav,header')) {
+          orphan.parentNode.removeChild(orphan);
+        }
       }
       return;
     }
@@ -233,37 +322,23 @@ class MainActivity : ComponentActivity() {
       if (styleRef && anchor) break;
     }
 
-    var existing = document.querySelector(dockSel);
-    if (existing && existing.parentNode === slot) {
-      if (styleRef && existing.className !== styleRef.className) {
-        existing.className = styleRef.className;
-      }
-      // 只在位置不对时搬运，避免 MutationObserver 反复触发 childList 变更
-      if (anchor) {
-        if (anchor.nextSibling !== existing) slot.insertBefore(existing, anchor.nextSibling);
-      } else if (existing !== slot.lastElementChild) {
-        slot.appendChild(existing);
-      }
-      disarmFallback();
-      return;
+    var app = ensureButton(appSpec, slot, styleRef);
+    var src = document.querySelector(history[0]);
+    var hist = null;
+    if (src) {
+      histSpec.html = src.innerHTML;
+      hist = ensureButton(histSpec, slot, styleRef);
     }
-    if (existing) existing.parentNode.removeChild(existing);
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute(DOCK_ATTR, '1');
-    b.setAttribute('aria-label', '观看历史');
-    b.title = '观看历史';
-    b.className = styleRef ? styleRef.className : 'kvideo-dock-fallback';
-    b.innerHTML = src.innerHTML;
-    b.addEventListener('click', function (ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      var target = document.querySelector(history[0]);
-      if (target) target.click();
-    });
-    if (anchor) slot.insertBefore(b, anchor.nextSibling);
-    else slot.appendChild(b);
-    disarmFallback();
+
+    // 固定顺序：设置 -> 应用设置 -> 观看历史 -> 主题切换胶囊。
+    // 只在位置不对时搬运，稳态下不产生 DOM 变更，不会让观察器无限循环。
+    if (anchor && anchor.nextSibling !== app) slot.insertBefore(app, anchor.nextSibling);
+    if (app && hist && app.nextSibling !== hist) slot.insertBefore(hist, app.nextSibling);
+    if (app && !hist && !anchor && app !== slot.lastElementChild) slot.appendChild(app);
+
+    if (hist) disarmFallback();
+    else armFallback();
+    notifyAppDock(!!app);
   }
 
   var lastRun = 0;
@@ -305,7 +380,8 @@ class MainActivity : ComponentActivity() {
                  return count;
                })(),
                fallback: document.documentElement.classList.contains(FAIL_CLS),
-               docked: document.querySelectorAll(dockSel).length };
+               appDocked: document.querySelectorAll(appSel).length,
+               docked: document.querySelectorAll(histSel).length };
     }
   };
 
@@ -331,6 +407,8 @@ class MainActivity : ComponentActivity() {
     private var wasSetupVisibleBeforeFullscreen = false
     private var viewsReady = false
     private var chromeHiddenByGesture = false
+    // 顶部条已停靠「应用设置」代理按钮时，右下角 FAB 让位；代理消失则自动回落
+    private var appSettingsDocked = false
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
@@ -576,16 +654,17 @@ class MainActivity : ComponentActivity() {
     private fun isSetupVisible(): Boolean = setupContainer.visibility == View.VISIBLE
 
     /**
-     * 手机习惯：像浏览器地址栏，上滑内容时一起收起「网页顶部工具条 + 右下角齿轮」，
-     * 下滑再展开。显隐只由手势决定，不跟随横竖屏或播放画面；全屏播放与设置页仍
-     * 强制隐藏（这两种场景留悬浮按钮只会挡画面）。
+     * 手机习惯：像浏览器地址栏，上滑内容时一起收起「网页顶部工具条」，下滑再展开。
+     * 显隐只由手势决定，不跟随横竖屏或播放画面；全屏播放与设置页仍强制隐藏。
+     * 右下角 FAB 只在顶部条的「应用设置」代理按钮没插上时才作为回落入口显示。
      */
     private fun shouldShowSettingsButton(): Boolean =
         viewsReady &&
             !isSetupVisible() &&
             customView == null &&
             webView.visibility == View.VISIBLE &&
-            !chromeHiddenByGesture
+            !chromeHiddenByGesture &&
+            !appSettingsDocked
 
     private fun updateSettingsButton() {
         settingsButton.visibility =
@@ -760,6 +839,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class AndroidPlayerBridge {
+        /** 顶部条代理按钮插上后隐藏右下角 FAB；页面/顶部条异常时恢复，入口不丢。 */
+        @JavascriptInterface
+        fun setAppSettingsDocked(docked: Boolean) {
+            runOnUiThread {
+                appSettingsDocked = docked
+                updateSettingsButton()
+            }
+        }
+
+        /** 顶部条「应用设置」代理按钮：打开壳层的服务器地址设置页。 */
+        @JavascriptInterface
+        fun openAppSettings() {
+            runOnUiThread { showSetup(getString(R.string.status_settings_hint)) }
+        }
+
         @JavascriptInterface
         fun isPictureInPictureSupported(): Boolean = this@MainActivity.isPictureInPictureSupported()
 
