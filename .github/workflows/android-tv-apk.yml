@@ -65,6 +65,18 @@ jobs:
           fi
           ls -l "$HOME/.android/debug.keystore"
 
+      # 一次性迁移：把缓存里的旧密钥导出，随后改为随仓库版本化（签名保持不变）。
+      - name: Stage debug keystore for export
+        run: cp "$HOME/.android/debug.keystore" "$GITHUB_WORKSPACE/kvideo-debug.keystore.export"
+
+      - name: Export debug keystore (one-time migration)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kvideo-debug-keystore-export
+          path: kvideo-debug-keystore.export
+          if-no-files-found: error
+          retention-days: 1
+
       # ubuntu-latest 预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
       # 并在 sdkmanager --licenses 的交互提示处退出 1，故直接使用预装 SDK。
       - name: Accept Android SDK licenses
@@ -83,10 +95,20 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug -PkvideoUrl="$KVIDEO_URL"
 
+      - name: Resolve APK version name
+        id: apk_version
+        run: |
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ -z "$version_name" ]; then
+            echo "::error::versionName not found in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "value=$version_name" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kvideo-android-phone-apk
+          name: kvideo-android-phone-apk-${{ steps.apk_version.outputs.value }}-r${{ github.run_number }}
           path: android-tv/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -101,24 +123,28 @@ jobs:
           release_notes="$(mktemp)"
           effective_title="${RELEASE_TITLE:-Android Phone APK ${RELEASE_TAG}}"
           default_url_text="${KVIDEO_URL:-未预置，首次启动时手动填写}"
+          apk_name="KVideo-Android-${{ steps.apk_version.outputs.value }}.apk"
 
           cat >"$release_notes" <<EOF
-          预构建的 Android 手机 APK（Android 8.0+）。
+          预构建的 Android 手机 APK（Android 8.0+，版本 ${{ steps.apk_version.outputs.value }}）。
 
           使用方式：
           1. 下载 APK 并在安卓手机上安装（需允许安装未知来源应用）
           2. 首次启动时输入 KVideo 地址，或直接使用已预置的默认地址
-          3. 保存后即可直接进入；网页右上角「设置」可随时改地址
+          3. 保存后即可直接进入；顶部条「更多 → 应用设置」可随时改地址
+
+          本包为 debug 签名（非应用商店正式签名），签名密钥随仓库版本化，
+          后续版本可直接覆盖安装，无需卸载、不会丢已保存的地址。
 
           构建提交：$GITHUB_SHA
           默认地址：$default_url_text
           EOF
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#KVideo-Android.apk" --clobber
+            gh release upload "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#$apk_name" --clobber
             gh release edit "$RELEASE_TAG" --title "$effective_title" --notes-file "$release_notes"
           else
-            gh release create "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#KVideo-Android.apk" \
+            gh release create "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#$apk_name" \
               --title "$effective_title" \
               --notes-file "$release_notes" \
               --target "$GITHUB_SHA"
