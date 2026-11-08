@@ -47,25 +47,24 @@ class MainActivity : ComponentActivity() {
         private const val SWIPE_THRESHOLD_DP = 48f
 
         /**
-         * 注入到网页：统一控制贴顶 sticky 导航条与「收藏夹 / 观看历史」入口。
+         * 注入到网页：统一控制贴顶 sticky 导航条与「观看历史」悬浮圆钮。
          * 1. 纯 CSS 按 nav/header 的 sticky + top-0 类名命中顶部条，Next.js 客户端
          *    渲染、SPA 换页、React 重建节点都能立刻生效，不依赖注入时机。
-         * 2. 收藏夹 / 观看历史原本是 position:fixed、位置可拖动的全局悬浮圆钮，
-         *    会压在视频与选集上。这里不搬动 React 管理的节点（重排时 removeChild
-         *    会找不到节点），而是在顶部条右侧注入两个 30dp 代理圆钮，复用上游图标；
-         *    点击转发给原按钮的 click()，原按钮在停靠成功后 display:none 退出布局。
-         *    代理按钮是 nav 的后代，因此天然随顶部条一起上滑收起、下滑回来。
-         * 3. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
+         * 2. 顶部条原生已有「我的收藏」Heart 入口（/favorites），所以同名的
+         *    「打开收藏夹」悬浮圆钮是重复入口，常驻 display:none 隐藏。
+         * 3. 观看历史没有其它入口（/history 不存在、收藏页无历史 tab），保留
+         *    它的悬浮圆钮，但纳入手势：上滑随顶部条一起收起、下滑恢复。
+         *    fixed 元素带 inline 坐标，用 opacity 隐藏而不用 transform 位移。
+         * 4. mark() 给贴顶元素打 data-kvideo-topbar 兜底，几何判断放宽到 25%
          *    视口高，容纳状态栏留白、safe-area 与外层 padding。
-         * 4. MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
-         *    唯一的 debounce 无限推迟。dock() 带存在性检查，插入后不会自我循环。
+         * 5. MutationObserver 用「节流立即扫 + 尾部补扫」，避免高频 DOM 变化把
+         *    唯一的 debounce 无限推迟。sticky 元素仍占位，内容不会突然跳动。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
   var ATTR = 'data-kvideo-topbar';
   var CLS = 'kvideo-chrome-hidden';
-  var DOCK_CLS = 'kvideo-docked';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
   var HIDE_FLOAT = 'opacity:0 !important;pointer-events:none !important;';
@@ -75,15 +74,17 @@ class MainActivity : ComponentActivity() {
     'nav[class*="sticky"][class*="top-0"]',
     'header[class*="sticky"][class*="top-0"]'
   ];
-  var floats = [
-    'button[aria-label="打开收藏夹"]:not([data-kvideo-dock])',
-    'button[aria-label="打开观看历史"]:not([data-kvideo-dock])',
-    'button[title*="拖动可调整位置"]:not([data-kvideo-dock])'
+  // 顶部条原生已有「我的收藏」Heart 入口，这个悬浮圆钮是重复入口，常驻隐藏
+  var favorites = [
+    'button[aria-label="打开收藏夹"]',
+    'button[title*="拖动可调整位置"][title*="收藏"]'
   ];
-  var dockDefs = [
-    { key: 'favorites', label: '打开收藏夹', title: '收藏夹', sel: floats[0] },
-    { key: 'history', label: '打开观看历史', title: '观看历史', sel: floats[1] }
+  // 观看历史没有其它入口，保留它并纳入同一套手势
+  var history = [
+    'button[aria-label="打开观看历史"]',
+    'button[title*="拖动可调整位置"][title*="历史"]'
   ];
+  var floats = favorites.concat(history);
   function prefixed(prefix, list) {
     var out = [];
     for (var i = 0; i < list.length; i++) out.push(prefix + list[i]);
@@ -95,22 +96,8 @@ class MainActivity : ComponentActivity() {
     sels.concat(floats).join(',') +
       '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
-    prefixed('html.' + CLS + ' ', floats) + '{' + HIDE_FLOAT + '}' +
-    prefixed('html.' + DOCK_CLS + ' ', floats) + '{display:none !important;}' +
-    'button[data-kvideo-dock]{' +
-      'width:30px;height:30px;flex:0 0 auto;' +
-      'display:inline-flex;align-items:center;justify-content:center;' +
-      'padding:0;margin:0;border-radius:999px;cursor:pointer;' +
-      'border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
-      'background:var(--glass-bg,rgba(127,127,127,.12));' +
-      'color:var(--text-color,inherit);' +
-      '-webkit-tap-highlight-color:transparent;' +
-    '}' +
-    'button[data-kvideo-dock] svg{width:16px;height:16px;}' +
-    '@media (max-width:420px){' +
-      'button[data-kvideo-dock]{width:27px;height:27px;}' +
-      'button[data-kvideo-dock] svg{width:15px;height:15px;}' +
-    '}';
+    prefixed('html.' + CLS + ' ', history) + '{' + HIDE_FLOAT + '}' +
+    favorites.join(',') + '{display:none !important;}';
   (document.head || document.documentElement).appendChild(style);
 
   function mark() {
@@ -132,64 +119,13 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  function dock() {
-    var bar = null;
-    var navs = document.querySelectorAll(sels[1] + ',' + sels[2]);
-    for (var i = 0; i < navs.length; i++) {
-      var r = navs[i].getBoundingClientRect();
-      if (r.width > 100 && r.height > 20 && r.top < 200 && r.bottom > 0) {
-        bar = navs[i];
-        break;
-      }
-    }
-    if (!bar) {
-      document.documentElement.classList.remove(DOCK_CLS);
-      return false;
-    }
-    var row = bar.querySelector('[class*="justify-between"]');
-    var slot = row ? row.lastElementChild : null;
-    if (!slot || !slot.appendChild) slot = bar.querySelector('[class*="flex"]') || bar;
-    var made = 0;
-    for (var k = 0; k < dockDefs.length; k++) {
-      var def = dockDefs[k];
-      var src = document.querySelector(def.sel);
-      if (!src) continue;
-      var existing = document.querySelector('[data-kvideo-dock="' + def.key + '"]');
-      if (existing && existing.parentNode === slot) continue;
-      if (existing) existing.parentNode.removeChild(existing);
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('data-kvideo-dock', def.key);
-      b.setAttribute('aria-label', def.label);
-      b.title = def.title;
-      b.innerHTML = src.innerHTML;
-      b.addEventListener('click', (function (sel) {
-        return function (ev) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          var target = document.querySelector(sel);
-          if (target) target.click();
-        };
-      }(def.sel)));
-      slot.appendChild(b);
-      made++;
-    }
-    document.documentElement.classList.toggle(
-      DOCK_CLS,
-      slot.querySelectorAll('[data-kvideo-dock]').length >= dockDefs.length
-    );
-    return made > 0;
-  }
-
   var lastRun = 0;
   var tail = null;
   function schedule() {
     var now = Date.now();
-    if (now - lastRun >= 120) { lastRun = now; mark(); dock(); }
+    if (now - lastRun >= 120) { lastRun = now; mark(); }
     if (tail) clearTimeout(tail);
-    tail = setTimeout(function () {
-      tail = null; lastRun = Date.now(); mark(); dock();
-    }, 200);
+    tail = setTimeout(function () { tail = null; lastRun = Date.now(); mark(); }, 200);
   }
 
   var hidden = false;
@@ -198,24 +134,20 @@ class MainActivity : ComponentActivity() {
       hidden = !!v;
       document.documentElement.classList.toggle(CLS, hidden);
       mark();
-      dock();
     },
     sync: function () {
       document.documentElement.classList.toggle(CLS, hidden);
       mark();
-      dock();
     },
     debug: function () {
       return { hidden: hidden,
                marked: document.querySelectorAll('[' + ATTR + ']').length,
                matched: document.querySelectorAll(sels[1] + ',' + sels[2]).length,
-               floats: document.querySelectorAll(floats.join(',')).length,
-               docked: document.querySelectorAll('button[data-kvideo-dock]').length };
+               floats: document.querySelectorAll(floats.join(',')).length };
     }
   };
 
   mark();
-  dock();
   new MutationObserver(function () { schedule(); })
     .observe(document.documentElement, { childList: true, subtree: true });
 })();
