@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.util.Log
 import android.util.Rational
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -34,6 +35,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +44,68 @@ class MainActivity : ComponentActivity() {
         private const val PREFS_NAME = "kvideo_tv_settings"
         private const val PREF_SERVER_URL = "server_url"
         private const val TAG = "KVideoMainActivity"
+        private const val SWIPE_THRESHOLD_DP = 48f
+
+        /**
+         * 注入到网页：把贴顶的 sticky 导航条（上游 Navbar / PlayerNavbar）打上
+         * data-kvideo-topbar 标记，再用 html.kvideo-chrome-hidden 控制它上移淡出。
+         * 不写死 DOM 层级，靠「贴顶 + 横向铺满 + sticky/top-0」识别，SPA 换页由
+         * MutationObserver 重新扫描。sticky 元素仍占位，内容不会突然跳动。
+         */
+        private const val CHROME_INJECT_JS = """
+(function () {
+  if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
+  var ATTR = 'data-kvideo-topbar';
+  var style = document.createElement('style');
+  style.id = 'kvideo-chrome-style';
+  style.textContent =
+    '[' + ATTR + ']{transition:transform .22s ease,opacity .22s ease !important;}' +
+    'html.kvideo-chrome-hidden [' + ATTR + ']{' +
+    'transform:translateY(-120%) !important;opacity:0 !important;' +
+    'pointer-events:none !important;}';
+  (document.head || document.documentElement).appendChild(style);
+
+  function mark() {
+    var nodes = document.querySelectorAll(
+      'nav,header,[class*="navbar"],[class*="top-0"],[class*="topbar"]');
+    var w = window.innerWidth;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var r = el.getBoundingClientRect();
+      if (r.top > 12 || r.top < -4 || r.height < 24 || r.height > 200) continue;
+      if (r.width < w * 0.5) continue;
+      var cls = (typeof el.className === 'string') ? el.className : '';
+      var cs = window.getComputedStyle(el);
+      var pinned = cs.position === 'sticky' || cs.position === 'fixed' ||
+                   cls.indexOf('sticky') >= 0 || cls.indexOf('top-0') >= 0;
+      if (pinned) el.setAttribute(ATTR, '1');
+    }
+  }
+
+  var timer = null;
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(mark, 150);
+  }
+
+  var hidden = false;
+  window.KVideoChrome = {
+    setHidden: function (v) {
+      hidden = !!v;
+      document.documentElement.classList.toggle('kvideo-chrome-hidden', hidden);
+      mark();
+    },
+    sync: function () {
+      document.documentElement.classList.toggle('kvideo-chrome-hidden', hidden);
+      mark();
+    }
+  };
+
+  mark();
+  new MutationObserver(function () { schedule(); })
+    .observe(document.documentElement, { childList: true, subtree: true });
+})();
+"""
     }
 
     private lateinit var webView: WebView
@@ -57,6 +121,10 @@ class MainActivity : ComponentActivity() {
     private var customViewCallback: CustomViewCallback? = null
     private var wasSetupVisibleBeforeFullscreen = false
     private var viewsReady = false
+    private var chromeHiddenByGesture = false
+    private var swipeStartX = 0f
+    private var swipeStartY = 0f
+    private var swipeThresholdPx = 0f
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +146,8 @@ class MainActivity : ComponentActivity() {
         settingsButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
         }
+        swipeThresholdPx = SWIPE_THRESHOLD_DP * resources.displayMetrics.density
+        attachSwipeToHide(webView)
 
         saveButton.setOnClickListener {
             openConfiguredUrl()
@@ -118,7 +188,12 @@ class MainActivity : ComponentActivity() {
                 displayZoomControls = false
             }
 
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    injectChromeScript()
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
                     if (view == null || callback == null) {
@@ -190,14 +265,14 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Manifest 声明了 configChanges="orientation|..."，旋转不会重建 Activity，
-     * 因此齿轮的显隐必须在这里同步。手机横屏几乎就是在看视频：底部整条都是
-     * 播放控制区，右下角按钮既挡全屏/倍速/进度条，右手握持又容易误触。
+     * 旋转不重建 Activity（configChanges 已声明）。显隐只由上滑/下滑手势决定，
+     * 不再跟随横竖屏或播放画面；这里只同步当前状态与系统栏。
      */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         if (viewsReady) {
             updateSettingsButton()
+            applyWebChromeState()
             applySystemBars(customView != null)
         }
     }
@@ -244,6 +319,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadConfiguredUrl(url: String) {
+        chromeHiddenByGesture = false
         setupContainer.visibility = View.GONE
         updateSettingsButton()
         statusText.text = getString(R.string.status_ready)
@@ -251,6 +327,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSetup(message: String) {
+        // 用户主动进设置页说明要操作，返回网页时把工具条和齿轮都还给他
+        chromeHiddenByGesture = false
+        applyWebChromeState()
         val currentUrl = getConfiguredUrl()
         if (currentUrl.isNotEmpty() && urlInput.text.toString().isBlank()) {
             urlInput.setText(currentUrl)
@@ -288,20 +367,82 @@ class MainActivity : ComponentActivity() {
     private fun isSetupVisible(): Boolean = setupContainer.visibility == View.VISIBLE
 
     /**
-     * 齿轮只在「竖屏 + 网页可见 + 未进入全屏播放 + 非设置页」时出现。
-     * 横屏一律隐藏，避免压住播放控制条；转回竖屏会自动恢复。
-     * 横屏下仍可用返回键（或外接键盘菜单键）回到设置页。
+     * 手机习惯：像浏览器地址栏，上滑内容时一起收起「网页顶部工具条 + 右下角齿轮」，
+     * 下滑再展开。显隐只由手势决定，不跟随横竖屏或播放画面；全屏播放与设置页仍
+     * 强制隐藏（这两种场景留悬浮按钮只会挡画面）。
      */
     private fun shouldShowSettingsButton(): Boolean =
         viewsReady &&
             !isSetupVisible() &&
             customView == null &&
             webView.visibility == View.VISIBLE &&
-            resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+            !chromeHiddenByGesture
 
     private fun updateSettingsButton() {
         settingsButton.visibility =
             if (shouldShowSettingsButton()) View.VISIBLE else View.GONE
+    }
+
+    /** 只观察手势、不消费事件，网页自身的滚动/点击/横滑/拖动进度条都不受影响。 */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachSwipeToHide(target: WebView) {
+        target.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    swipeStartX = event.x
+                    swipeStartY = event.y
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (viewsReady && !isSetupVisible() && customView == null &&
+                        webView.visibility == View.VISIBLE) {
+                        val dx = event.x - swipeStartX
+                        val dy = event.y - swipeStartY
+                        // 只认明显垂直、且超过 48dp 的滑动；横滑切换/拖进度条不误触发
+                        if (abs(dx) < abs(dy) * 0.8f) {
+                            if (dy <= -swipeThresholdPx) {
+                                setChromeHidden(true)
+                            } else if (dy >= swipeThresholdPx) {
+                                setChromeHidden(false)
+                            }
+                        }
+                    }
+                }
+            }
+            false
+        }
+    }
+
+    private fun setChromeHidden(hidden: Boolean) {
+        if (chromeHiddenByGesture == hidden) return
+        chromeHiddenByGesture = hidden
+        updateSettingsButton()
+        applyWebChromeState()
+    }
+
+    /** 页面（重新）加载完成后注入样式与识别逻辑，并立即同步当前手势状态。 */
+    private fun injectChromeScript() {
+        val js = CHROME_INJECT_JS +
+            "\nif(window.KVideoChrome){window.KVideoChrome.setHidden(" +
+            chromeHiddenByGesture + ");}"
+        webView.post {
+            try {
+                webView.evaluateJavascript(js, null)
+            } catch (error: Throwable) {
+                Log.w(TAG, "Failed to inject toolbar auto-hide script", error)
+            }
+        }
+    }
+
+    private fun applyWebChromeState() {
+        val js = "if(window.KVideoChrome){window.KVideoChrome.setHidden(" +
+            chromeHiddenByGesture + ");}"
+        webView.post {
+            try {
+                webView.evaluateJavascript(js, null)
+            } catch (error: Throwable) {
+                Log.w(TAG, "Failed to sync toolbar visibility", error)
+            }
+        }
     }
 
     private fun normalizeUrl(rawUrl: String): String {
@@ -364,6 +505,7 @@ class MainActivity : ComponentActivity() {
             setupContainer.visibility = View.VISIBLE
         }
         updateSettingsButton()
+        applyWebChromeState()
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
         wasSetupVisibleBeforeFullscreen = false
