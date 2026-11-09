@@ -106,6 +106,12 @@ jobs:
           effective_title="${RELEASE_TITLE:-Android Phone APK ${RELEASE_TAG}}"
           default_url_text="${KVIDEO_URL:-未预置，首次启动时手动填写}"
           apk_name="KVideo-Android-${{ steps.apk_version.outputs.value }}.apk"
+          apk_src="android-tv/app/build/outputs/apk/debug/app-debug.apk"
+          # gh 的 "path#label" 显示名语法在 ubuntu-24.04 预装版本上不稳定：
+          # v1.1.29 发布时资产仍落成 app-debug.apk。改为先把 APK 复制成目标
+          # 文件名再上传，资产名直接由文件名决定，不依赖 gh 的 label 解析。
+          apk_out="$RUNNER_TEMP/$apk_name"
+          cp "$apk_src" "$apk_out"
 
           cat >"$release_notes" <<EOF
           预构建的 Android 手机 APK（Android 8.0+，版本 ${{ steps.apk_version.outputs.value }}）。
@@ -124,10 +130,10 @@ jobs:
           EOF
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#$apk_name" --clobber
+            gh release upload "$RELEASE_TAG" "$apk_out" --clobber
             gh release edit "$RELEASE_TAG" --title "$effective_title" --notes-file "$release_notes"
           else
-            gh release create "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#$apk_name" \
+            gh release create "$RELEASE_TAG" "$apk_out" \
               --title "$effective_title" \
               --notes-file "$release_notes" \
               --target "$GITHUB_SHA"
