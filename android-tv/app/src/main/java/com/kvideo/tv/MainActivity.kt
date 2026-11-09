@@ -31,6 +31,7 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -224,7 +225,13 @@ class MainActivity : ComponentActivity() {
   // 按钮仍是 40px、图标只小 2px，观感上等于没生效。这里全部宽度统一缩到
   // 按钮 28px / 图标 16px（相对原生 64/32 缩小一半以上），不再依赖断点；
   // CSS + 内联 important 双保险。
+  // 快退/快进圆钮默认隐藏；只有左右滑动触发时才短暂显示，作为方向反馈。
+  // display:none 不影响 element.click()，网页 React 的 onClick 仍会被派发。
   var SEEK_CSS =
+    '[data-kvideo-seek="1"]{display:none !important;}' +
+    '[data-kvideo-seek="1"][data-kvideo-seek-show="1"]{' +
+      'display:flex !important;align-items:center !important;' +
+      'justify-content:center !important;}' +
     '[data-kvideo-seek="1"]{width:28px !important;height:28px !important;' +
       'min-width:28px !important;min-height:28px !important;' +
       'max-width:28px !important;max-height:28px !important;' +
@@ -650,11 +657,98 @@ class MainActivity : ComponentActivity() {
       var marked = b.getAttribute('data-kvideo-seek') === '1';
       if (!marked && !labelIsSeek(b.getAttribute('aria-label')) &&
           !looksLikeSeek(b)) continue;
-      if (!marked) b.setAttribute('data-kvideo-seek', '1');
+      if (!marked) {
+        b.setAttribute('data-kvideo-seek', '1');
+        b.setAttribute('data-kvideo-seek-dir', seekDirection(b));
+      }
       forceStyle(b, BTN_PROPS);
       var svg = b.querySelector('svg');
       if (svg) forceStyle(svg, SVG_PROPS);
     }
+  }
+
+  // 打标时判定方向：优先 aria-label 文案，回落看父容器贴左还是贴右。
+  function seekDirection(b) {
+    var s = String(b.getAttribute('aria-label') || '').trim();
+    var low = s.toLowerCase();
+    if (s.indexOf('后退') === 0 || s.indexOf('快退') === 0 ||
+        low.indexOf('back ') === 0 || low.indexOf('rewind ') === 0) return 'back';
+    if (s.indexOf('前进') === 0 || s.indexOf('快进') === 0 ||
+        low.indexOf('forward ') === 0) return 'fwd';
+    var p = b.parentElement;
+    var pc = p ? String(p.className || '') : '';
+    return pc.indexOf('absolute right-0') >= 0 ? 'fwd' : 'back';
+  }
+
+  // 左滑快退 / 右滑快进。只识别「画面中部 + 明显水平」的一次滑动，
+  // 避开顶部工具条、底部进度条/控制条、自建菜单与弹层。
+  var SEEK_SWIPE_MIN = 56;
+  var SEEK_SWIPE_RATIO = 1.4;
+  var seekSwipe = null;
+  var seekFlashTimer = null;
+
+  function hideSeekFlash() {
+    var l = document.querySelectorAll('[data-kvideo-seek-show]');
+    for (var i = 0; i < l.length; i++) {
+      l[i].removeAttribute('data-kvideo-seek-show');
+    }
+  }
+  function flashSeek(dir) {
+    var b = document.querySelector(
+      '[data-kvideo-seek="1"][data-kvideo-seek-dir="' + dir + '"]');
+    if (b) {
+      b.setAttribute('data-kvideo-seek-show', '1');
+      // 复用网页原生按钮的 onClick（React 合成事件），不自己算时间轴
+      try { b.click(); } catch (e) {}
+    }
+    if (seekFlashTimer) clearTimeout(seekFlashTimer);
+    seekFlashTimer = setTimeout(hideSeekFlash, 900);
+  }
+  function seekGestureAllowed(x, y) {
+    var h = window.innerHeight || 0;
+    if (h > 0 && (y < h * 0.12 || y > h * 0.78)) return false;
+    var el = document.elementFromPoint(x, y);
+    if (el && el.closest && (
+        el.closest('[data-kvideo-menu]') ||
+        el.closest('input,select,textarea') ||
+        el.closest('[role="dialog"]') ||
+        el.closest('[data-kvideo-popover]'))) return false;
+    return true;
+  }
+  function onSeekTouchStart(ev) {
+    if (ev.touches.length !== 1) { seekSwipe = null; return; }
+    var t = ev.touches[0];
+    if (!seekGestureAllowed(t.clientX, t.clientY)) { seekSwipe = null; return; }
+    seekSwipe = { x: t.clientX, y: t.clientY, fired: false };
+  }
+  function onSeekTouchMove(ev) {
+    if (!seekSwipe || seekSwipe.fired || ev.touches.length !== 1) return;
+    var t = ev.touches[0];
+    var dx = t.clientX - seekSwipe.x;
+    var dy = t.clientY - seekSwipe.y;
+    if (Math.abs(dx) < SEEK_SWIPE_MIN) return;
+    if (Math.abs(dx) < Math.abs(dy) * SEEK_SWIPE_RATIO) return;
+    seekSwipe.fired = true;
+    flashSeek(dx < 0 ? 'back' : 'fwd');
+    // 确认是水平滑动后，别让网页自己的长按连跳/拖动逻辑再处理这一下
+    if (ev.cancelable) ev.preventDefault();
+    if (ev.stopPropagation) ev.stopPropagation();
+  }
+  function onSeekTouchEnd() { seekSwipe = null; }
+
+  // 网页上报「当前横屏且有 video」，壳层据此决定是否显示锁按钮。
+  // 状态变化才调桥，避免 1s 补扫每轮都跨 JNI。
+  var lastPlaybackState = null;
+  function syncPlaybackState() {
+    var v = document.querySelector('video');
+    var active = !!v &&
+      (window.innerWidth || 0) > (window.innerHeight || 0);
+    if (lastPlaybackState === active) return;
+    lastPlaybackState = active;
+    try {
+      var bridge = window.KVideoAndroid;
+      if (bridge && bridge.onPlaybackState) bridge.onPlaybackState(active);
+    } catch (e) { lastPlaybackState = null; }
   }
 
   function syncMenu() {
@@ -743,6 +837,16 @@ class MainActivity : ComponentActivity() {
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         seekButtons: document.querySelectorAll('[data-kvideo-seek="1"]').length,
+        seekDirs: (function () {
+          var l = document.querySelectorAll('[data-kvideo-seek="1"]');
+          var o = [];
+          for (var i = 0; i < l.length; i++) {
+            o.push(l[i].getAttribute('data-kvideo-seek-dir'));
+          }
+          return o.join(',');
+        })(),
+        seekFlash: document.querySelectorAll('[data-kvideo-seek-show]').length,
+        playbackActive: !!document.querySelector('video'),
         seekSizes: (function () {
           var out = [];
           var l = document.querySelectorAll('[data-kvideo-seek="1"]');
@@ -778,9 +882,24 @@ class MainActivity : ComponentActivity() {
     { childList: true, subtree: true, attributes: true,
       attributeFilter: ['class', 'aria-label'] });
   setInterval(function () {
-    if (document.visibilityState === 'visible') shrinkSeekButtons();
+    if (document.visibilityState === 'visible') {
+      shrinkSeekButtons();
+      syncPlaybackState();
+    }
   }, 1000);
-  window.addEventListener('pageshow', shrinkSeekButtons);
+  window.addEventListener('pageshow', function () {
+    shrinkSeekButtons();
+    syncPlaybackState();
+  });
+  document.addEventListener('touchstart', onSeekTouchStart,
+    { capture: true, passive: true });
+  document.addEventListener('touchmove', onSeekTouchMove,
+    { capture: true, passive: false });
+  document.addEventListener('touchend', onSeekTouchEnd,
+    { capture: true, passive: true });
+  document.addEventListener('touchcancel', onSeekTouchEnd,
+    { capture: true, passive: true });
+  syncPlaybackState();
 })();
 """
     }
@@ -811,6 +930,13 @@ class MainActivity : ComponentActivity() {
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
+    private lateinit var lockOverlay: View
+    private lateinit var lockToggle: ImageButton
+    private lateinit var lockHint: TextView
+    private var playbackLocked = false
+    private var playbackActive = false
+    private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideLockHint = Runnable { lockHint.visibility = View.GONE }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -833,10 +959,14 @@ class MainActivity : ComponentActivity() {
         errorDetail = findViewById(R.id.error_detail)
         retryButton = findViewById(R.id.retry_button)
         changeUrlButton = findViewById(R.id.change_url_button)
+        lockOverlay = findViewById(R.id.lock_overlay)
+        lockToggle = findViewById(R.id.lock_toggle)
+        lockHint = findViewById(R.id.lock_hint)
         viewsReady = true
         settingsButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
         }
+        lockToggle.setOnClickListener { togglePlaybackLock() }
         retryButton.setOnClickListener {
             val url = currentLoadUrl
             if (url.isNotEmpty()) {
@@ -1002,6 +1132,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * 锁定时把方向键、OK、媒体键、数字键全部吞掉，避免遥控器/键盘误触。
+     * 音量与 HOME 放行；BACK / OK / ENTER / MENU 作为解锁键，保证不会锁死。
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (playbackLocked && event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP,
+                KeyEvent.KEYCODE_VOLUME_DOWN,
+                KeyEvent.KEYCODE_VOLUME_MUTE,
+                KeyEvent.KEYCODE_HOME -> return super.dispatchKeyEvent(event)
+                KeyEvent.KEYCODE_BACK,
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_NUMPAD_ENTER,
+                KeyEvent.KEYCODE_MENU,
+                KeyEvent.KEYCODE_SETTINGS -> {
+                    setPlaybackLocked(false)
+                    return true
+                }
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         // 少数设备/外接键盘仍有菜单键，保留它作为设置页快捷入口
         if (!isSetupVisible() && (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS)) {
@@ -1061,6 +1217,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        lockHintHandler.removeCallbacks(hideLockHint)
         exitCustomFullscreen()
         webView.destroy()
         super.onDestroy()
@@ -1079,6 +1236,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadConfiguredUrl(url: String) {
+        playbackActive = false
+        setPlaybackLocked(false)
         chromeHiddenByGesture = false
         currentLoadUrl = url
         pageLoadFailed = false
@@ -1131,6 +1290,9 @@ class MainActivity : ComponentActivity() {
         statusText.text = message
         setupContainer.visibility = View.VISIBLE
         updateSettingsButton()
+        // 必须在 setupContainer 可见之后刷新，updateLockUi() 才判定得到
+        // !isSetupVisible() == false，锁按钮不会盖在设置表单上。
+        setPlaybackLocked(false)
         urlInput.requestFocus()
     }
 
@@ -1158,6 +1320,44 @@ class MainActivity : ComponentActivity() {
         settingsButton.visibility =
             if (shouldShowSettingsButton()) View.VISIBLE else View.GONE
     }
+
+    /** 网页只在「横屏 + 存在 video」时上报 true；离开播放页自动解锁并收起按钮。 */
+    private fun onPlaybackStateChanged(active: Boolean) {
+        playbackActive = active
+        if (!active && playbackLocked) setPlaybackLocked(false)
+        updateLockUi()
+    }
+
+    private fun updateLockUi() {
+        val show = playbackActive && !isSetupVisible() &&
+            errorContainer.visibility != View.VISIBLE
+        lockOverlay.visibility =
+            if (playbackLocked && show) View.VISIBLE else View.GONE
+        lockToggle.visibility = if (show) View.VISIBLE else View.GONE
+        lockToggle.setImageResource(
+            if (playbackLocked) R.drawable.ic_lock_closed_24
+            else R.drawable.ic_lock_open_24
+        )
+        lockToggle.contentDescription = getString(
+            if (playbackLocked) R.string.lock_button_unlock
+            else R.string.lock_button_lock
+        )
+        lockHint.text = getString(R.string.lock_hint_locked)
+        lockHintHandler.removeCallbacks(hideLockHint)
+        if (playbackLocked) {
+            lockHint.visibility = View.VISIBLE
+            lockHintHandler.postDelayed(hideLockHint, 2500L)
+        } else {
+            lockHint.visibility = View.GONE
+        }
+    }
+
+    private fun setPlaybackLocked(locked: Boolean) {
+        playbackLocked = locked
+        updateLockUi()
+    }
+
+    private fun togglePlaybackLock() = setPlaybackLocked(!playbackLocked)
 
     /** 只观察手势、不消费事件，网页自身的滚动/点击/横滑/拖动进度条都不受影响。 */
     @SuppressLint("ClickableViewAccessibility")
@@ -1274,6 +1474,7 @@ class MainActivity : ComponentActivity() {
         fullscreenContainer.removeView(currentCustomView)
         fullscreenContainer.visibility = View.GONE
         customView = null
+        setPlaybackLocked(false)
         webView.visibility = View.VISIBLE
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         val restoreSetup = wasSetupVisibleBeforeFullscreen
@@ -1327,6 +1528,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class AndroidPlayerBridge {
+        /** 网页上报当前是否处于横屏播放，壳层据此显示/隐藏防误触锁按钮。 */
+        @JavascriptInterface
+        fun onPlaybackState(active: Boolean) {
+            runOnUiThread { onPlaybackStateChanged(active) }
+        }
+
         /** 记录顶部条是否停靠；右下角 FAB 已停用，此状态仅用于调试。 */
         @JavascriptInterface
         fun setAppSettingsDocked(docked: Boolean) {

@@ -221,4 +221,44 @@
         android:layout_height="match_parent"
         android:background="#000000"
         android:visibility="gone" />
+
+    <!-- 防误触锁：锁定时这层透明全屏 View 吞掉所有触摸。
+         锁按钮必须放在本层之上（FrameLayout 后添加者在上），
+         否则锁定后连解锁按钮也点不到。 -->
+    <FrameLayout
+        android:id="@+id/lock_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#00000000"
+        android:clickable="true"
+        android:focusable="false"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/lock_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#B3101115"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
+            android:text="@string/lock_hint_locked"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+    </FrameLayout>
+
+    <ImageButton
+        android:id="@+id/lock_toggle"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_lock_button"
+        android:contentDescription="@string/lock_button_lock"
+        android:foreground="?android:attr/selectableItemBackgroundBorderless"
+        android:padding="11dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_lock_open_24"
+        android:visibility="gone" />
 </FrameLayout>
