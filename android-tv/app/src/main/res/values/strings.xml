@@ -23,4 +23,5 @@
     <string name="lock_button_unlock">解除锁定</string>
     <string name="lock_hint_locked">已锁定</string>
     <string name="brightness_hud_value">亮度 %d%%</string>
+    <string name="volume_hud_value">音量 %d%%</string>
 </resources>

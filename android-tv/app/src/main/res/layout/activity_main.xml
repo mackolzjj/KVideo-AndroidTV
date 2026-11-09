@@ -222,10 +222,10 @@
         android:background="#000000"
         android:visibility="gone" />
 
-    <!-- 亮度提示浮层：右半屏上下滑调亮度时由壳层原生显示，绕开网页 CSS 不确定性。
-         居中卡片，松手约 800ms 后自动隐藏；音量仍走系统 FLAG_SHOW_UI 浮层。 -->
+    <!-- 手势提示浮层：左右半屏上下滑调音量/亮度时由壳层原生显示，绕开网页 CSS 不确定性。
+         居中卡片，松手约 800ms 后自动隐藏。音量与亮度共用此卡片，外观完全一致。 -->
     <LinearLayout
-        android:id="@+id/brightness_hud"
+        android:id="@+id/gesture_hud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
@@ -237,7 +237,7 @@
         android:visibility="gone">
 
         <TextView
-            android:id="@+id/brightness_hud_value"
+            android:id="@+id/gesture_hud_value"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="亮度 100%"
@@ -246,7 +246,7 @@
             android:textStyle="bold" />
 
         <ProgressBar
-            android:id="@+id/brightness_hud_bar"
+            android:id="@+id/gesture_hud_bar"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="170dp"
             android:layout_height="4dp"

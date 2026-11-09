@@ -903,7 +903,7 @@ class MainActivity : ComponentActivity() {
         var bridge = window.KVideoAndroid;
         for (var i = 0; i < n; i++) {
           try {
-            // 音量由系统 FLAG_SHOW_UI 浮层反馈；亮度由壳层原生浮层反馈（见 adjustBrightness）。
+            // 音量与亮度都由壳层原生卡片浮层反馈（见 adjustVolume / adjustBrightness），外观完全一致。
             if (scrub.side === 'left') {
               if (bridge && bridge.adjustVolume) bridge.adjustVolume(dir);
             } else {
@@ -1321,11 +1321,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var lockOverlay: View
     private lateinit var lockToggle: ImageButton
     private lateinit var lockHint: TextView
-    private lateinit var brightnessHud: View
-    private lateinit var brightnessHudValue: TextView
-    private lateinit var brightnessHudBar: ProgressBar
-    private val brightnessHudHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val hideBrightnessHud = Runnable { brightnessHud.visibility = View.GONE }
+    private lateinit var gestureHud: View
+    private lateinit var gestureHudValue: TextView
+    private lateinit var gestureHudBar: ProgressBar
+    private val gestureHudHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideGestureHud = Runnable { gestureHud.visibility = View.GONE }
     private var playbackLocked = false
     private var playbackActive = false
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -1357,9 +1357,9 @@ class MainActivity : ComponentActivity() {
         lockOverlay = findViewById(R.id.lock_overlay)
         lockToggle = findViewById(R.id.lock_toggle)
         lockHint = findViewById(R.id.lock_hint)
-        brightnessHud = findViewById(R.id.brightness_hud)
-        brightnessHudValue = findViewById(R.id.brightness_hud_value)
-        brightnessHudBar = findViewById(R.id.brightness_hud_bar)
+        gestureHud = findViewById(R.id.gesture_hud)
+        gestureHudValue = findViewById(R.id.gesture_hud_value)
+        gestureHudBar = findViewById(R.id.gesture_hud_bar)
         viewsReady = true
         settingsButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
@@ -1748,16 +1748,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 原生亮度浮层：右半屏上下滑调亮度时显示百分比与进度条，松手 800ms 后自动隐藏。
-     *  用原生 View 而非注入 JS 浮层，避免网页 CSS !important 把显示压住导致「无反馈」。 */
-    private fun showBrightnessHud(pct: Int) {
+    /** 原生手势浮层：左右半屏上下滑调音量/亮度时显示百分比与进度条，松手 800ms 后自动隐藏。
+     *  音量与亮度共用同一卡片，外观完全一致；用原生 View 而非注入 JS 浮层，
+     *  避免网页 CSS !important 把显示压住导致「无反馈」。 */
+    private fun showGestureHud(valueText: String, pct: Int) {
         if (!viewsReady) return
         val p = pct.coerceIn(0, 100)
-        brightnessHudValue.text = getString(R.string.brightness_hud_value, p)
-        brightnessHudBar.progress = p
-        brightnessHud.visibility = View.VISIBLE
-        brightnessHudHandler.removeCallbacks(hideBrightnessHud)
-        brightnessHudHandler.postDelayed(hideBrightnessHud, 800L)
+        gestureHudValue.text = valueText
+        gestureHudBar.progress = p
+        gestureHud.visibility = View.VISIBLE
+        gestureHudHandler.removeCallbacks(hideGestureHud)
+        gestureHudHandler.postDelayed(hideGestureHud, 800L)
     }
 
     /** JS 桥在 WebView 线程调用，音量和窗口亮度必须在 UI 线程改；同步回传百分比给提示浮层。 */
@@ -2006,7 +2007,8 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { onPlaybackStateChanged(active) }
         }
 
-        /** 左半屏上下滑动：调系统媒体音量，返回 0..100 供提示浮层显示。 */
+        /** 左半屏上下滑动：调系统媒体音量，返回 0..100 供提示浮层显示。
+         *  不再用系统 FLAG_SHOW_UI 音量条，改走与亮度完全一致的壳层原生卡片。 */
         @JavascriptInterface
         fun adjustVolume(direction: Int): Int = runOnUiSync {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -2015,9 +2017,11 @@ class MainActivity : ComponentActivity() {
             val step = maxOf(1, max / 15)
             val next = (cur + direction * step).coerceIn(0, max)
             if (next != cur) {
-                am.setStreamVolume(AudioManager.STREAM_MUSIC, next, AudioManager.FLAG_SHOW_UI)
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
             }
-            ((next.toFloat() / max) * 100).roundToInt()
+            val pct = ((next.toFloat() / max) * 100).roundToInt()
+            showGestureHud(getString(R.string.volume_hud_value, pct), pct)
+            pct
         }
 
         /** 右半屏上下滑动：调当前窗口亮度，返回 0..100 供提示浮层显示。 */
@@ -2039,7 +2043,7 @@ class MainActivity : ComponentActivity() {
             lp.screenBrightness = value
             window.attributes = lp
             val pct = (value * 100).roundToInt()
-            showBrightnessHud(pct)
+            showGestureHud(getString(R.string.brightness_hud_value, pct), pct)
             pct
         }
 
