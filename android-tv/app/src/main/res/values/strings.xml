@@ -21,5 +21,5 @@
     <string name="button_change_url">修改地址</string>
     <string name="lock_button_lock">锁定播放画面</string>
     <string name="lock_button_unlock">解除锁定</string>
-    <string name="lock_hint_locked">已锁定 · 点锁钮或按确认键 / 返回键解锁</string>
+    <string name="lock_hint_locked">已锁定</string>
 </resources>
