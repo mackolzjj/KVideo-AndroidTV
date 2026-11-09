@@ -145,17 +145,14 @@ class MainActivity : ComponentActivity() {
 
   var BTN = '[data-kvideo-menu] button';
   var MENU_CSS =
-    // 按钮组占满 logo 右侧整条，按组宽权重等间距铺开；
-    // 原先的右推布局把 6 个钮整体挤到最右，中间留一大块空白。
+    // 6 个圆钮与 5 条竖线作为同级 flex 项整条等距铺开；
+    // 不再分组给不同权重，首页与播放页的每个间隔完全一致。
     '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:1 1 auto;' +
       'position:relative;margin-left:8px;min-width:0;' +
-      'justify-content:space-between;}' +
-    '[data-kvideo-menu] .kvideo-menu-group{display:flex;align-items:center;gap:6px;' +
-      'flex:1 1 auto;justify-content:space-around;justify-content:space-evenly;}' +
-    '[data-kvideo-menu] [data-kvideo-group="content"]{flex:2 1 auto;}' +
-    '[data-kvideo-menu] [data-kvideo-group="tools"]{flex:5 1 auto;}' +
+      'justify-content:space-evenly;}' +
+    // 播放页会把 --glass-border 设成透明，竖线颜色必须固定，否则两页不一致。
     '[data-kvideo-menu] .kvideo-menu-sep{width:1px;height:22px;flex:0 0 auto;' +
-      'background:var(--glass-border,rgba(127,127,127,.35));margin:0 2px;}' +
+      'background:rgba(127,127,127,.45) !important;margin:0 2px;}' +
     BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
       'display:inline-flex;align-items:center;justify-content:center;' +
       'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
@@ -197,7 +194,6 @@ class MainActivity : ComponentActivity() {
       BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
     '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:5px;}' +
-      '[data-kvideo-menu] .kvideo-menu-group{gap:4px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:20px;height:20px;}}';
 
@@ -227,19 +223,15 @@ class MainActivity : ComponentActivity() {
       '<span>' + label + '</span></button>';
   }
   // 「直播」收进「更多」弹层：顶栏按钮过多会挤压左侧 logo。
+  // 6 个圆钮之间各有一条竖线，不再分组，视觉与间距完全统一。
   function menuHtml() {
-    return '<div class="kvideo-menu-group" data-kvideo-group="content">' +
-        btn('favorites', '我的收藏', ICON.heart) +
-        btn('history', '观看历史', ICON.history) +
-      '</div>' +
-      '<span class="kvideo-menu-sep"></span>' +
-      '<div class="kvideo-menu-group" data-kvideo-group="tools">' +
-        btn('more', '更多', ICON.more) +
-        '<span class="kvideo-menu-sep"></span>' +
-        btn('theme0', '浅色主题', ICON.sun) +
-        btn('theme1', '深色主题', ICON.moon) +
+    var sep = '<span class="kvideo-menu-sep"></span>';
+    return btn('favorites', '我的收藏', ICON.heart) + sep +
+        btn('history', '观看历史', ICON.history) + sep +
+        btn('more', '更多', ICON.more) + sep +
+        btn('theme0', '浅色主题', ICON.sun) + sep +
+        btn('theme1', '深色主题', ICON.moon) + sep +
         btn('theme2', '跟随系统', ICON.monitor) +
-      '</div>' +
       '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
         item('live', '直播', ICON.tv) +
         item('logout', '退出登录', ICON.logout) +
@@ -400,6 +392,24 @@ class MainActivity : ComponentActivity() {
       if (b.style.display !== want) b.style.display = want;
     }
   }
+  // 功能不可用时按钮会被隐藏，同步收掉它两侧多余的竖线，
+  // 避免出现落单分隔线或两条竖线连在一起。
+  function syncSeparators() {
+    if (!root) return;
+    var kids = root.children;
+    for (var i = 0; i < kids.length; i++) {
+      var s = kids[i];
+      if (s.className !== 'kvideo-menu-sep') continue;
+      var prev = s.previousElementSibling;
+      var next = s.nextElementSibling;
+      var ok = prev && next &&
+        prev.tagName === 'BUTTON' && next.tagName === 'BUTTON' &&
+        prev.style.display !== 'none' && next.style.display !== 'none';
+      var want = ok ? '' : 'none';
+      if (s.style.display !== want) s.style.display = want;
+    }
+  }
+
   function syncThemeState() {
     if (!root) return;
     var idx = themeIndex();
@@ -558,6 +568,7 @@ class MainActivity : ComponentActivity() {
     hideBrandText(row, m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
+    syncSeparators();
     syncThemeState();
     disarmFallback();
   }
@@ -611,6 +622,15 @@ class MainActivity : ComponentActivity() {
         favoritesDisplay: (function () {
           var b = document.querySelector('[data-kvideo-act="favorites"]');
           return b ? (b.style.display || 'shown') : 'missing';
+        })(),
+        seps: document.querySelectorAll('[data-kvideo-menu] > .kvideo-menu-sep').length,
+        sepsVisible: (function () {
+          var n = 0;
+          var list = document.querySelectorAll('[data-kvideo-menu] > .kvideo-menu-sep');
+          for (var i = 0; i < list.length; i++) {
+            if (list[i].style.display !== 'none') n++;
+          }
+          return n;
         })(),
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
