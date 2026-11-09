@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
          *    「节流立即扫 + 尾部补扫」，syncMenu() 稳态不产生 DOM 变更。
          * 8. 播放页左右快退/快进圆钮按 aria-label 打标后缩小，保留 44px 热区。
          */
-        private const val CHROME_INJECT_JS = """
+        private const val CHROME_INJECT_JS_A = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
 
@@ -731,7 +731,8 @@ class MainActivity : ComponentActivity() {
     'min-width': '28px', 'min-height': '28px',
     'max-width': '28px', 'max-height': '28px'
   };
-  var SVG_PROPS = {
+"""
+        private val CHROME_INJECT_JS_B = """  var SVG_PROPS = {
     'width': '16px', 'height': '16px',
     'min-width': '16px', 'min-height': '16px',
     'max-width': '16px', 'max-height': '16px'
@@ -1470,6 +1471,13 @@ class MainActivity : ComponentActivity() {
   syncPlaybackState();
 })();
 """
+
+        // JVM class 常量池单个 UTF-8 项上限 65535 字节。这段脚本含大量中文
+        // 注释，1.1.29 时整串已达 65900 字节，做成单个字面量会编译报
+        // "UTF8 string too large"。拆成两个字面量，用 getter 在运行时拼接：
+        // B 不是 const，编译器不会把两段折叠回一个大常量池项。
+        private val CHROME_INJECT_JS: String
+            get() = CHROME_INJECT_JS_A + CHROME_INJECT_JS_B
     }
 
     private lateinit var webView: WebView
