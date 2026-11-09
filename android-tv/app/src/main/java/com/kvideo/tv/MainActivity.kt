@@ -305,6 +305,16 @@ class MainActivity : ComponentActivity() {
     '[' + MORE_WRAP_ATTR + '="1"]{' +
       'left:auto !important;right:24px !important;top:32px !important;}';
 
+  // 三点弹出的设置面板原本卡片接近三分之一屏宽，挡画面。1.1.28 起接管尺寸：
+  // max-content 让宽度贴合文字内容，zoom 等比缩小字号/间距/图标/内边距——
+  // 比逐条改子元素的 padding、font-size 稳妥，也不会碰网页用来向左展开的
+  // transform（那个一旦覆盖，菜单就会跑出屏幕或贴错位置）。
+  var MORE_MENU_ATTR = 'data-kvideo-more-menu';
+  var MORE_MENU_CSS =
+    '[' + MORE_MENU_ATTR + '="1"]{' +
+      'zoom:0.82 !important;width:max-content !important;min-width:0 !important;' +
+      'max-width:300px !important;box-sizing:border-box !important;}';
+
   // 手势提示浮层：跟手拖进度时显示目标时间/偏移/进度条，音量亮度时显示百分比。
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
   var HUD_CSS =
@@ -342,7 +352,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + MORE_CSS + HUD_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + MORE_CSS + MORE_MENU_CSS + HUD_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -880,12 +890,43 @@ class MainActivity : ComponentActivity() {
       if (looksLikeOverlayMenu(e)) e.setAttribute(OVERLAY_MENU_ATTR, '1');
     }
   }
+  // 三点「更多」设置面板：单独标记，供尺寸 CSS 与手势闸门使用。
+  // 只认含「复制链接」的浮层（该菜单独有文案），取最内层/最窄的一个，
+  // 防止父子同时命中造成二次缩放；菜单关闭后清掉标记。
+  function markMoreMenu() {
+    var l = document.querySelectorAll('div');
+    var best = null, bw = 1e9;
+    for (var i = 0; i < l.length; i++) {
+      var e = l[i];
+      var marked = e.hasAttribute(MORE_MENU_ATTR);
+      var r = e.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      // zoom 后菜单视觉尺寸会变小；已标记的放宽下限，避免「标记→缩小→
+      // 判太小→清标记→恢复」的闪烁循环。
+      if (!marked && (r.width < 110 || r.height < 110)) continue;
+      if (String(e.textContent || '').indexOf(OVERLAY_TEXT_HINT) < 0) continue;
+      var cs;
+      try { cs = window.getComputedStyle(e); } catch (err) { continue; }
+      if (!cs || (cs.position !== 'fixed' && cs.position !== 'absolute')) continue;
+      if (cs.display === 'none' || cs.visibility === 'hidden' ||
+          cs.opacity === '0') continue;
+      if (r.width < bw) { bw = r.width; best = e; }
+    }
+    var olds = document.querySelectorAll('[' + MORE_MENU_ATTR + '="1"]');
+    for (var j = 0; j < olds.length; j++) {
+      if (olds[j] !== best) olds[j].removeAttribute(MORE_MENU_ATTR);
+    }
+    if (best && best.getAttribute(MORE_MENU_ATTR) !== '1') {
+      best.setAttribute(MORE_MENU_ATTR, '1');
+    }
+  }
   function elInOverlay(el) {
     var hops = 0;
     while (el && el !== document.body && hops < 24) {
       if (el.hasAttribute) {
         if (el.hasAttribute(OVERLAY_MENU_ATTR) ||
             el.hasAttribute(SPEED_MENU_ATTR) ||
+            el.hasAttribute(MORE_MENU_ATTR) ||
             el.hasAttribute('data-kvideo-popover')) return true;
         var role = el.getAttribute('role');
         if (role === 'menu' || role === 'dialog' || role === 'listbox') return true;
@@ -900,7 +941,8 @@ class MainActivity : ComponentActivity() {
   // 避免误伤字幕层、弹幕层等常驻浮层，也避免菜单 DOM 残留时把手势永久关掉。
   function overlayMenuVisible() {
     var l = document.querySelectorAll(
-      '[' + OVERLAY_MENU_ATTR + '="1"], [' + SPEED_MENU_ATTR + '="1"]');
+      '[' + OVERLAY_MENU_ATTR + '="1"], [' + SPEED_MENU_ATTR + '="1"], ' +
+      '[' + MORE_MENU_ATTR + '="1"]');
     for (var i = 0; i < l.length; i++) {
       var e = l[i];
       var r = e.getBoundingClientRect();
@@ -909,7 +951,7 @@ class MainActivity : ComponentActivity() {
       try { cs = window.getComputedStyle(e); } catch (err) { continue; }
       if (cs.display === 'none' || cs.visibility === 'hidden' ||
           cs.opacity === '0') continue;
-      if (e.hasAttribute(SPEED_MENU_ATTR) ||
+      if (e.hasAttribute(SPEED_MENU_ATTR) || e.hasAttribute(MORE_MENU_ATTR) ||
           String(e.textContent || '').indexOf(OVERLAY_TEXT_HINT) >= 0) return true;
     }
     return false;
@@ -1222,6 +1264,7 @@ class MainActivity : ComponentActivity() {
     moveMoreButton();
     moveRateButton();
     placeSpeedMenu();
+    markMoreMenu();
   }
 
   function syncMenu() {
