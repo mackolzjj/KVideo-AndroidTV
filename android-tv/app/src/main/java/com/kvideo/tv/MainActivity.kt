@@ -145,9 +145,15 @@ class MainActivity : ComponentActivity() {
 
   var BTN = '[data-kvideo-menu] button';
   var MENU_CSS =
-    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:0 0 auto;' +
-      'position:relative;margin-left:auto;min-width:0;}' +
-    '[data-kvideo-menu] .kvideo-menu-group{display:flex;align-items:center;gap:6px;}' +
+    // 按钮组占满 logo 右侧整条，按组宽权重等间距铺开；
+    // 原先的右推布局把 6 个钮整体挤到最右，中间留一大块空白。
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:1 1 auto;' +
+      'position:relative;margin-left:8px;min-width:0;' +
+      'justify-content:space-between;}' +
+    '[data-kvideo-menu] .kvideo-menu-group{display:flex;align-items:center;gap:6px;' +
+      'flex:1 1 auto;justify-content:space-around;justify-content:space-evenly;}' +
+    '[data-kvideo-menu] [data-kvideo-group="content"]{flex:2 1 auto;}' +
+    '[data-kvideo-menu] [data-kvideo-group="tools"]{flex:5 1 auto;}' +
     '[data-kvideo-menu] .kvideo-menu-sep{width:1px;height:22px;flex:0 0 auto;' +
       'background:var(--glass-border,rgba(127,127,127,.35));margin:0 2px;}' +
     BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
@@ -207,7 +213,7 @@ class MainActivity : ComponentActivity() {
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
-      '{font-size:0 !important;margin-right:8px !important;}' +
+      '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS;
