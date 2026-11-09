@@ -4,7 +4,7 @@
     <string name="setup_title">连接你的 KVideo</string>
     <string name="setup_description">首次使用时输入你的 KVideo 部署地址，保存后会记住，下次打开直接进入。支持 https 与局域网 http 地址。</string>
     <string name="setup_hint">http://192.168.1.2:3000</string>
-    <string name="setup_footer">在网页上滑可收起顶部工具条，下滑再展开；显隐只听手势，横屏竖屏都有效。顶部条「更多 → 应用设置」可随时回到这里修改服务器地址；也可连按返回键到网页首页后再按一次返回。顶部菜单未加载时同样用返回键进入设置页。视频全屏时自动转横屏并隐藏悬浮按钮，退出全屏恢复。横屏播放时点画面左侧的锁按钮可防误触（5 秒无操作自动隐藏，触屏或按键即可唤出）；在画面上左滑快退、右滑快进。</string>
+    <string name="setup_footer">在网页上滑可收起顶部工具条，下滑再展开；显隐只听手势，横屏竖屏都有效。顶部条「更多 → 应用设置」可随时回到这里修改服务器地址；也可连按返回键到网页首页后再按一次返回。顶部菜单未加载时同样用返回键进入设置页。视频全屏时自动转横屏并隐藏悬浮按钮，退出全屏恢复。横屏播放时点画面左侧的锁按钮可防误触（5 秒无操作自动隐藏，触屏或按键即可唤出）；在画面上左右滑动可跟手拖动进度、松手定位；左半屏上滑增大音量、下滑减小，右半屏上滑变亮、下滑变暗。</string>
     <string name="button_open_saved">打开已保存地址</string>
     <string name="button_save">保存并重载</string>
     <string name="button_exit">退出</string>

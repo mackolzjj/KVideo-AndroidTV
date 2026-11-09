@@ -7,7 +7,9 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.media.AudioManager
 import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -227,8 +229,7 @@ class MainActivity : ComponentActivity() {
   // 按钮仍是 40px、图标只小 2px，观感上等于没生效。这里全部宽度统一缩到
   // 按钮 28px / 图标 16px（相对原生 64/32 缩小一半以上），不再依赖断点；
   // CSS + 内联 important 双保险。
-  // 快退/快进圆钮默认隐藏；只有左右滑动触发时才短暂显示，作为方向反馈。
-  // display:none 不影响 element.click()，网页 React 的 onClick 仍会被派发。
+  // 快退/快进圆钮保持隐藏：1.1.22 起水平滑动改为跟手拖进度，不再点这两个按钮。
   var SEEK_CSS =
     '[data-kvideo-seek="1"]{display:none !important;}' +
     '[data-kvideo-seek="1"][data-kvideo-seek-show="1"]{' +
@@ -295,6 +296,28 @@ class MainActivity : ComponentActivity() {
     '[' + MORE_WRAP_ATTR + '="1"]{' +
       'left:auto !important;right:24px !important;top:32px !important;}';
 
+  // 手势提示浮层：跟手拖进度时显示目标时间/偏移/进度条，音量亮度时显示百分比。
+  // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
+  var HUD_CSS =
+    '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
+      'transform:translate(-50%,-50%) !important;min-width:176px !important;' +
+      'padding:14px 20px 12px !important;box-sizing:border-box !important;' +
+      'background:rgba(20,22,26,.92) !important;' +
+      'border:1px solid rgba(255,255,255,.18) !important;border-radius:14px !important;' +
+      'box-shadow:0 8px 28px rgba(0,0,0,.35) !important;color:#FFFFFF !important;' +
+      'text-align:center !important;z-index:2147483647 !important;' +
+      'pointer-events:none !important;display:none !important;font-family:sans-serif !important;}' +
+    '.kv-hud-main{font-size:22px !important;font-weight:600 !important;' +
+      'line-height:1.2 !important;font-variant-numeric:tabular-nums !important;' +
+      'color:#FFFFFF !important;}' +
+    '.kv-hud-sub{font-size:12px !important;color:rgba(255,255,255,.68) !important;' +
+      'margin-top:4px !important;line-height:1.3 !important;}' +
+    '.kv-hud-track{height:4px !important;border-radius:2px !important;' +
+      'margin-top:10px !important;background:rgba(255,255,255,.20) !important;' +
+      'overflow:hidden !important;}' +
+    '.kv-hud-track i{display:block !important;height:100% !important;width:0 !important;' +
+      'background:#3b82f6 !important;border-radius:2px !important;}';
+
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
@@ -310,7 +333,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + MORE_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + MORE_CSS + HUD_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -732,29 +755,81 @@ class MainActivity : ComponentActivity() {
     return pc.indexOf('absolute right-0') >= 0 ? 'fwd' : 'back';
   }
 
-  // 左滑快退 / 右滑快进。只识别「画面中部 + 明显水平」的一次滑动，
-  // 避开顶部工具条、底部进度条/控制条、自建菜单与弹层。
-  var SEEK_SWIPE_MIN = 56;
-  var SEEK_SWIPE_RATIO = 1.4;
-  var seekSwipe = null;
-  var seekFlashTimer = null;
+  // 1.1.22：左右滑动 = 跟手拖进度条（连续定位，不再是固定 10 秒跳跃）；
+  // 纵向滑动按起点左右分区 = 音量 / 亮度。两者按首次位移的主方向二选一。
+  // 网页自己的进度条拖动机制（isDraggingProgressRef）是：touchstart 置标志，
+  // document 上的 touchmove 只更新 React 时间显示，touchend 才真正 seek。
+  // 这里合成同构的 touch 事件喂给它，让原生进度条/时间文字实时跟着手指走；
+  // 合成失败也不影响核心功能 —— 松手时用 video.currentTime 兜底定位。
+  var SCRUB_MIN_PX = 10;
+  var AXIS_RATIO = 1.2;
+  var VERT_STEP_PX = 24;
+  var scrub = null;
+  var synthDispatching = false;
+  var hudTimer = null;
 
-  function hideSeekFlash() {
-    var l = document.querySelectorAll('[data-kvideo-seek-show]');
-    for (var i = 0; i < l.length; i++) {
-      l[i].removeAttribute('data-kvideo-seek-show');
-    }
+  function kvClamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function kvTime(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return h > 0 ? h + ':' + p(m) + ':' + p(x) : p(m) + ':' + p(x);
   }
-  function flashSeek(dir) {
-    var b = document.querySelector(
-      '[data-kvideo-seek="1"][data-kvideo-seek-dir="' + dir + '"]');
-    if (b) {
-      b.setAttribute('data-kvideo-seek-show', '1');
-      // 复用网页原生按钮的 onClick（React 合成事件），不自己算时间轴
-      try { b.click(); } catch (e) {}
-    }
-    if (seekFlashTimer) clearTimeout(seekFlashTimer);
-    seekFlashTimer = setTimeout(hideSeekFlash, 900);
+  function kvHud() {
+    var h = document.getElementById('kvideo-gesture-hud');
+    if (h) return h;
+    h = document.createElement('div');
+    h.id = 'kvideo-gesture-hud';
+    h.setAttribute('data-kvideo-hud', '1');
+    h.innerHTML = '<div class="kv-hud-main"></div>' +
+      '<div class="kv-hud-sub"></div><div class="kv-hud-track"><i></i></div>';
+    (document.body || document.documentElement).appendChild(h);
+    return h;
+  }
+  function showHud(main, sub, ratio) {
+    if (hudTimer) { clearTimeout(hudTimer); hudTimer = null; }
+    var h = kvHud();
+    h.querySelector('.kv-hud-main').textContent = main;
+    h.querySelector('.kv-hud-sub').textContent = sub;
+    h.querySelector('.kv-hud-track i').style.width =
+      Math.round(kvClamp(ratio, 0, 1) * 100) + '%';
+    h.style.display = 'block';
+  }
+  function hideHud(delay) {
+    if (hudTimer) clearTimeout(hudTimer);
+    hudTimer = setTimeout(function () {
+      var h = document.getElementById('kvideo-gesture-hud');
+      if (h) h.style.display = 'none';
+      hudTimer = null;
+    }, delay || 0);
+  }
+  // 用普通 Event + 自定义 touches 合成，避免依赖 Touch 构造函数；
+  // 标志位防止派发到 document 时又回到本脚本的 capture 监听造成递归。
+  function synthTouch(type, targetEl, clientX, clientY) {
+    try {
+      var e = new Event(type, { bubbles: false, cancelable: true });
+      var t = { identifier: 1, target: targetEl, clientX: clientX, clientY: clientY,
+                pageX: clientX, pageY: clientY, screenX: clientX, screenY: clientY };
+      Object.defineProperty(e, 'touches', { value: [t], configurable: true });
+      Object.defineProperty(e, 'targetTouches', { value: [t], configurable: true });
+      Object.defineProperty(e, 'changedTouches', { value: [t], configurable: true });
+      synthDispatching = true;
+      try { targetEl.dispatchEvent(e); } finally { synthDispatching = false; }
+      return true;
+    } catch (err) { synthDispatching = false; return false; }
+  }
+  function findProgressBar() {
+    var b = document.querySelector('.slider-track');
+    if (b) return b;
+    var t = document.querySelector('.slider-thumb');
+    return t ? t.parentElement : null;
+  }
+  function videoInfo() {
+    var v = document.querySelector('video');
+    if (!v) return null;
+    var d = v.duration;
+    if (!isFinite(d) || d <= 1) return null;
+    return { v: v, d: d, t: v.currentTime || 0 };
   }
   function seekGestureAllowed(x, y) {
     var h = window.innerHeight || 0;
@@ -764,29 +839,101 @@ class MainActivity : ComponentActivity() {
         el.closest('[data-kvideo-menu]') ||
         el.closest('input,select,textarea') ||
         el.closest('[role="dialog"]') ||
-        el.closest('[data-kvideo-popover]'))) return false;
+        el.closest('[data-kvideo-popover]') ||
+        el.closest('[data-kvideo-hud]') ||
+        el.closest('.slider-track') ||
+        el.closest('button,a'))) return false;
     return true;
   }
   function onSeekTouchStart(ev) {
-    if (ev.touches.length !== 1) { seekSwipe = null; return; }
+    if (synthDispatching) return;
+    if (ev.touches.length !== 1) { scrub = null; return; }
     var t = ev.touches[0];
-    if (!seekGestureAllowed(t.clientX, t.clientY)) { seekSwipe = null; return; }
-    seekSwipe = { x: t.clientX, y: t.clientY, fired: false };
+    if (!seekGestureAllowed(t.clientX, t.clientY)) { scrub = null; return; }
+    var info = videoInfo();
+    if (!info) { scrub = null; return; }
+    var bar = findProgressBar();
+    var rect = bar ? bar.getBoundingClientRect() : null;
+    var usable = !!(rect && rect.width > 120);
+    scrub = {
+      x: t.clientX, y: t.clientY, lastY: t.clientY,
+      t0: info.t, d: info.d, v: info.v,
+      width: usable ? rect.width : (window.innerWidth || 1280) * 0.9,
+      rect: rect, bar: bar, usable: usable,
+      baseX: usable ? rect.left + (info.t / info.d) * rect.width : 0,
+      side: t.clientX < (window.innerWidth || 0) / 2 ? 'left' : 'right',
+      mode: null, target: info.t, synthStarted: false
+    };
   }
   function onSeekTouchMove(ev) {
-    if (!seekSwipe || seekSwipe.fired || ev.touches.length !== 1) return;
+    if (synthDispatching || !scrub || ev.touches.length !== 1) return;
     var t = ev.touches[0];
-    var dx = t.clientX - seekSwipe.x;
-    var dy = t.clientY - seekSwipe.y;
-    if (Math.abs(dx) < SEEK_SWIPE_MIN) return;
-    if (Math.abs(dx) < Math.abs(dy) * SEEK_SWIPE_RATIO) return;
-    seekSwipe.fired = true;
-    flashSeek(dx < 0 ? 'back' : 'fwd');
-    // 确认是水平滑动后，别让网页自己的长按连跳/拖动逻辑再处理这一下
+    var dx = t.clientX - scrub.x, dy = t.clientY - scrub.y;
+    if (!scrub.mode) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_MIN_PX) return;
+      if (Math.abs(dx) >= Math.abs(dy) * AXIS_RATIO) {
+        scrub.mode = 'scrub';
+        if (scrub.usable) {
+          scrub.synthStarted = synthTouch('touchstart', scrub.bar,
+            kvClamp(scrub.baseX, scrub.rect.left, scrub.rect.right),
+            scrub.rect.top + scrub.rect.height / 2);
+        }
+      } else if (Math.abs(dy) >= Math.abs(dx) * AXIS_RATIO) {
+        scrub.mode = 'vertical';
+      } else return;
+    }
+    if (scrub.mode === 'scrub') {
+      scrub.target = kvClamp(scrub.t0 + dx / scrub.width * scrub.d,
+                             0, Math.max(0, scrub.d - 0.25));
+      var delta = scrub.target - scrub.t0;
+      showHud(kvTime(scrub.target) + ' / ' + kvTime(scrub.d),
+              (delta >= 0 ? '+' : '-') + kvTime(Math.abs(delta)) + ' · 松手定位',
+              scrub.target / scrub.d);
+      if (scrub.synthStarted) {
+        synthTouch('touchmove', document,
+          kvClamp(scrub.baseX + dx, scrub.rect.left, scrub.rect.right), t.clientY);
+      }
+    } else {
+      var steps = Math.trunc((t.clientY - scrub.lastY) / VERT_STEP_PX);
+      if (steps !== 0) {
+        scrub.lastY += steps * VERT_STEP_PX;
+        var dir = steps < 0 ? 1 : -1;
+        var n = Math.min(Math.abs(steps), 3);
+        var bridge = window.KVideoAndroid;
+        var pct = -1;
+        for (var i = 0; i < n; i++) {
+          try {
+            pct = scrub.side === 'left'
+              ? (bridge && bridge.adjustVolume ? bridge.adjustVolume(dir) : -1)
+              : (bridge && bridge.adjustBrightness ? bridge.adjustBrightness(dir) : -1);
+          } catch (e) {}
+        }
+        showHud((scrub.side === 'left' ? '音量' : '亮度') + ' ' +
+                  (pct >= 0 ? pct + '%' : (dir > 0 ? '＋' : '－')),
+                scrub.side === 'left' ? '左侧上滑增大 · 下滑减小'
+                                      : '右侧上滑变亮 · 下滑变暗',
+                pct >= 0 ? pct / 100 : (dir > 0 ? 0.65 : 0.35));
+      }
+    }
     if (ev.cancelable) ev.preventDefault();
     if (ev.stopPropagation) ev.stopPropagation();
   }
-  function onSeekTouchEnd() { seekSwipe = null; }
+  function onSeekTouchEnd() {
+    if (!scrub) return;
+    if (scrub.mode === 'scrub') {
+      // 先让网页清掉 isDraggingProgressRef，否则它的 timeupdate 会跳过状态更新，
+      // 进度条会停在我们最后合成的位置而不回到真实播放位置。
+      if (scrub.synthStarted) {
+        synthTouch('touchend', document, scrub.baseX, 0);
+        synthTouch('touchcancel', document, scrub.baseX, 0);
+      }
+      try { if (scrub.v) scrub.v.currentTime = scrub.target; } catch (e) {}
+      hideHud(350);
+    } else if (scrub.mode === 'vertical') {
+      hideHud(500);
+    }
+    scrub = null;
+  }
 
   // 网页上报「当前横屏且有 video」，壳层据此决定是否显示锁按钮。
   // 状态变化才调桥，避免 1s 补扫每轮都跨 JNI。
@@ -1060,6 +1207,12 @@ class MainActivity : ComponentActivity() {
           return o.join(',');
         })(),
         seekFlash: document.querySelectorAll('[data-kvideo-seek-show]').length,
+        progressBar: document.querySelectorAll('.slider-track').length,
+        gestureHud: document.querySelectorAll('[data-kvideo-hud]').length,
+        videoDuration: (function () {
+          var v = document.querySelector('video');
+          return v && isFinite(v.duration) ? Math.round(v.duration) : -1;
+        })(),
         moreButton: document.querySelectorAll('[' + MORE_ATTR + '="1"]').length,
         moreWrap: document.querySelectorAll('[' + MORE_WRAP_ATTR + '="1"]').length,
         morePos: (function () {
@@ -1573,8 +1726,39 @@ class MainActivity : ComponentActivity() {
     /** 网页只在「横屏 + 存在 video」时上报 true；离开播放页自动解锁并收起按钮。 */
     private fun onPlaybackStateChanged(active: Boolean) {
         playbackActive = active
-        if (!active && playbackLocked) setPlaybackLocked(false)
+        if (!active) {
+            if (playbackLocked) setPlaybackLocked(false)
+            resetWindowBrightness()
+        }
         updateLockUi()
+    }
+
+    /** 手势调过的亮度只在本窗口生效；离开播放页交还给系统亮度。 */
+    private fun resetWindowBrightness() {
+        val lp = window.attributes
+        if (lp.screenBrightness in 0f..1f) {
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            window.attributes = lp
+        }
+    }
+
+    /** JS 桥在 WebView 线程调用，音量和窗口亮度必须在 UI 线程改；同步回传百分比给提示浮层。 */
+    private fun runOnUiSync(block: () -> Int): Int {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            return block()
+        }
+        var result = -1
+        val latch = CountDownLatch(1)
+        runOnUiThread {
+            try {
+                result = block()
+            } catch (error: Exception) {
+                Log.w(TAG, "Gesture adjustment failed", error)
+            } finally {
+                latch.countDown()
+            }
+        }
+        return if (latch.await(500, TimeUnit.MILLISECONDS)) result else -1
     }
 
     private fun canShowLockToggle(): Boolean =
@@ -1639,7 +1823,7 @@ class MainActivity : ComponentActivity() {
                     swipeStartY = event.y
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (viewsReady && !isSetupVisible() && customView == null &&
+                    if (viewsReady && !playbackActive && !isSetupVisible() && customView == null &&
                         webView.visibility == View.VISIBLE) {
                         val dx = event.x - swipeStartX
                         val dy = event.y - swipeStartY
@@ -1802,6 +1986,41 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun onPlaybackState(active: Boolean) {
             runOnUiThread { onPlaybackStateChanged(active) }
+        }
+
+        /** 左半屏上下滑动：调系统媒体音量，返回 0..100 供提示浮层显示。 */
+        @JavascriptInterface
+        fun adjustVolume(direction: Int): Int = runOnUiSync {
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val max = maxOf(1, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+            val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val step = maxOf(1, max / 15)
+            val next = (cur + direction * step).coerceIn(0, max)
+            if (next != cur) {
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, next, AudioManager.FLAG_SHOW_UI)
+            }
+            ((next.toFloat() / max) * 100).roundToInt()
+        }
+
+        /** 右半屏上下滑动：调当前窗口亮度，返回 0..100 供提示浮层显示。 */
+        @JavascriptInterface
+        fun adjustBrightness(direction: Int): Int = runOnUiSync {
+            val lp = window.attributes
+            var value = lp.screenBrightness
+            if (value !in 0f..1f) {
+                value = try {
+                    Settings.System.getInt(
+                        contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128
+                    ) / 255f
+                } catch (error: Exception) {
+                    0.5f
+                }
+                value = value.coerceIn(0.05f, 1f)
+            }
+            value = (value + direction * 0.06f).coerceIn(0.02f, 1f)
+            lp.screenBrightness = value
+            window.attributes = lp
+            (value * 100).roundToInt()
         }
 
         /** 记录顶部条是否停靠；右下角 FAB 已停用，此状态仅用于调试。 */
