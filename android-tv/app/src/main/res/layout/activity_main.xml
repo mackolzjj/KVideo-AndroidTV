@@ -222,6 +222,40 @@
         android:background="#000000"
         android:visibility="gone" />
 
+    <!-- 亮度提示浮层：右半屏上下滑调亮度时由壳层原生显示，绕开网页 CSS 不确定性。
+         居中卡片，松手约 800ms 后自动隐藏；音量仍走系统 FLAG_SHOW_UI 浮层。 -->
+    <LinearLayout
+        android:id="@+id/brightness_hud"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_hud_card"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="30dp"
+        android:paddingVertical="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/brightness_hud_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="亮度 100%"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <ProgressBar
+            android:id="@+id/brightness_hud_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="170dp"
+            android:layout_height="4dp"
+            android:layout_marginTop="14dp"
+            android:max="100"
+            android:progress="100"
+            android:progressTint="#3B82F6" />
+    </LinearLayout>
+
     <!-- 防误触锁：锁定时这层透明全屏 View 吞掉所有触摸。
          锁按钮必须放在本层之上（FrameLayout 后添加者在上），
          否则锁定后连解锁按钮也点不到。 -->

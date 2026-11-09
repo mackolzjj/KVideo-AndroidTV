@@ -901,19 +901,16 @@ class MainActivity : ComponentActivity() {
         var dir = steps < 0 ? 1 : -1;
         var n = Math.min(Math.abs(steps), 3);
         var bridge = window.KVideoAndroid;
-        var pct = -1;
         for (var i = 0; i < n; i++) {
           try {
-            pct = scrub.side === 'left'
-              ? (bridge && bridge.adjustVolume ? bridge.adjustVolume(dir) : -1)
-              : (bridge && bridge.adjustBrightness ? bridge.adjustBrightness(dir) : -1);
+            // 音量由系统 FLAG_SHOW_UI 浮层反馈；亮度由壳层原生浮层反馈（见 adjustBrightness）。
+            if (scrub.side === 'left') {
+              if (bridge && bridge.adjustVolume) bridge.adjustVolume(dir);
+            } else {
+              if (bridge && bridge.adjustBrightness) bridge.adjustBrightness(dir);
+            }
           } catch (e) {}
         }
-        showHud((scrub.side === 'left' ? '音量' : '亮度') + ' ' +
-                  (pct >= 0 ? pct + '%' : (dir > 0 ? '＋' : '－')),
-                scrub.side === 'left' ? '左侧上滑增大 · 下滑减小'
-                                      : '右侧上滑变亮 · 下滑变暗',
-                pct >= 0 ? pct / 100 : (dir > 0 ? 0.65 : 0.35));
       }
     }
     if (ev.cancelable) ev.preventDefault();
@@ -1324,6 +1321,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var lockOverlay: View
     private lateinit var lockToggle: ImageButton
     private lateinit var lockHint: TextView
+    private lateinit var brightnessHud: View
+    private lateinit var brightnessHudValue: TextView
+    private lateinit var brightnessHudBar: ProgressBar
+    private val brightnessHudHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideBrightnessHud = Runnable { brightnessHud.visibility = View.GONE }
     private var playbackLocked = false
     private var playbackActive = false
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -1355,6 +1357,9 @@ class MainActivity : ComponentActivity() {
         lockOverlay = findViewById(R.id.lock_overlay)
         lockToggle = findViewById(R.id.lock_toggle)
         lockHint = findViewById(R.id.lock_hint)
+        brightnessHud = findViewById(R.id.brightness_hud)
+        brightnessHudValue = findViewById(R.id.brightness_hud_value)
+        brightnessHudBar = findViewById(R.id.brightness_hud_bar)
         viewsReady = true
         settingsButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
@@ -1743,6 +1748,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 原生亮度浮层：右半屏上下滑调亮度时显示百分比与进度条，松手 800ms 后自动隐藏。
+     *  用原生 View 而非注入 JS 浮层，避免网页 CSS !important 把显示压住导致「无反馈」。 */
+    private fun showBrightnessHud(pct: Int) {
+        if (!viewsReady) return
+        val p = pct.coerceIn(0, 100)
+        brightnessHudValue.text = getString(R.string.brightness_hud_value, p)
+        brightnessHudBar.progress = p
+        brightnessHud.visibility = View.VISIBLE
+        brightnessHudHandler.removeCallbacks(hideBrightnessHud)
+        brightnessHudHandler.postDelayed(hideBrightnessHud, 800L)
+    }
+
     /** JS 桥在 WebView 线程调用，音量和窗口亮度必须在 UI 线程改；同步回传百分比给提示浮层。 */
     private fun runOnUiSync(block: () -> Int): Int {
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
@@ -2021,7 +2038,9 @@ class MainActivity : ComponentActivity() {
             value = (value + direction * 0.06f).coerceIn(0.02f, 1f)
             lp.screenBrightness = value
             window.attributes = lp
-            (value * 100).roundToInt()
+            val pct = (value * 100).roundToInt()
+            showBrightnessHud(pct)
+            pct
         }
 
         /** 记录顶部条是否停靠；右下角 FAB 已停用，此状态仅用于调试。 */
