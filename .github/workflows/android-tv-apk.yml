@@ -1,0 +1,132 @@
+name: Android Phone APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag used to publish the built APK"
+        required: false
+        type: string
+      release_title:
+        description: "Optional release title"
+        required: false
+        type: string
+      kvideo_url:
+        description: "Optional default KVideo URL baked into the APK"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-phone-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_android_phone_apk:
+    runs-on: ubuntu-latest
+    env:
+      KVIDEO_URL: ${{ inputs.kvideo_url || '' }}
+    defaults:
+      run:
+        # 目录名沿用上游 android-tv/，只是路径，产物面向手机
+        working-directory: android-tv
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # 固定 debug 签名密钥随仓库版本化。
+      # 实测 Gradle 并不会读取 ~/.android/debug.keystore：runner 上每次构建都会
+      # 自动生成一把新的默认 debug key，导致签名逐次变化、覆盖安装必然失败。
+      # 这里把密钥解码到 app/ 目录，由 build.gradle.kts 的 signingConfigs.debug
+      # 显式引用，才能真正固定签名；也不再依赖 7 天未访问即被清理的 Actions 缓存。
+      # debug key 不是机密：密码固定为 android，仅用于开发签名，不用于应用商店分发。
+      - name: Restore fixed debug keystore
+        run: |
+          base64 -d "$GITHUB_WORKSPACE/.github/debug-keystore.b64" > app/debug.keystore
+          keytool -list -keystore app/debug.keystore \
+            -storepass android -alias androiddebugkey >/dev/null
+          ls -l app/debug.keystore
+
+      # ubuntu-latest 预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
+      # 并在 sdkmanager --licenses 的交互提示处退出 1，故直接使用预装 SDK。
+      - name: Accept Android SDK licenses
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+
+      - name: Install Android SDK packages
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug -PkvideoUrl="$KVIDEO_URL"
+
+      - name: Resolve APK version name
+        id: apk_version
+        run: |
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n 1 | tr -d '\r\n ')"
+          if [ -z "$version_name" ]; then
+            echo "::error::versionName not found in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "value=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kvideo-android-phone-apk-${{ steps.apk_version.outputs.value }}-r${{ github.run_number }}
+          path: android-tv/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TITLE: ${{ inputs.release_title }}
+        run: |
+          release_notes="$(mktemp)"
+          effective_title="${RELEASE_TITLE:-Android Phone APK ${RELEASE_TAG}}"
+          default_url_text="${KVIDEO_URL:-未预置，首次启动时手动填写}"
+          apk_name="KVideo-Android-${{ steps.apk_version.outputs.value }}.apk"
+
+          cat >"$release_notes" <<EOF
+          预构建的 Android 手机 APK（Android 8.0+，版本 ${{ steps.apk_version.outputs.value }}）。
+
+          使用方式：
+          1. 下载 APK 并在安卓手机上安装（需允许安装未知来源应用）
+          2. 首次启动时输入 KVideo 地址，或直接使用已预置的默认地址
+          3. 保存后即可直接进入；顶部条「更多 → 应用设置」可随时改地址
+
+          本包为 debug 签名（非应用商店正式签名）。自 1.1.4 起签名密钥固定并
+          随仓库版本化，后续版本可直接覆盖安装，无需卸载、不会丢已保存的地址。
+          注意：v1.1.3 及更早版本签名不同，升级到本版需先卸载一次旧包。
+
+          构建提交：$GITHUB_SHA
+          默认地址：$default_url_text
+          EOF
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#$apk_name" --clobber
+            gh release edit "$RELEASE_TAG" --title "$effective_title" --notes-file "$release_notes"
+          else
+            gh release create "$RELEASE_TAG" "android-tv/app/build/outputs/apk/debug/app-debug.apk#$apk_name" \
+              --title "$effective_title" \
+              --notes-file "$release_notes" \
+              --target "$GITHUB_SHA"
+          fi

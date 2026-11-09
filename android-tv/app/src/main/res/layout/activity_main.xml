@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 顶部加载进度条：加载期间给一条可见反馈，100% 自动收起 -->
+    <ProgressBar
+        android:id="@+id/load_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="top"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="#5B9CFF"
+        android:visibility="gone" />
+
+    <!-- 主框架加载失败时盖住 WebView 黑屏，给出原因与两个出口。
+         放在 setup_container 之前，设置页显示时会自然盖住本层。 -->
+    <LinearLayout
+        android:id="@+id/error_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6101115"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/load_error_title"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/load_error_message"
+            android:textColor="#D7DBE5"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/error_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="#9EA7BA"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/retry_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="@string/button_retry"
+                android:textAllCaps="false"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/change_url_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="@string/button_change_url"
+                android:textAllCaps="false"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 手机端：右下角悬浮操作按钮（FAB 习惯）。
+         放在 bottom|end 而非 top|end，避免压住 KVideo 网页自带的顶部图标工具条。
+         显隐由 MainActivity 的上滑/下滑手势统一控制（同时收起网页顶部工具条），
+         不再跟随横竖屏；全屏播放与设置页仍强制隐藏。
+         48dp 触摸目标 + 点击水波纹 + contentDescription。 -->
+    <ImageButton
+        android:id="@+id/settings_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:alpha="0.72"
+        android:background="@drawable/bg_settings_button"
+        android:contentDescription="@string/settings_button"
+        android:foreground="?android:attr/selectableItemBackgroundBorderless"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_settings_24"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/setup_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6101115"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#F31A1C22"
+                android:elevation="12dp"
+                android:maxWidth="480dp"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/setup_title"
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/setup_description"
+                    android:textColor="#D7DBE5"
+                    android:textSize="14sp" />
+
+                <EditText
+                    android:id="@+id/url_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:background="#FF0D0F14"
+                    android:hint="@string/setup_hint"
+                    android:importantForAutofill="no"
+                    android:imeOptions="actionDone"
+                    android:inputType="textUri"
+                    android:minHeight="48dp"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#7D8597"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/status_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/status_ready"
+                    android:textColor="#F5B942"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/open_button"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/button_open_saved"
+                        android:textAllCaps="false"
+                        android:textSize="14sp" />
+
+                    <Button
+                        android:id="@+id/save_button"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:text="@string/button_save"
+                        android:textAllCaps="false"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/setup_footer"
+                    android:textColor="#9EA7BA"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <FrameLayout
+        android:id="@+id/fullscreen_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
+
+    <!-- 防误触锁：锁定时这层透明全屏 View 吞掉所有触摸。
+         锁按钮必须放在本层之上（FrameLayout 后添加者在上），
+         否则锁定后连解锁按钮也点不到。 -->
+    <FrameLayout
+        android:id="@+id/lock_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#00000000"
+        android:clickable="true"
+        android:focusable="false"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/lock_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#B3101115"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
+            android:text="@string/lock_hint_locked"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+    </FrameLayout>
+
+    <!-- 与网页底栏 .btn-icon 统一：40dp 圆钮、10% 白底、20% 白描边、白色线性图标。
+         放在画面左侧中部，避开顶部画质标签与右上角倍速；滑动快退闪现时
+         注入 CSS 会把快退/快进上移 64px，两个圆钮不会叠在一起。 -->
+    <ImageButton
+        android:id="@+id/lock_toggle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="24dp"
+        android:background="@drawable/bg_lock_button"
+        android:contentDescription="@string/lock_button_lock"
+        android:foreground="?android:attr/selectableItemBackgroundBorderless"
+        android:padding="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_lock_open_24"
+        android:visibility="gone" />
+</FrameLayout>
