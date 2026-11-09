@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
@@ -21,9 +22,13 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebChromeClient.CustomViewCallback
 import android.webkit.WebSettings
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.ProgressBar
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -160,12 +165,14 @@ class MainActivity : ComponentActivity() {
       // 和原生按钮糊在同一行；这里固定中性底色与描边，不依赖网页变量。
       'border:1px solid rgba(127,127,127,.34) !important;' +
       'background:rgba(127,127,127,.14) !important;' +
-      'color:var(--text-color,inherit);font:inherit;' +
+      // 不再吃网页的 --text-color：圆钮颜色随网页前景（等同 inherit），
+      // 弹层的文字另给固定浅色，避免深底配深字。
+      'color:inherit;font:inherit;' +
       '-webkit-tap-highlight-color:transparent;' +
       'transition:transform .16s ease,border-color .16s ease,color .16s ease;}' +
     BTN + ':active{transform:scale(.9);}' +
-    BTN + '[data-kvideo-active="1"]{border-color:var(--accent-color,#3b82f6);' +
-      'color:var(--accent-color,#3b82f6);}' +
+    BTN + '[data-kvideo-active="1"]{border-color:#3b82f6;' +
+      'color:#3b82f6;}' +
     BTN + ' svg{width:24px;height:24px;flex:0 0 auto;}' +
     // 播放页对 button 有全局重置（border-radius:0），用更高特异性兜底
     '[data-kvideo-menu] button[data-kvideo-act]{' +
@@ -174,28 +181,42 @@ class MainActivity : ComponentActivity() {
       'background:rgba(127,127,127,.14) !important;}' +
     // 当前主题档位（也用于「更多」展开态）：特异性要高于上面的兜底规则
     '[data-kvideo-menu] button[data-kvideo-act][data-kvideo-active="1"]{' +
-      'border-color:var(--accent-color,#3b82f6) !important;' +
-      'color:var(--accent-color,#3b82f6) !important;' +
+      'border-color:#3b82f6 !important;' +
+      'color:#3b82f6 !important;' +
       'background:rgba(59,130,246,.16) !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
+    // 弹层自带不透明深色底与固定文字色：播放页会把 --glass-bg 设成透明，
+    // 上游浅色主题也可能只定义了 --text-color，靠网页变量必然糊字。
     '[data-kvideo-menu] .kvideo-menu-popover{' +
       'position:absolute;top:calc(100% + 10px);right:0;z-index:3000;' +
       'min-width:172px;padding:6px;display:flex;flex-direction:column;gap:2px;' +
-      'border-radius:16px;border:1px solid var(--glass-border,rgba(127,127,127,.28));' +
-      'background:var(--glass-bg,rgba(32,32,36,.94));' +
+      'border-radius:16px;' +
+      'border:1px solid rgba(127,127,127,.42) !important;' +
+      'background:rgba(26,27,31,.97) !important;' +
+      'color:#F2F3F5 !important;' +
       'backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);' +
-      'box-shadow:0 12px 32px rgba(0,0,0,.3);}' +
+      'box-shadow:0 12px 32px rgba(0,0,0,.42);}' +
     '[data-kvideo-menu] .kvideo-menu-popover button{' +
       'width:100%;height:40px;min-height:40px;border:0;border-radius:10px;' +
-      'background:transparent;justify-content:flex-start;gap:10px;padding:0 10px;' +
+      'background:transparent !important;color:#F2F3F5 !important;' +
+      'justify-content:flex-start;gap:10px;padding:0 10px;' +
       'font-size:14px;white-space:nowrap;}' +
+    '[data-kvideo-menu] .kvideo-menu-popover button:active{' +
+      'background:rgba(255,255,255,.12) !important;}' +
     '[data-kvideo-menu] .kvideo-menu-popover button svg{width:18px;height:18px;}' +
     '@media (min-width:640px){' +
       BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
+    // 6 个圆钮是固定 32px 不会缩，原先 5 条竖线各带 4px margin、10 个
+    // 5px gap，合计约 267px，320dp 设备会把最右钮挤出去或反压 logo。
+    // 压成 2px gap + 无 margin 后约 217px；超窄屏再降一档到约 199px。
     '@media (max-width:430px){' +
-      '[data-kvideo-menu]{gap:5px;}' +
+      '[data-kvideo-menu]{gap:2px;margin-left:4px;}' +
+      '[data-kvideo-menu] .kvideo-menu-sep{margin:0;height:18px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
-      BTN + ' svg{width:20px;height:20px;}}';
+      BTN + ' svg{width:20px;height:20px;}}' +
+    '@media (max-width:360px){' +
+      '[data-kvideo-menu]{gap:1px;}' +
+      BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}}';
 
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
@@ -665,7 +686,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var settingsButton: View
     private lateinit var openButton: Button
     private lateinit var saveButton: Button
+    private lateinit var loadProgress: ProgressBar
+    private lateinit var errorContainer: View
+    private lateinit var errorDetail: TextView
+    private lateinit var retryButton: Button
+    private lateinit var changeUrlButton: Button
     private lateinit var prefs: android.content.SharedPreferences
+    private var currentLoadUrl: String = ""
+    private var pageLoadFailed = false
     private var customView: View? = null
     private var customViewCallback: CustomViewCallback? = null
     private var wasSetupVisibleBeforeFullscreen = false
@@ -693,8 +721,24 @@ class MainActivity : ComponentActivity() {
         openButton = findViewById(R.id.open_button)
         saveButton = findViewById(R.id.save_button)
         settingsButton = findViewById(R.id.settings_button)
+        loadProgress = findViewById(R.id.load_progress)
+        errorContainer = findViewById(R.id.error_container)
+        errorDetail = findViewById(R.id.error_detail)
+        retryButton = findViewById(R.id.retry_button)
+        changeUrlButton = findViewById(R.id.change_url_button)
         viewsReady = true
         settingsButton.setOnClickListener {
+            showSetup(getString(R.string.status_settings_hint))
+        }
+        retryButton.setOnClickListener {
+            val url = currentLoadUrl
+            if (url.isNotEmpty()) {
+                loadConfiguredUrl(url)
+            } else {
+                showSetup(getString(R.string.status_settings_hint))
+            }
+        }
+        changeUrlButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
         }
         swipeThresholdPx = SWIPE_THRESHOLD_DP * resources.displayMetrics.density
@@ -740,12 +784,69 @@ class MainActivity : ComponentActivity() {
             }
 
             webViewClient = object : WebViewClient() {
+                override fun onPageStarted(
+                    view: WebView?,
+                    url: String?,
+                    favicon: Bitmap?
+                ) {
+                    super.onPageStarted(view, url, favicon)
+                    pageLoadFailed = false
+                    errorContainer.visibility = View.GONE
+                    loadProgress.progress = 0
+                    loadProgress.visibility = View.VISIBLE
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    loadProgress.visibility = View.GONE
                     injectChromeScript()
+                }
+
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    error: WebResourceError?
+                ) {
+                    super.onReceivedError(view, request, error)
+                    if (request?.isForMainFrame != true) return
+                    val reason = error?.description?.toString().orEmpty()
+                    val codeText = if (reason.isBlank()) {
+                        error?.errorCode?.toString().orEmpty()
+                    } else {
+                        reason
+                    }
+                    showLoadError(
+                        getString(R.string.load_error_detail, codeText.ifBlank { "unknown" }),
+                        request.url?.toString().orEmpty()
+                    )
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    errorResponse: WebResourceResponse?
+                ) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (request?.isForMainFrame != true) return
+                    val code = errorResponse?.statusCode ?: return
+                    if (code < 400) return
+                    showLoadError(
+                        getString(R.string.load_error_http, code),
+                        request.url?.toString().orEmpty()
+                    )
                 }
             }
             webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                    super.onProgressChanged(view, newProgress)
+                    if (!viewsReady) return
+                    if (newProgress >= 100 || pageLoadFailed) {
+                        loadProgress.visibility = View.GONE
+                    } else {
+                        loadProgress.progress = newProgress
+                    }
+                }
+
                 override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
                     if (view == null || callback == null) {
                         callback?.onCustomViewHidden()
@@ -770,6 +871,7 @@ class MainActivity : ComponentActivity() {
                         )
                     )
                     fullscreenContainer.visibility = View.VISIBLE
+                    loadProgress.visibility = View.GONE
                     webView.visibility = View.GONE
                     setupContainer.visibility = View.GONE
                     updateSettingsButton()
@@ -871,13 +973,33 @@ class MainActivity : ComponentActivity() {
 
     private fun loadConfiguredUrl(url: String) {
         chromeHiddenByGesture = false
+        currentLoadUrl = url
+        pageLoadFailed = false
+        errorContainer.visibility = View.GONE
+        loadProgress.progress = 0
+        loadProgress.visibility = View.VISIBLE
         setupContainer.visibility = View.GONE
         updateSettingsButton()
         statusText.text = getString(R.string.status_ready)
         webView.loadUrl(url)
     }
 
+    /** 主框架加载失败时盖住黑屏，给出原因、重试入口和改地址入口。 */
+    private fun showLoadError(detail: String, url: String) {
+        pageLoadFailed = true
+        loadProgress.visibility = View.GONE
+        val text = StringBuilder(detail)
+        if (url.isNotBlank()) {
+            text.append('\n').append(getString(R.string.load_error_url, url))
+        }
+        errorDetail.text = text.toString()
+        errorContainer.visibility = View.VISIBLE
+    }
+
     private fun showSetup(message: String) {
+        // 设置页盖住 WebView，进度条和错误层一并收起，避免叠在表单上
+        loadProgress.visibility = View.GONE
+        errorContainer.visibility = View.GONE
         // 用户主动进设置页说明要操作，返回网页时把工具条和齿轮都还给他
         chromeHiddenByGesture = false
         applyWebChromeState()

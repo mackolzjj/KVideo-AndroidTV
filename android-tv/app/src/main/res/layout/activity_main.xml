@@ -9,6 +9,87 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- 顶部加载进度条：加载期间给一条可见反馈，100% 自动收起 -->
+    <ProgressBar
+        android:id="@+id/load_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="top"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="#5B9CFF"
+        android:visibility="gone" />
+
+    <!-- 主框架加载失败时盖住 WebView 黑屏，给出原因与两个出口。
+         放在 setup_container 之前，设置页显示时会自然盖住本层。 -->
+    <LinearLayout
+        android:id="@+id/error_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6101115"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/load_error_title"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/load_error_message"
+            android:textColor="#D7DBE5"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/error_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="#9EA7BA"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/retry_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="@string/button_retry"
+                android:textAllCaps="false"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/change_url_button"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="@string/button_change_url"
+                android:textAllCaps="false"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- 手机端：右下角悬浮操作按钮（FAB 习惯）。
          放在 bottom|end 而非 top|end，避免压住 KVideo 网页自带的顶部图标工具条。
          显隐由 MainActivity 的上滑/下滑手势统一控制（同时收起网页顶部工具条），
