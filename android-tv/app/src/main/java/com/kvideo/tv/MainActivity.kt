@@ -846,8 +846,28 @@ class MainActivity : ComponentActivity() {
         el.closest('button,a'))) return false;
     return true;
   }
+  // 手势只在「全屏播放页」生效：首页/详情页/内嵌预览的滑动不应改音量、
+  // 亮度或进度。盒子与 TV 本身恒为横屏，不能用宽高比判定；网页的全屏播放器
+  // 是自实现的（网页 UI 仍可见，不会走 WebView onShowCustomView），所以以
+  // video 是否铺满视口为主，再以「无可见顶部导航 + 有播放进度条」兜底。
+  function isFullscreenPlayback() {
+    if (document.fullscreenElement || document.webkitFullscreenElement ||
+        document.mozFullScreenElement) return true;
+    var v = document.querySelector('video');
+    if (!v) return false;
+    var w = window.innerWidth || 0, h = window.innerHeight || 0;
+    var r = v.getBoundingClientRect();
+    // 宽屏电影上下留黑边，高度阈值放宽到 0.6
+    if (w > 0 && h > 0 && r.width >= w * 0.9 && r.height >= h * 0.6) return true;
+    var nav = document.querySelector(NAV + ',' + HEADER);
+    var nr = nav ? nav.getBoundingClientRect() : null;
+    var navVisible = !!(nr && nr.width > 0 && nr.height > 0);
+    if (!navVisible && document.querySelector('.slider-track')) return true;
+    return false;
+  }
   function onSeekTouchStart(ev) {
     if (synthDispatching) return;
+    if (!isFullscreenPlayback()) { scrub = null; return; }
     if (ev.touches.length !== 1) { scrub = null; return; }
     var t = ev.touches[0];
     if (!seekGestureAllowed(t.clientX, t.clientY)) { scrub = null; return; }
@@ -868,6 +888,8 @@ class MainActivity : ComponentActivity() {
   }
   function onSeekTouchMove(ev) {
     if (synthDispatching || !scrub || ev.touches.length !== 1) return;
+    // 滑动途中退出全屏也要立刻停手，避免继续调音量/亮度
+    if (!isFullscreenPlayback()) { scrub = null; return; }
     var t = ev.touches[0];
     var dx = t.clientX - scrub.x, dy = t.clientY - scrub.y;
     if (!scrub.mode) {
