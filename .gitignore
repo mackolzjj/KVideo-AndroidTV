@@ -11,3 +11,6 @@ captures/
 *.ap_
 *.aab
 *.log
+
+# 构建时从 .github/debug-keystore.b64 解码生成的本地签名文件（勿提交）
+android-tv/app/debug.keystore

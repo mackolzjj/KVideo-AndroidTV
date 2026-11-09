@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.22`（`versionCode 24`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.29`（`versionCode 31`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -80,7 +80,7 @@
 | 输入 | 说明 |
 | --- | --- |
 | `kvideo_url` | 预置进 APK 的默认地址，留空则首次启动手填 |
-| `release_tag` | 填了才创建 / 更新 Release（如 `v1.1.22`） |
+| `release_tag` | 填了才创建 / 更新 Release（如 `v1.1.29`） |
 | `release_title` | Release 标题，留空用默认 |
 
 产物：`kvideo-android-phone-apk-<versionName>-r<run_number>` artifact；填了 `release_tag` 时，Release 资产名为 `KVideo-Android-<versionName>.apk`。`versionName` 直接从 `app/build.gradle.kts` 读取，不用手工同步。
@@ -107,7 +107,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### 发版规则
 
-每次发布在 `android-tv/app/build.gradle.kts` 递增 `versionCode`（只增不减，Android 靠它判断能否覆盖安装）并更新 `versionName`；Release tag 与 `versionName` 对齐（如 `v1.1.22`）。**不要删除或重新生成 `.github/debug-keystore.b64`** —— 换密钥等于要求所有已安装用户卸载重装。
+每次发布在 `android-tv/app/build.gradle.kts` 递增 `versionCode`（只增不减，Android 靠它判断能否覆盖安装）并更新 `versionName`；Release tag 与 `versionName` 对齐（如 `v1.1.29`）。**不要删除或重新生成 `.github/debug-keystore.b64`** —— 换密钥等于要求所有已安装用户卸载重装。
 
 ## 实现要点 / 排障
 
