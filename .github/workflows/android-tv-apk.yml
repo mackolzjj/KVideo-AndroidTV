@@ -25,7 +25,9 @@ concurrency:
 
 jobs:
   build_android_phone_apk:
-    runs-on: ubuntu-latest
+    # 固定镜像：ubuntu-latest 会漂移到 Ubuntu 26（预装 Android SDK/cmdline-tools
+    # 版本变化会让下面「直接使用预装 SDK」的步骤失效），故钉在 24.04。
+    runs-on: ubuntu-24.04
     env:
       KVIDEO_URL: ${{ inputs.kvideo_url || '' }}
     defaults:
@@ -35,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -57,7 +59,7 @@ jobs:
             -storepass android -alias androiddebugkey >/dev/null
           ls -l app/debug.keystore
 
-      # ubuntu-latest 预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
+      # ubuntu-24.04 镜像预装 cmdline-tools 20.0；setup-android@v3 会强装旧版 16.0，
       # 并在 sdkmanager --licenses 的交互提示处退出 1，故直接使用预装 SDK。
       - name: Accept Android SDK licenses
         run: |
@@ -86,7 +88,7 @@ jobs:
           echo "value=$version_name" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: kvideo-android-phone-apk-${{ steps.apk_version.outputs.value }}-r${{ github.run_number }}
           path: android-tv/app/build/outputs/apk/debug/app-debug.apk
