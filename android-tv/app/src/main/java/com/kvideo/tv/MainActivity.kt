@@ -83,6 +83,8 @@ class MainActivity : ComponentActivity() {
   var READY_CLS = 'kvideo-menu-ready';
   var FAIL_CLS = 'kvideo-dock-failed';
   var NATIVE_ATTR = 'data-kvideo-native';
+  var BRAND_ATTR = 'data-kvideo-brand';
+  var BRAND_TEXT_ATTR = 'data-kvideo-brand-text';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
 
@@ -201,6 +203,11 @@ class MainActivity : ComponentActivity() {
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
       '{display:none !important;}' +
+    // 站名文字：只藏文字元素，不碰 img/svg；font-size:0 处理容器里的裸文本节点
+    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
+      '{display:none !important;}' +
+    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
+      '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS;
@@ -468,6 +475,46 @@ class MainActivity : ComponentActivity() {
       b.setAttribute(NATIVE_ATTR, '1');
     }
   }
+  // 顶栏左侧是「图片 logo + 站名文字」，窄屏下站名被截断成 "KVi…"。
+  // 不写死上游 class：按「含图片的品牌容器 + 其中的纯文本叶子」识别，
+  // 只隐藏文字、保住图片；没有图片的纯文字 logo 一律不动。
+  function hideBrandText(row, m) {
+    var kids = row.children;
+    var brand = null, brandIdx = -1, i, j, el, n, txt;
+    for (i = 0; i < kids.length; i++) {
+      el = kids[i];
+      if (!el || el.nodeType !== 1 || el === m ||
+          el.hasAttribute('data-kvideo-menu')) continue;
+      if (el.querySelector && el.querySelector('img,svg,picture,canvas')) {
+        brand = el; brandIdx = i; break;
+      }
+    }
+    if (!brand) return;
+    if (!brand.hasAttribute(BRAND_ATTR)) brand.setAttribute(BRAND_ATTR, '1');
+    var nodes = brand.querySelectorAll('*');
+    for (j = 0; j < nodes.length; j++) {
+      n = nodes[j];
+      if (n.closest && n.closest('svg')) continue;
+      if (n.children.length) continue;
+      txt = String(n.textContent || '').trim();
+      if (!txt || txt.length > 24) continue;
+      if (!n.hasAttribute(BRAND_TEXT_ATTR)) n.setAttribute(BRAND_TEXT_ATTR, '1');
+    }
+    // 上游也可能把站名放在图片容器的紧邻兄弟里，而不在同一个容器内
+    for (i = brandIdx + 1; i < kids.length; i++) {
+      el = kids[i];
+      if (!el || el.nodeType !== 1 || el === m ||
+          el.hasAttribute('data-kvideo-menu')) break;
+      if (el.hasAttribute(NATIVE_ATTR)) break;
+      if (el.querySelector && el.querySelector('img,svg,picture,canvas')) break;
+      if (el.querySelector && el.querySelector('button,a,input,select')) break;
+      txt = String(el.textContent || '').trim();
+      if (!txt || txt.length > 24) break;
+      if (!el.hasAttribute(BRAND_TEXT_ATTR)) el.setAttribute(BRAND_TEXT_ATTR, '1');
+      break;
+    }
+  }
+
   function syncMenu() {
     var bar = null;
     var navs = document.querySelectorAll(NAV + ',' + HEADER);
@@ -483,6 +530,7 @@ class MainActivity : ComponentActivity() {
     var m = ensureRoot();
     if (m.parentNode !== row) row.appendChild(m);
     hideNativeControls(row, m);
+    hideBrandText(row, m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
@@ -533,6 +581,8 @@ class MainActivity : ComponentActivity() {
         theme: themeIndex(),
         fallback: document.documentElement.classList.contains(FAIL_CLS),
         nativeHidden: document.querySelectorAll('[' + NATIVE_ATTR + ']').length,
+        brandHidden: document.querySelectorAll('[' + BRAND_ATTR + ']').length,
+        brandTextHidden: document.querySelectorAll('[' + BRAND_TEXT_ATTR + ']').length,
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         docked: document.querySelectorAll('[data-kvideo-menu]').length
