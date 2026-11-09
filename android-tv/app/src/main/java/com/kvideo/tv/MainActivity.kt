@@ -572,7 +572,7 @@ class MainActivity : ComponentActivity() {
     private var wasSetupVisibleBeforeFullscreen = false
     private var viewsReady = false
     private var chromeHiddenByGesture = false
-    // 右下角 FAB 默认隐藏；只有页面顶部条持续渲染不出来时才回落显示
+    // 右下角 FAB 已停用；保留桥接状态供调试与后续恢复使用
     private var appSettingsDocked = true
     private var swipeStartX = 0f
     private var swipeStartY = 0f
@@ -821,15 +821,10 @@ class MainActivity : ComponentActivity() {
     /**
      * 手机习惯：像浏览器地址栏，上滑内容时一起收起「网页顶部工具条」，下滑再展开。
      * 显隐只由手势决定，不跟随横竖屏或播放画面；全屏播放与设置页仍强制隐藏。
-     * 右下角 FAB 默认隐藏，只在网页顶部条渲染失败时才作为回落入口显示。
+     * 右下角 FAB 已停用：无顶栏的页面（如网页设置页）会触发菜单回落，
+     * 把它放出来挡住内容；应用设置入口由「更多 → 应用设置」和返回键兜底。
      */
-    private fun shouldShowSettingsButton(): Boolean =
-        viewsReady &&
-            !isSetupVisible() &&
-            customView == null &&
-            webView.visibility == View.VISIBLE &&
-            !chromeHiddenByGesture &&
-            !appSettingsDocked
+    private fun shouldShowSettingsButton(): Boolean = false
 
     private fun updateSettingsButton() {
         settingsButton.visibility =
@@ -1004,7 +999,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class AndroidPlayerBridge {
-        /** 顶部条代理按钮在位时隐藏右下角 FAB；持续插不上时恢复，入口不丢。 */
+        /** 记录顶部条是否停靠；右下角 FAB 已停用，此状态仅用于调试。 */
         @JavascriptInterface
         fun setAppSettingsDocked(docked: Boolean) {
             runOnUiThread {
