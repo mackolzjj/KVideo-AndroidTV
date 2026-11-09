@@ -284,6 +284,17 @@ class MainActivity : ComponentActivity() {
       'max-height:60vh !important;overflow-y:auto !important;' +
       'z-index:2147483647 !important;pointer-events:auto !important;}';
 
+  // 播放页「更多」三点原本贴在左上角，和绿色 1080P 画质标签挤在一起。
+  // 1.1.18 已把右上角 top-8 right-6 的倍速容器整体挪到底栏，右上角空出来。
+  // 这里只翻转外层定位容器的左右方向（left-6 -> right-6），DOM 层级不动，
+  // 网页菜单的三套定位算法会自动按「按钮在右半屏」算成 align:right，
+  // 用 translateX(-100%) 向左展开，不会跑出屏幕，无需再接管弹层。
+  var MORE_ATTR = 'data-kvideo-more';
+  var MORE_WRAP_ATTR = 'data-kvideo-more-wrap';
+  var MORE_CSS =
+    '[' + MORE_WRAP_ATTR + '="1"]{' +
+      'left:auto !important;right:24px !important;top:32px !important;}';
+
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
@@ -299,7 +310,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + MORE_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -794,6 +805,55 @@ class MainActivity : ComponentActivity() {
 
   // 找到右上角「1x」倍速钮。优先用 aria-label，上游改文案时回落到
   // 「纯数字 + x」文本且不含 svg 的按钮（底栏图标钮都带 svg，不会误伤）。
+  // 播放页原生「更多」按钮 aria-label 是「更多选项」，里面是 lucide
+  // MoreHorizontal。首页自建 dock 的「更多」带 data-kvideo-act，显式排除。
+  function findMoreButton() {
+    var exact = document.querySelector(
+      'button[aria-label="更多选项"]:not([data-kvideo-act])');
+    if (exact) return exact;
+    var names = ['更多', '更多设置', 'more options', 'more'];
+    var l = document.querySelectorAll(
+      'button[aria-label]:not([data-kvideo-act])');
+    for (var i = 0; i < l.length; i++) {
+      var a = String(l[i].getAttribute('aria-label') || '').trim().toLowerCase();
+      if (names.indexOf(a) >= 0 && l[i].querySelector('svg')) return l[i];
+    }
+    var s = document.querySelector(
+      'button:not([data-kvideo-act]) svg[class*="more-horizontal"]');
+    return s ? s.closest('button') : null;
+  }
+
+  // 只移动外层定位容器，绝不 appendChild 搬按钮节点：React 下次 commit 仍能
+  // 在原父节点上找到它，不会抛 removeChild；容器上的 opacity / pointerEvents
+  // 淡出逻辑（网页 showControls 控制）也完整保留，静止时三点照样自动消失。
+  function moveMoreButton() {
+    var b = findMoreButton();
+    if (!b) return;
+    if (b.getAttribute(MORE_ATTR) !== '1') b.setAttribute(MORE_ATTR, '1');
+    var wrap = b.parentElement;
+    var fallback = null;
+    while (wrap && wrap !== document.body) {
+      var cls = String(wrap.className || '');
+      if (cls.indexOf('absolute top-8 left-6') >= 0) break;
+      if (!fallback &&
+          window.getComputedStyle(wrap).position === 'absolute' &&
+          wrap.getBoundingClientRect().top < 220) fallback = wrap;
+      wrap = wrap.parentElement;
+    }
+    if (!wrap || wrap === document.body) wrap = fallback;
+    if (!wrap) return;
+    if (wrap.getAttribute(MORE_WRAP_ATTR) !== '1') {
+      wrap.setAttribute(MORE_WRAP_ATTR, '1');
+    }
+    // CSS !important + 内联 !important 双保险，压过 Tailwind 的 left-6。
+    // forceStyle 只在值不同或缺 important 时写入，不会自触发观察器死循环。
+    forceStyle(wrap, {
+      'left': 'auto',
+      'right': '24px',
+      'top': '32px'
+    });
+  }
+
   function findRateButton() {
     var b = document.querySelector('button[aria-label="播放速度"]');
     if (b) return b;
@@ -895,7 +955,11 @@ class MainActivity : ComponentActivity() {
     });
   }
 
+  // 播放页浮动控件统一同步：三点位置、倍速钮位置、速度菜单定位。
+  // 这个函数已挂在 syncMenu 开头 / 1s 补扫 / pageshow / resize /
+  // orientationchange 上，加在这里就等于全部钩子自动生效。
   function syncRateUi() {
+    moveMoreButton();
     moveRateButton();
     placeSpeedMenu();
   }
@@ -996,6 +1060,12 @@ class MainActivity : ComponentActivity() {
           return o.join(',');
         })(),
         seekFlash: document.querySelectorAll('[data-kvideo-seek-show]').length,
+        moreButton: document.querySelectorAll('[' + MORE_ATTR + '="1"]').length,
+        moreWrap: document.querySelectorAll('[' + MORE_WRAP_ATTR + '="1"]').length,
+        morePos: (function () {
+          var w = document.querySelector('[' + MORE_WRAP_ATTR + '="1"]');
+          return w ? (w.style.left + ',' + w.style.right) : 'none';
+        })(),
         rateButton: document.querySelectorAll('[' + RATE_ATTR + '="1"]').length,
         rateWrap: document.querySelectorAll('[' + RATE_WRAP_ATTR + '="1"]').length,
         ratePos: (function () {
