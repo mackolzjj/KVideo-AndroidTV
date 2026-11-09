@@ -247,17 +247,19 @@
             android:textSize="13sp" />
     </FrameLayout>
 
+    <!-- 与网页底栏 .btn-icon 统一：40dp 圆钮、10% 白底、20% 白描边、白色线性图标。
+         放在画面左侧中部，避开顶部画质标签与右上角倍速；滑动快退闪现时
+         注入 CSS 会把快退/快进上移 64px，两个圆钮不会叠在一起。 -->
     <ImageButton
         android:id="@+id/lock_toggle"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:layout_gravity="top|start"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="24dp"
         android:background="@drawable/bg_lock_button"
         android:contentDescription="@string/lock_button_lock"
         android:foreground="?android:attr/selectableItemBackgroundBorderless"
-        android:padding="11dp"
+        android:padding="10dp"
         android:scaleType="fitCenter"
         android:src="@drawable/ic_lock_open_24"
         android:visibility="gone" />

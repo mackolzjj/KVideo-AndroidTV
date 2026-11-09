@@ -231,17 +231,44 @@ class MainActivity : ComponentActivity() {
     '[data-kvideo-seek="1"]{display:none !important;}' +
     '[data-kvideo-seek="1"][data-kvideo-seek-show="1"]{' +
       'display:flex !important;align-items:center !important;' +
-      'justify-content:center !important;}' +
+      'justify-content:center !important;' +
+      // 锁钮现在常驻画面左侧中部，闪现的快退/快进上移一档，避免两个圆钮重叠。
+      'transform:translateY(-64px) !important;}' +
     '[data-kvideo-seek="1"]{width:28px !important;height:28px !important;' +
       'min-width:28px !important;min-height:28px !important;' +
       'max-width:28px !important;max-height:28px !important;' +
       'padding:0 !important;box-sizing:border-box !important;' +
       'background:rgba(0,0,0,.22) !important;' +
       'backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}' +
-    '[data-kvideo-seek="1"]:hover{transform:none !important;}' +
+    '[data-kvideo-seek="1"]:hover{transform:translateY(-64px) !important;}' +
     '[data-kvideo-seek="1"] svg{width:16px !important;height:16px !important;' +
       'min-width:16px !important;min-height:16px !important;' +
       'max-width:16px !important;max-height:16px !important;}';
+
+  // 倍速圆钮从右上角挪到底栏后，外观必须与底栏 .btn-icon 完全一致：
+  // 40px 圆、rgba(255,255,255,.10) 底、1px rgba(255,255,255,.20) 描边、白字。
+  // 原生网页给它的是 bg-black/40 + backdrop-blur + hover:scale-110，全部压掉。
+  var RATE_ATTR = 'data-kvideo-rate';
+  var RATE_WRAP_ATTR = 'data-kvideo-rate-wrap';
+  var RATE_CSS =
+    '[' + RATE_ATTR + '="1"]{width:40px !important;height:40px !important;' +
+      'min-width:40px !important;min-height:40px !important;' +
+      'max-width:40px !important;max-height:40px !important;' +
+      'padding:0 !important;margin:0 !important;box-sizing:border-box !important;' +
+      'border-radius:999px !important;background:rgba(255,255,255,.10) !important;' +
+      'border:1px solid rgba(255,255,255,.20) !important;color:#FFFFFF !important;' +
+      'font-size:13px !important;font-weight:500 !important;line-height:1 !important;' +
+      'backdrop-filter:none !important;-webkit-backdrop-filter:none !important;' +
+      'box-shadow:none !important;pointer-events:auto !important;' +
+      'display:flex !important;align-items:center !important;justify-content:center !important;' +
+      'transform:none !important;}' +
+    '[' + RATE_ATTR + '="1"]:hover,[' + RATE_ATTR + '="1"]:active{' +
+      'transform:none !important;background:rgba(255,255,255,.20) !important;}' +
+    // 移动的是右上角那个 absolute 定位容器，left/top 由 moveRateButton 内联写入。
+    // Tailwind 的 top-8 / right-6 必须先置 auto，否则两个方向会互相拉扯。
+    '[' + RATE_WRAP_ATTR + '="1"]{top:auto !important;right:auto !important;' +
+      'bottom:auto !important;width:40px !important;height:40px !important;' +
+      'min-width:0 !important;overflow:visible !important;z-index:45 !important;}';
 
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
@@ -258,7 +285,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -751,8 +778,57 @@ class MainActivity : ComponentActivity() {
     } catch (e) { lastPlaybackState = null; }
   }
 
+  // 找到右上角「1x」倍速钮。优先用 aria-label，上游改文案时回落到
+  // 「纯数字 + x」文本且不含 svg 的按钮（底栏图标钮都带 svg，不会误伤）。
+  function findRateButton() {
+    var b = document.querySelector('button[aria-label="播放速度"]');
+    if (b) return b;
+    var l = document.querySelectorAll('button');
+    for (var i = 0; i < l.length; i++) {
+      var t = String(l[i].textContent || '').trim();
+      if (/^[0-9]+([.][0-9]+)?x$/.test(t) && !l[i].querySelector('svg')) return l[i];
+    }
+    return null;
+  }
+
+  // 把右上角倍速容器整体挪到底部控制栏、右侧按钮组左边。
+  // 关键点：移动的是外层定位容器而不是按钮本身，DOM 层级不变，
+  // React 不会因节点被移走而在下次 commit 抛 removeChild；同时网页速度
+  // 菜单的两套定位算法（getBoundingClientRect / offsetTop 累加）仍能跟上。
+  function moveRateButton() {
+    var b = findRateButton();
+    if (!b) return;
+    if (b.getAttribute(RATE_ATTR) !== '1') b.setAttribute(RATE_ATTR, '1');
+    var wrap = b.parentElement;
+    while (wrap && String(wrap.className || '').indexOf('absolute top-8 right-6') < 0) {
+      wrap = wrap.parentElement;
+    }
+    if (!wrap) return;
+    if (wrap.getAttribute(RATE_WRAP_ATTR) !== '1') {
+      wrap.setAttribute(RATE_WRAP_ATTR, '1');
+    }
+    var anchor = document.querySelector('.player-controls-right');
+    if (!anchor) return;
+    var ar = anchor.getBoundingClientRect();
+    if (ar.width < 4 || ar.height < 4) return;
+    var host = wrap.offsetParent || wrap.parentElement;
+    if (!host) return;
+    var hr = host.getBoundingClientRect();
+    var size = 40, gap = 12;
+    var left = ar.left - hr.left - size - gap;
+    var top = ar.top - hr.top + (ar.height - size) / 2;
+    if (left < 8) left = 8;
+    if (top < 0) top = 0;
+    forceStyle(wrap, {
+      'position': 'absolute',
+      'left': left.toFixed(1) + 'px',
+      'top': top.toFixed(1) + 'px'
+    });
+  }
+
   function syncMenu() {
     shrinkSeekButtons();
+    moveRateButton();
     var bar = null;
     var navs = document.querySelectorAll(NAV + ',' + HEADER);
     for (var i = 0; i < navs.length; i++) {
@@ -846,6 +922,12 @@ class MainActivity : ComponentActivity() {
           return o.join(',');
         })(),
         seekFlash: document.querySelectorAll('[data-kvideo-seek-show]').length,
+        rateButton: document.querySelectorAll('[' + RATE_ATTR + '="1"]').length,
+        rateWrap: document.querySelectorAll('[' + RATE_WRAP_ATTR + '="1"]').length,
+        ratePos: (function () {
+          var w = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
+          return w ? (w.style.left + ',' + w.style.top) : 'none';
+        })(),
         playbackActive: !!document.querySelector('video'),
         seekSizes: (function () {
           var out = [];
@@ -884,13 +966,19 @@ class MainActivity : ComponentActivity() {
   setInterval(function () {
     if (document.visibilityState === 'visible') {
       shrinkSeekButtons();
+      moveRateButton();
       syncPlaybackState();
     }
   }, 1000);
   window.addEventListener('pageshow', function () {
     shrinkSeekButtons();
+    moveRateButton();
     syncPlaybackState();
   });
+  window.addEventListener('resize', moveRateButton, { passive: true });
+  window.addEventListener('orientationchange', function () {
+    setTimeout(moveRateButton, 150);
+  }, { passive: true });
   document.addEventListener('touchstart', onSeekTouchStart,
     { capture: true, passive: true });
   document.addEventListener('touchmove', onSeekTouchMove,
