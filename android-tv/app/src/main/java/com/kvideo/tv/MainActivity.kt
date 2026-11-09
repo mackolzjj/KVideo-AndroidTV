@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         private const val PREF_SERVER_URL = "server_url"
         private const val TAG = "KVideoMainActivity"
         private const val SWIPE_THRESHOLD_DP = 48f
+        /** 锁按钮空闲多久后自动隐藏；触屏或按任意键重新计时并显示。 */
+        private const val LOCK_TOGGLE_IDLE_MS = 5_000L
 
                                 /**
          * 注入到网页：把顶部菜单重排为「内容组 + 分隔线 + 工具组 + 更多」。
@@ -270,6 +272,18 @@ class MainActivity : ComponentActivity() {
       'bottom:auto !important;width:40px !important;height:40px !important;' +
       'min-width:0 !important;overflow:visible !important;z-index:45 !important;}';
 
+  // 网页自带的「向上还是向下展开」判定，在倍速钮被移到底栏后会算错：
+  // 菜单从按钮下沿往下弹，被屏幕底边裁到只剩 0.5x / 0.75x。
+  // 这里接管定位：固定在按钮正上方，右边缘对齐按钮，超高时可滚动。
+  // position/top/right/transform/max-height 由样式表 important 兜底
+  // （React 每次 w() 都会重设内联 style），left/bottom 由 JS 动态写入。
+  var SPEED_MENU_ATTR = 'data-kvideo-speed-menu';
+  var SPEED_MENU_CSS =
+    '[' + SPEED_MENU_ATTR + '="1"]{position:fixed !important;' +
+      'top:auto !important;right:auto !important;transform:none !important;' +
+      'max-height:60vh !important;overflow-y:auto !important;' +
+      'z-index:2147483647 !important;pointer-events:auto !important;}';
+
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
@@ -285,7 +299,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -826,9 +840,69 @@ class MainActivity : ComponentActivity() {
     });
   }
 
+  // 速度菜单是 Portal 出来的独立 div，直接子元素是一串
+  // 「0.5x / 0.75x / 1x」按钮。用「直接子按钮全是 数字x 且至少 2 个」
+  // 识别，不依赖随时会变的 Tailwind class。
+  function findSpeedMenu() {
+    var l = document.querySelectorAll('div');
+    for (var i = 0; i < l.length; i++) {
+      var kids = l[i].children;
+      if (!kids || kids.length < 2) continue;
+      var total = 0, hit = 0;
+      for (var j = 0; j < kids.length; j++) {
+        if (kids[j].tagName !== 'BUTTON') continue;
+        total++;
+        if (/^[0-9]+([.][0-9]+)?x$/.test(
+              String(kids[j].textContent || '').trim())) hit++;
+      }
+      if (total >= 2 && hit === total) return l[i];
+    }
+    return null;
+  }
+
+  // 只监听菜单自身 style 属性。React 的 w() 会在 useEffect / 50ms 后
+  // 重算坐标，把我们的 left 覆盖掉；这个观察器立刻写回。forceStyle 在
+  // 值相同且不缺 important 时不会写，因此不会自触发死循环。
+  var speedMenuObserver = null;
+  var speedMenuWatched = null;
+  function watchSpeedMenu(menu) {
+    if (speedMenuWatched === menu || !window.MutationObserver) return;
+    if (speedMenuObserver) speedMenuObserver.disconnect();
+    speedMenuWatched = menu;
+    speedMenuObserver = new MutationObserver(function () { placeSpeedMenu(); });
+    speedMenuObserver.observe(menu,
+      { attributes: true, attributeFilter: ['style'] });
+  }
+
+  function placeSpeedMenu() {
+    var menu = findSpeedMenu();
+    if (!menu) return;
+    if (menu.getAttribute(SPEED_MENU_ATTR) !== '1') {
+      menu.setAttribute(SPEED_MENU_ATTR, '1');
+    }
+    watchSpeedMenu(menu);
+    var b = document.querySelector('[' + RATE_ATTR + '="1"]') || findRateButton();
+    if (!b) return;
+    var br = b.getBoundingClientRect();
+    if (br.width < 1) return;
+    var bottom = (window.innerHeight || 0) - br.top + 10;
+    var mw = menu.getBoundingClientRect().width || 72;
+    var left = br.right - mw;
+    if (left < 8) left = 8;
+    forceStyle(menu, {
+      'left': left.toFixed(1) + 'px',
+      'bottom': bottom.toFixed(1) + 'px'
+    });
+  }
+
+  function syncRateUi() {
+    moveRateButton();
+    placeSpeedMenu();
+  }
+
   function syncMenu() {
     shrinkSeekButtons();
-    moveRateButton();
+    syncRateUi();
     var bar = null;
     var navs = document.querySelectorAll(NAV + ',' + HEADER);
     for (var i = 0; i < navs.length; i++) {
@@ -928,6 +1002,11 @@ class MainActivity : ComponentActivity() {
           var w = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
           return w ? (w.style.left + ',' + w.style.top) : 'none';
         })(),
+        speedMenu: document.querySelectorAll('[' + SPEED_MENU_ATTR + '="1"]').length,
+        speedMenuPos: (function () {
+          var m = document.querySelector('[' + SPEED_MENU_ATTR + '="1"]');
+          return m ? (m.style.left + ',' + m.style.bottom) : 'none';
+        })(),
         playbackActive: !!document.querySelector('video'),
         seekSizes: (function () {
           var out = [];
@@ -966,18 +1045,18 @@ class MainActivity : ComponentActivity() {
   setInterval(function () {
     if (document.visibilityState === 'visible') {
       shrinkSeekButtons();
-      moveRateButton();
+      syncRateUi();
       syncPlaybackState();
     }
   }, 1000);
   window.addEventListener('pageshow', function () {
     shrinkSeekButtons();
-    moveRateButton();
+    syncRateUi();
     syncPlaybackState();
   });
-  window.addEventListener('resize', moveRateButton, { passive: true });
+  window.addEventListener('resize', syncRateUi, { passive: true });
   window.addEventListener('orientationchange', function () {
-    setTimeout(moveRateButton, 150);
+    setTimeout(syncRateUi, 150);
   }, { passive: true });
   document.addEventListener('touchstart', onSeekTouchStart,
     { capture: true, passive: true });
@@ -1025,6 +1104,8 @@ class MainActivity : ComponentActivity() {
     private var playbackActive = false
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val hideLockHint = Runnable { lockHint.visibility = View.GONE }
+    private val lockIdleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideLockToggle = Runnable { lockToggle.visibility = View.GONE }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1221,10 +1302,20 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * 任意触摸都算「有操作」。即使锁定态下 lock_overlay 吞掉了事件，
+     * Activity 层仍会先收到这里，所以触屏一定能把锁钮唤回来。
+     */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_DOWN) scheduleLockToggleHide()
+        return super.dispatchTouchEvent(event)
+    }
+
+    /**
      * 锁定时把方向键、OK、媒体键、数字键全部吞掉，避免遥控器/键盘误触。
      * 音量与 HOME 放行；BACK / OK / ENTER / MENU 作为解锁键，保证不会锁死。
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) scheduleLockToggleHide()
         if (playbackLocked && event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP,
@@ -1416,12 +1507,33 @@ class MainActivity : ComponentActivity() {
         updateLockUi()
     }
 
-    private fun updateLockUi() {
-        val show = playbackActive && !isSetupVisible() &&
+    private fun canShowLockToggle(): Boolean =
+        playbackActive && !isSetupVisible() &&
             errorContainer.visibility != View.VISIBLE
+
+    /** 有输入时调用：立刻显示锁钮并重新计 5 秒空闲；离开播放页则立即收起。 */
+    private fun scheduleLockToggleHide() {
+        if (!viewsReady) return
+        lockIdleHandler.removeCallbacks(hideLockToggle)
+        if (!canShowLockToggle()) {
+            lockToggle.visibility = View.GONE
+            return
+        }
+        lockToggle.visibility = View.VISIBLE
+        lockIdleHandler.postDelayed(hideLockToggle, LOCK_TOGGLE_IDLE_MS)
+    }
+
+    private fun hideLockToggleNow() {
+        if (!viewsReady) return
+        lockIdleHandler.removeCallbacks(hideLockToggle)
+        lockToggle.visibility = View.GONE
+    }
+
+    private fun updateLockUi() {
+        val show = canShowLockToggle()
         lockOverlay.visibility =
             if (playbackLocked && show) View.VISIBLE else View.GONE
-        lockToggle.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) scheduleLockToggleHide() else hideLockToggleNow()
         lockToggle.setImageResource(
             if (playbackLocked) R.drawable.ic_lock_closed_24
             else R.drawable.ic_lock_open_24
