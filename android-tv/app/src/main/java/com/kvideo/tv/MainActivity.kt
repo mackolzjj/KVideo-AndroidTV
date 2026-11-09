@@ -250,7 +250,9 @@ class MainActivity : ComponentActivity() {
 
   // 倍速圆钮从右上角挪到底栏后，外观必须与底栏 .btn-icon 完全一致：
   // 40px 圆、rgba(255,255,255,.10) 底、1px rgba(255,255,255,.20) 描边、白字。
-  // 原生网页给它的是 bg-black/40 + backdrop-blur + hover:scale-110，全部压掉。
+  // 底色/描边/blur 压成固定值（不依赖网页变量），但 1.1.29 起把 hover/active
+  // 的缩放动画补回来：三点按钮没被我们接管 transform，一直保留网页原生的
+  // scale-110 反馈，倍速钮之前被 transform:none 压死，点起来是「死」的。
   var RATE_ATTR = 'data-kvideo-rate';
   var RATE_WRAP_ATTR = 'data-kvideo-rate-wrap';
   var RATE_CSS =
@@ -264,9 +266,14 @@ class MainActivity : ComponentActivity() {
       'backdrop-filter:none !important;-webkit-backdrop-filter:none !important;' +
       'box-shadow:none !important;pointer-events:auto !important;' +
       'display:flex !important;align-items:center !important;justify-content:center !important;' +
-      'transform:none !important;}' +
-    '[' + RATE_ATTR + '="1"]:hover,[' + RATE_ATTR + '="1"]:active{' +
-      'transform:none !important;background:rgba(255,255,255,.20) !important;}' +
+      // 常态仍锁死 transform（网页可能拿 translate 做定位），只加过渡曲线；
+      // hover/active 选择器特异性更高，同为 important 时会覆盖这一条。
+      'transform:none !important;' +
+      'transition:transform .16s ease,background-color .16s ease,border-color .16s ease !important;}' +
+    '[' + RATE_ATTR + '="1"]:hover{' +
+      'transform:scale(1.1) !important;background:rgba(255,255,255,.20) !important;}' +
+    '[' + RATE_ATTR + '="1"]:active{' +
+      'transform:scale(.95) !important;background:rgba(255,255,255,.20) !important;}' +
     // 移动的是右上角那个 absolute 定位容器，left/top 由 moveRateButton 内联写入。
     // Tailwind 的 top-8 / right-6 必须先置 auto，否则两个方向会互相拉扯。
     '[' + RATE_WRAP_ATTR + '="1"]{top:auto !important;right:auto !important;' +
@@ -293,6 +300,21 @@ class MainActivity : ComponentActivity() {
       'box-sizing:border-box !important;padding:7px 4px !important;' +
       'font-size:15px !important;line-height:1.25 !important;' +
       'white-space:nowrap !important;}';
+
+  // 倍速菜单的 transform 被接管成 none（left/bottom 定位需要），网页原生的
+  // zoom-in 弹出动画因此跟着失效，只剩「啪」地瞬间出现；三点面板没被接管，
+  // 一直是柔和淡入。这里补一套同款：容器只动 opacity（绝不碰 transform，
+  // 否则菜单位置会跑偏），条目再叠一点 translateY + scale 做放大感。
+  // 用 !important 的 animation 覆盖网页自带的 animate-in，避免两套叠播。
+  var SPEED_MENU_ANIM =
+    '@keyframes kvideoSpeedFade{from{opacity:0;}to{opacity:1;}}' +
+    '@keyframes kvideoSpeedItem{' +
+      'from{opacity:0;transform:translateY(6px) scale(.96);}' +
+      'to{opacity:1;transform:none;}}' +
+    '[' + SPEED_MENU_ATTR + '="1"]{' +
+      'animation:kvideoSpeedFade .18s ease-out !important;}' +
+    '[' + SPEED_MENU_ATTR + '="1"] > button{' +
+      'animation:kvideoSpeedItem .2s cubic-bezier(.16,1,.3,1) backwards !important;}';
 
   // 播放页「更多」三点原本贴在左上角，和绿色 1080P 画质标签挤在一起。
   // 1.1.18 已把右上角 top-8 right-6 的倍速容器整体挪到底栏，右上角空出来。
@@ -352,7 +374,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + MORE_CSS + MORE_MENU_CSS + HUD_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
