@@ -219,19 +219,22 @@ class MainActivity : ComponentActivity() {
       '[data-kvideo-menu]{gap:1px;}' +
       BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}}';
 
-  // 播放页左右快退/快进圆钮：网页原生按钮的 aria-label 是「后退 N 秒」
-  // /「前进 N 秒」，md 断点下按钮 64px、图标 32px，明显压过底部 20px 控件。
-  // 只缩视觉尺寸；按钮保留 40/44px 触摸热区，点击逻辑与 DOM 结构都不碰。
+  // 播放页左右快退/快进圆钮：网页原生按钮 aria-label 是「后退 N 秒」/「前进 N 秒」。
+  // 1.1.15 用 @media(min-width:768px) 分档，WebView 宽度不到 768px 时窄屏档
+  // 按钮仍是 40px、图标只小 2px，观感上等于没生效。这里全部宽度统一缩到
+  // 按钮 28px / 图标 16px（相对原生 64/32 缩小一半以上），不再依赖断点；
+  // CSS + 内联 important 双保险。
   var SEEK_CSS =
-    '[data-kvideo-seek="1"]{width:40px !important;height:40px !important;' +
-      'min-width:40px !important;min-height:40px !important;}' +
-    '[data-kvideo-seek="1"] svg{width:18px !important;height:18px !important;' +
-      'max-width:18px !important;max-height:18px !important;}' +
-    '@media (min-width:768px){' +
-      '[data-kvideo-seek="1"]{width:44px !important;height:44px !important;' +
-        'min-width:44px !important;min-height:44px !important;}' +
-      '[data-kvideo-seek="1"] svg{width:24px !important;height:24px !important;' +
-        'max-width:24px !important;max-height:24px !important;}}';
+    '[data-kvideo-seek="1"]{width:28px !important;height:28px !important;' +
+      'min-width:28px !important;min-height:28px !important;' +
+      'max-width:28px !important;max-height:28px !important;' +
+      'padding:0 !important;box-sizing:border-box !important;' +
+      'background:rgba(0,0,0,.22) !important;' +
+      'backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}' +
+    '[data-kvideo-seek="1"]:hover{transform:none !important;}' +
+    '[data-kvideo-seek="1"] svg{width:16px !important;height:16px !important;' +
+      'min-width:16px !important;min-height:16px !important;' +
+      'max-width:16px !important;max-height:16px !important;}';
 
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
@@ -586,30 +589,71 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  // 按 aria-label 精确识别，不用几何位置猜，避免误伤底部控件或顶栏按钮。
-  // 上游文案「后退 10 秒 / 前进 10 秒」，同时兼容快退/快进与英文前缀。
+  // 内联 important 样式：优先级高于网页任何 stylesheet（含 Tailwind v4 的
+  // @layer 与 md: 断点），避免 1.1.15 那种「断点没命中就几乎没变化」。
+  // 只在值确实不同时才写，配合下面的 attributeFilter 避开自触发循环。
+  function forceStyle(el, props) {
+    for (var k in props) {
+      if (!Object.prototype.hasOwnProperty.call(props, k)) continue;
+      if (el.style.getPropertyValue(k) === props[k] &&
+          el.style.getPropertyPriority(k) === 'important') continue;
+      el.style.setProperty(k, props[k], 'important');
+    }
+  }
+  // 只把尺寸写成内联：CSSOM 会把 '0' / 'rgba(0,0,0,.22)' 规范化成
+  // '0px' / 'rgba(0, 0, 0, 0.22)'，若把它们放进比较表会导致每秒重复写入。
+  // padding / 底色 / hover 缩放交给上面注入的 !important 规则负责。
+  var BTN_PROPS = {
+    'width': '28px', 'height': '28px',
+    'min-width': '28px', 'min-height': '28px',
+    'max-width': '28px', 'max-height': '28px'
+  };
+  var SVG_PROPS = {
+    'width': '16px', 'height': '16px',
+    'min-width': '16px', 'min-height': '16px',
+    'max-width': '16px', 'max-height': '16px'
+  };
+
+  // 结构兜底：上游改了文案也能命中。父容器是贴左/贴右的整高绝对定位层，
+  // 按钮本身是 rounded-full 且用 w-10 / md:w-16 那套尺寸类，内含 svg。
+  // 底部控制条按钮与中间播放大按钮都不满足父容器条件，不会误伤。
+  function looksLikeSeek(b) {
+    if (!b.querySelector || !b.querySelector('svg')) return false;
+    var c = String(b.className || '');
+    if (c.indexOf('rounded-full') < 0) return false;
+    if (c.indexOf('md:w-16') < 0 && c.indexOf('w-10') < 0) return false;
+    var p = b.parentElement;
+    var pc = p ? String(p.className || '') : '';
+    return pc.indexOf('absolute left-0 top-0 bottom-0') >= 0 ||
+           pc.indexOf('absolute right-0 top-0 bottom-0') >= 0;
+  }
+  function labelIsSeek(label) {
+    var s = String(label || '').trim();
+    var low = s.toLowerCase();
+    var zh = s.indexOf('后退') === 0 || s.indexOf('前进') === 0 ||
+             s.indexOf('快退') === 0 || s.indexOf('快进') === 0;
+    var en = low.indexOf('back ') === 0 || low.indexOf('forward ') === 0 ||
+             low.indexOf('rewind ') === 0;
+    if (!zh && !en) return false;
+    for (var j = 0; j < s.length; j++) {
+      if (s.charAt(j) >= '0' && s.charAt(j) <= '9') return true;
+    }
+    return false;
+  }
+
+  // 全量扫描：每次都对已打标元素重刷内联样式，React 重建 DOM 后也能自愈。
   function shrinkSeekButtons() {
-    var list = document.querySelectorAll('button[aria-label]');
+    var list = document.querySelectorAll('button');
     for (var i = 0; i < list.length; i++) {
       var b = list[i];
-      if (b.hasAttribute('data-kvideo-seek')) continue;
       if (b.closest && b.closest('[data-kvideo-menu]')) continue;
-      var label = String(b.getAttribute('aria-label') || '').trim();
-      var low = label.toLowerCase();
-      var zh = label.indexOf('后退') === 0 || label.indexOf('前进') === 0 ||
-               label.indexOf('快退') === 0 || label.indexOf('快进') === 0;
-      var en = low.indexOf('back ') === 0 || low.indexOf('forward ') === 0 ||
-               low.indexOf('rewind ') === 0;
-      if (!zh && !en) continue;
-      var hasDigit = false;
-      for (var j = 0; j < label.length; j++) {
-        if (label.charAt(j) >= '0' && label.charAt(j) <= '9') {
-          hasDigit = true;
-          break;
-        }
-      }
-      if (!hasDigit) continue;
-      b.setAttribute('data-kvideo-seek', '1');
+      var marked = b.getAttribute('data-kvideo-seek') === '1';
+      if (!marked && !labelIsSeek(b.getAttribute('aria-label')) &&
+          !looksLikeSeek(b)) continue;
+      if (!marked) b.setAttribute('data-kvideo-seek', '1');
+      forceStyle(b, BTN_PROPS);
+      var svg = b.querySelector('svg');
+      if (svg) forceStyle(svg, SVG_PROPS);
     }
   }
 
@@ -699,6 +743,16 @@ class MainActivity : ComponentActivity() {
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         seekButtons: document.querySelectorAll('[data-kvideo-seek="1"]').length,
+        seekSizes: (function () {
+          var out = [];
+          var l = document.querySelectorAll('[data-kvideo-seek="1"]');
+          for (var i = 0; i < l.length; i++) {
+            var s = l[i].querySelector('svg');
+            out.push(window.getComputedStyle(l[i]).width + '/' +
+              (s ? window.getComputedStyle(s).width : '-'));
+          }
+          return out.join(',');
+        })(),
         docked: document.querySelectorAll('[data-kvideo-menu]').length
       };
     }
@@ -716,8 +770,17 @@ class MainActivity : ComponentActivity() {
 
   mark();
   syncMenu();
-  new MutationObserver(function () { schedule(); })
-    .observe(document.documentElement, { childList: true, subtree: true });
+  // 播放器由 React 挂载/重渲染：只监听 class 与 aria-label（不监听 style，
+  // 否则 forceStyle 会自触发）；再补一个 1s 低频全量扫描，覆盖注入早于
+  // hydrate、以及 Portal 挂载等 MutationObserver 漏掉的情况。
+  new MutationObserver(function () { schedule(); }).observe(
+    document.documentElement,
+    { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['class', 'aria-label'] });
+  setInterval(function () {
+    if (document.visibilityState === 'visible') shrinkSeekButtons();
+  }, 1000);
+  window.addEventListener('pageshow', shrinkSeekButtons);
 })();
 """
     }
