@@ -793,13 +793,14 @@ class MainActivity : ComponentActivity() {
     h.querySelector('.kv-hud-sub').textContent = sub;
     h.querySelector('.kv-hud-track i').style.width =
       Math.round(kvClamp(ratio, 0, 1) * 100) + '%';
-    h.style.display = 'block';
+    // 注意：HUD_CSS 里 display:none 带了 !important，必须用内联 important 才能覆盖。
+    h.style.setProperty('display', 'block', 'important');
   }
   function hideHud(delay) {
     if (hudTimer) clearTimeout(hudTimer);
     hudTimer = setTimeout(function () {
       var h = document.getElementById('kvideo-gesture-hud');
-      if (h) h.style.display = 'none';
+      if (h) h.style.setProperty('display', 'none', 'important');
       hudTimer = null;
     }, delay || 0);
   }
