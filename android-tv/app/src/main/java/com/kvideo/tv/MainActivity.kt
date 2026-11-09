@@ -207,7 +207,7 @@ class MainActivity : ComponentActivity() {
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
-      '{font-size:0 !important;}' +
+      '{font-size:0 !important;margin-right:8px !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS;
@@ -256,7 +256,23 @@ class MainActivity : ComponentActivity() {
 
   function clickNative(sel) {
     var el = q(sel);
-    if (el) { try { el.click(); } catch (e) {} }
+    if (!el) return false;
+    try { el.click(); } catch (e) {}
+    return true;
+  }
+  // 播放页没有「我的收藏」导航链接，但有「收藏这个视频」按钮；
+  // 按可见文案兜底，避免顶栏心形变成点了没反应的死钮。
+  function clickByText(txt) {
+    var nodes = document.querySelectorAll('button,[role="button"],a');
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.closest && n.closest('[data-kvideo-menu]')) continue;
+      var t = String(n.textContent || '').trim();
+      if (t && t.length <= 20 && t.indexOf(txt) >= 0) {
+        try { n.click(); return true; } catch (e) {}
+      }
+    }
+    return false;
   }
   function themeNodes() {
     var out = [];
@@ -339,7 +355,11 @@ class MainActivity : ComponentActivity() {
     if (act === 'more') { togglePopover(); return; }
     closePopover();
     if (act === 'live') clickNative('a[aria-label="直播"]');
-    else if (act === 'favorites') clickNative('a[aria-label="我的收藏"]');
+    else if (act === 'favorites') {
+      if (!clickNative('a[aria-label="我的收藏"]') &&
+          !clickNative('button[aria-label*="收藏"]') &&
+          !clickByText('收藏这个视频')) clickByText('收藏');
+    }
     else if (act === 'history') clickNative(history[0]);
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
@@ -359,7 +379,6 @@ class MainActivity : ComponentActivity() {
     if (!root) return;
     var checks = {
       live: 'a[aria-label="直播"]',
-      favorites: 'a[aria-label="我的收藏"]',
       history: history[0],
       logout: 'button[aria-label="退出登录"]',
       websettings: 'a[aria-label="设置"]',
@@ -583,6 +602,10 @@ class MainActivity : ComponentActivity() {
         nativeHidden: document.querySelectorAll('[' + NATIVE_ATTR + ']').length,
         brandHidden: document.querySelectorAll('[' + BRAND_ATTR + ']').length,
         brandTextHidden: document.querySelectorAll('[' + BRAND_TEXT_ATTR + ']').length,
+        favoritesDisplay: (function () {
+          var b = document.querySelector('[data-kvideo-act="favorites"]');
+          return b ? (b.style.display || 'shown') : 'missing';
+        })(),
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         docked: document.querySelectorAll('[data-kvideo-menu]').length
