@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
          *    380px 以下超窄屏回落 32px / 20px，避免再次挤到紫色 logo 上。
          * 7. mark() 给贴顶元素打 data-kvideo-topbar 兜底；MutationObserver 用
          *    「节流立即扫 + 尾部补扫」，syncMenu() 稳态不产生 DOM 变更。
+         * 8. 播放页左右快退/快进圆钮按 aria-label 打标后缩小，保留 44px 热区。
          */
         private const val CHROME_INJECT_JS = """
 (function () {
@@ -218,6 +219,20 @@ class MainActivity : ComponentActivity() {
       '[data-kvideo-menu]{gap:1px;}' +
       BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}}';
 
+  // 播放页左右快退/快进圆钮：网页原生按钮的 aria-label 是「后退 N 秒」
+  // /「前进 N 秒」，md 断点下按钮 64px、图标 32px，明显压过底部 20px 控件。
+  // 只缩视觉尺寸；按钮保留 40/44px 触摸热区，点击逻辑与 DOM 结构都不碰。
+  var SEEK_CSS =
+    '[data-kvideo-seek="1"]{width:40px !important;height:40px !important;' +
+      'min-width:40px !important;min-height:40px !important;}' +
+    '[data-kvideo-seek="1"] svg{width:18px !important;height:18px !important;' +
+      'max-width:18px !important;max-height:18px !important;}' +
+    '@media (min-width:768px){' +
+      '[data-kvideo-seek="1"]{width:44px !important;height:44px !important;' +
+        'min-width:44px !important;min-height:44px !important;}' +
+      '[data-kvideo-seek="1"] svg{width:24px !important;height:24px !important;' +
+        'max-width:24px !important;max-height:24px !important;}}';
+
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
@@ -233,7 +248,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS;
+    MENU_CSS + SEEK_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -571,7 +586,35 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  // 按 aria-label 精确识别，不用几何位置猜，避免误伤底部控件或顶栏按钮。
+  // 上游文案「后退 10 秒 / 前进 10 秒」，同时兼容快退/快进与英文前缀。
+  function shrinkSeekButtons() {
+    var list = document.querySelectorAll('button[aria-label]');
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      if (b.hasAttribute('data-kvideo-seek')) continue;
+      if (b.closest && b.closest('[data-kvideo-menu]')) continue;
+      var label = String(b.getAttribute('aria-label') || '').trim();
+      var low = label.toLowerCase();
+      var zh = label.indexOf('后退') === 0 || label.indexOf('前进') === 0 ||
+               label.indexOf('快退') === 0 || label.indexOf('快进') === 0;
+      var en = low.indexOf('back ') === 0 || low.indexOf('forward ') === 0 ||
+               low.indexOf('rewind ') === 0;
+      if (!zh && !en) continue;
+      var hasDigit = false;
+      for (var j = 0; j < label.length; j++) {
+        if (label.charAt(j) >= '0' && label.charAt(j) <= '9') {
+          hasDigit = true;
+          break;
+        }
+      }
+      if (!hasDigit) continue;
+      b.setAttribute('data-kvideo-seek', '1');
+    }
+  }
+
   function syncMenu() {
+    shrinkSeekButtons();
     var bar = null;
     var navs = document.querySelectorAll(NAV + ',' + HEADER);
     for (var i = 0; i < navs.length; i++) {
@@ -655,6 +698,7 @@ class MainActivity : ComponentActivity() {
         })(),
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
+        seekButtons: document.querySelectorAll('[data-kvideo-seek="1"]').length,
         docked: document.querySelectorAll('[data-kvideo-menu]').length
       };
     }
