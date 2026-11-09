@@ -279,11 +279,20 @@ class MainActivity : ComponentActivity() {
   // position/top/right/transform/max-height 由样式表 important 兜底
   // （React 每次 w() 都会重设内联 style），left/bottom 由 JS 动态写入。
   var SPEED_MENU_ATTR = 'data-kvideo-speed-menu';
+  // 网页给速度菜单一个很大的固有宽度（横屏下接近半屏），1.1.27 起一并接管尺寸：
+  // 按内容收到 136px，按钮跟着容器铺满、字号同步缩小，避免挡住画面。
   var SPEED_MENU_CSS =
     '[' + SPEED_MENU_ATTR + '="1"]{position:fixed !important;' +
       'top:auto !important;right:auto !important;transform:none !important;' +
+      'width:136px !important;min-width:0 !important;max-width:40vw !important;' +
+      'box-sizing:border-box !important;padding:6px !important;' +
       'max-height:60vh !important;overflow-y:auto !important;' +
-      'z-index:2147483647 !important;pointer-events:auto !important;}';
+      'z-index:2147483647 !important;pointer-events:auto !important;}' +
+    '[' + SPEED_MENU_ATTR + '="1"] > button{' +
+      'width:100% !important;min-width:0 !important;max-width:100% !important;' +
+      'box-sizing:border-box !important;padding:7px 4px !important;' +
+      'font-size:15px !important;line-height:1.25 !important;' +
+      'white-space:nowrap !important;}';
 
   // 播放页「更多」三点原本贴在左上角，和绿色 1080P 画质标签挤在一起。
   // 1.1.18 已把右上角 top-8 right-6 的倍速容器整体挪到底栏，右上角空出来。
@@ -832,6 +841,79 @@ class MainActivity : ComponentActivity() {
     if (!isFinite(d) || d <= 1) return null;
     return { v: v, d: d, t: v.currentTime || 0 };
   }
+  // 网页 Portal 弹层（右上角三点「更多」菜单、倍速菜单）自身可滚动，手指在
+  // 上面上下滑的本意是滚菜单，不能同时被当成左右半屏的音量/亮度手势，
+  // 更不能 preventDefault 把菜单滚动吃掉。不依赖随时会变的 Tailwind class，
+  // 用「浮层定位 + 尺寸够大 + 可滚动 / 含菜单文案」识别并打标记。
+  var OVERLAY_MENU_ATTR = 'data-kvideo-overlay-menu';
+  var OVERLAY_TEXT_HINT = '复制链接';
+  function looksLikeOverlayMenu(el) {
+    if (!el || el.nodeType !== 1 || el === document.body ||
+        el === document.documentElement) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width < 120 || r.height < 120) return false;
+    // 铺满视口的是播放器根容器/遮罩，绝不可能是弹出菜单；误标会让手势全废。
+    var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+    if (vw > 0 && vh > 0 && r.width >= vw * 0.9 && r.height >= vh * 0.9) return false;
+    if (el.querySelector && el.querySelector('video')) return false;
+    var cs;
+    try { cs = window.getComputedStyle(el); } catch (e) { return false; }
+    if (!cs || (cs.position !== 'fixed' && cs.position !== 'absolute')) return false;
+    if (cs.display === 'none' || cs.visibility === 'hidden' ||
+        cs.opacity === '0' || cs.pointerEvents === 'none') return false;
+    if (cs.overflowY === 'auto' || cs.overflowY === 'scroll' ||
+        el.scrollHeight > el.clientHeight + 8) return true;
+    if (r.width >= 140 && r.height >= 140 &&
+        String(el.textContent || '').indexOf(OVERLAY_TEXT_HINT) >= 0) return true;
+    return false;
+  }
+  // 每次 touchstart 刷一次（频率低），touchmove 只查属性，避免每帧 getComputedStyle。
+  function markOverlayMenus() {
+    var l = document.querySelectorAll('div');
+    for (var i = 0; i < l.length; i++) {
+      var e = l[i];
+      if (e.hasAttribute(OVERLAY_MENU_ATTR)) {
+        var rr = e.getBoundingClientRect();
+        if (rr.width < 1 || rr.height < 1) e.removeAttribute(OVERLAY_MENU_ATTR);
+        continue;
+      }
+      if (looksLikeOverlayMenu(e)) e.setAttribute(OVERLAY_MENU_ATTR, '1');
+    }
+  }
+  function elInOverlay(el) {
+    var hops = 0;
+    while (el && el !== document.body && hops < 24) {
+      if (el.hasAttribute) {
+        if (el.hasAttribute(OVERLAY_MENU_ATTR) ||
+            el.hasAttribute(SPEED_MENU_ATTR) ||
+            el.hasAttribute('data-kvideo-popover')) return true;
+        var role = el.getAttribute('role');
+        if (role === 'menu' || role === 'dialog' || role === 'listbox') return true;
+      }
+      el = el.parentElement;
+      hops++;
+    }
+    return false;
+  }
+  // 菜单弹出期间整体暂停手势：即使手指从菜单外的画面起滑也不该调音量/亮度。
+  // 只认「明确是菜单」的浮层（倍速菜单 / 含三点菜单文案），并校验真实可见，
+  // 避免误伤字幕层、弹幕层等常驻浮层，也避免菜单 DOM 残留时把手势永久关掉。
+  function overlayMenuVisible() {
+    var l = document.querySelectorAll(
+      '[' + OVERLAY_MENU_ATTR + '="1"], [' + SPEED_MENU_ATTR + '="1"]');
+    for (var i = 0; i < l.length; i++) {
+      var e = l[i];
+      var r = e.getBoundingClientRect();
+      if (r.width < 100 || r.height < 100) continue;
+      var cs;
+      try { cs = window.getComputedStyle(e); } catch (err) { continue; }
+      if (cs.display === 'none' || cs.visibility === 'hidden' ||
+          cs.opacity === '0') continue;
+      if (e.hasAttribute(SPEED_MENU_ATTR) ||
+          String(e.textContent || '').indexOf(OVERLAY_TEXT_HINT) >= 0) return true;
+    }
+    return false;
+  }
   function seekGestureAllowed(x, y) {
     var h = window.innerHeight || 0;
     if (h > 0 && (y < h * 0.12 || y > h * 0.78)) return false;
@@ -844,6 +926,8 @@ class MainActivity : ComponentActivity() {
         el.closest('[data-kvideo-hud]') ||
         el.closest('.slider-track') ||
         el.closest('button,a'))) return false;
+    // 三点菜单/倍速菜单里上下滑只滚菜单，不触发音量、亮度、拖进度
+    if (elInOverlay(el)) return false;
     return true;
   }
   // 手势只在「全屏播放页」生效：首页/详情页/内嵌预览的滑动不应改音量、
@@ -869,6 +953,8 @@ class MainActivity : ComponentActivity() {
     if (synthDispatching) return;
     if (!isFullscreenPlayback()) { scrub = null; return; }
     if (ev.touches.length !== 1) { scrub = null; return; }
+    markOverlayMenus();
+    if (overlayMenuVisible()) { scrub = null; return; }
     var t = ev.touches[0];
     if (!seekGestureAllowed(t.clientX, t.clientY)) { scrub = null; return; }
     var info = videoInfo();
@@ -891,6 +977,11 @@ class MainActivity : ComponentActivity() {
     // 滑动途中退出全屏也要立刻停手，避免继续调音量/亮度
     if (!isFullscreenPlayback()) { scrub = null; return; }
     var t = ev.touches[0];
+    // 手指滑进网页弹层时立刻收手：这里的上下滑本意是滚菜单，
+    // 不能继续调音量/亮度，也不能 preventDefault / stopPropagation 干扰网页。
+    if (elInOverlay(document.elementFromPoint(t.clientX, t.clientY))) {
+      scrub = null; return;
+    }
     var dx = t.clientX - scrub.x, dy = t.clientY - scrub.y;
     if (!scrub.mode) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_MIN_PX) return;
@@ -1117,6 +1208,8 @@ class MainActivity : ComponentActivity() {
     var left = br.right - mw;
     if (left < 8) left = 8;
     forceStyle(menu, {
+      'width': '136px',
+      'min-width': '0px',
       'left': left.toFixed(1) + 'px',
       'bottom': bottom.toFixed(1) + 'px'
     });
