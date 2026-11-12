@@ -286,17 +286,20 @@
         android:src="@drawable/ic_lock_open_24"
         android:visibility="gone" />
 
-    <!-- 锁定/解锁提示独立于遮罩：解锁后遮罩收起，仍可显示「已解锁」 -->
+    <!-- 锁定/解锁提示独立于遮罩：解锁后遮罩收起，仍可显示「已解锁」。
+         复用亮度/音量 HUD 的灰白卡片，图标与文字由代码按状态切换，不用状态色。 -->
     <TextView
         android:id="@+id/lock_hint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:background="#B3101115"
-        android:paddingHorizontal="18dp"
-        android:paddingVertical="10dp"
+        android:background="@drawable/bg_hud_card"
+        android:drawablePadding="8dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="7dp"
         android:text="@string/lock_hint_locked"
         android:textColor="#FFFFFF"
-        android:textSize="13sp"
+        android:textSize="14sp"
         android:visibility="gone" />
 </FrameLayout>

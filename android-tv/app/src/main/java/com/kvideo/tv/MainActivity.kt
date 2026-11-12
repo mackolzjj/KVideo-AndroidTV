@@ -1517,9 +1517,16 @@ class MainActivity : ComponentActivity() {
     private var playbackLocked = false
     private var playbackActive = false
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val hideLockHint = Runnable { lockHint.visibility = View.GONE }
+    private val hideLockHint = Runnable {
+        lockHint.visibility = View.GONE
+        lockHint.alpha = 1f
+        lockHint.scaleX = 1f
+        lockHint.scaleY = 1f
+    }
     private val lockIdleHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val hideLockToggle = Runnable { lockToggle.visibility = View.GONE }
+    private val lockTogglePressHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val clearLockTogglePress = Runnable { lockToggle.isPressed = false }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1814,6 +1821,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         lockHintHandler.removeCallbacks(hideLockHint)
+        lockTogglePressHandler.removeCallbacks(clearLockTogglePress)
         exitCustomFullscreen()
         webView.destroy()
         super.onDestroy()
@@ -2003,17 +2011,60 @@ class MainActivity : ComponentActivity() {
             if (playbackLocked) R.string.lock_button_unlock
             else R.string.lock_button_lock
         )
-        lockHint.text = getString(
-            if (playbackLocked) R.string.lock_hint_locked
-            else R.string.lock_hint_unlocked
-        )
         lockHintHandler.removeCallbacks(hideLockHint)
         if (playbackLocked || showUnlockHint) {
-            lockHint.visibility = View.VISIBLE
-            lockHintHandler.postDelayed(hideLockHint, 2500L)
+            showLockHint(playbackLocked)
         } else {
             lockHint.visibility = View.GONE
         }
+    }
+
+    /** 小号灰白胶囊：复用亮度/音量 HUD 的卡片样式，两态只换图标与文字，不用状态色。 */
+    private fun showLockHint(locked: Boolean) {
+        lockHint.text = getString(
+            if (locked) R.string.lock_hint_locked else R.string.lock_hint_unlocked
+        )
+        val iconRes =
+            if (locked) R.drawable.ic_lock_closed_24 else R.drawable.ic_lock_open_24
+        val size = (16 * resources.displayMetrics.density).toInt()
+        val icon = resources.getDrawable(iconRes, theme)?.mutate()
+        icon?.setBounds(0, 0, size, size)
+        lockHint.setCompoundDrawables(icon, null, null, null)
+        lockHintHandler.removeCallbacks(hideLockHint)
+        lockHint.animate().cancel()
+        lockHint.alpha = 0f
+        lockHint.scaleX = 0.92f
+        lockHint.scaleY = 0.92f
+        lockHint.visibility = View.VISIBLE
+        lockHint.animate()
+            .alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(150L)
+            .start()
+        lockHintHandler.postDelayed(hideLockHint, 2500L)
+    }
+
+    /**
+     * 电视上锁钮不接收遥控器焦点，三态 selector 的 focused 态不会触发、pressed 态
+     * 又只闪一瞬。这里手动置 pressed 220ms 并做一次缩放回弹，保证按下必有可见反馈。
+     */
+    private fun flashLockTogglePress() {
+        if (!viewsReady) return
+        lockTogglePressHandler.removeCallbacks(clearLockTogglePress)
+        lockToggle.isPressed = true
+        lockToggle.animate().cancel()
+        lockToggle.scaleX = 1f
+        lockToggle.scaleY = 1f
+        lockToggle.animate()
+            .scaleX(0.82f).scaleY(0.82f)
+            .setDuration(90L)
+            .withEndAction {
+                lockToggle.animate()
+                    .scaleX(1f).scaleY(1f)
+                    .setDuration(180L)
+                    .start()
+            }
+            .start()
+        lockTogglePressHandler.postDelayed(clearLockTogglePress, 220L)
     }
 
     private fun setPlaybackLocked(locked: Boolean, showUnlockHint: Boolean = false) {
@@ -2021,7 +2072,10 @@ class MainActivity : ComponentActivity() {
         updateLockUi(showUnlockHint)
     }
 
-    private fun togglePlaybackLock() = setPlaybackLocked(!playbackLocked, showUnlockHint = true)
+    private fun togglePlaybackLock() {
+        flashLockTogglePress()
+        setPlaybackLocked(!playbackLocked, showUnlockHint = true)
+    }
 
     /** 只观察手势、不消费事件，网页自身的滚动/点击/横滑/拖动进度条都不受影响。 */
     @SuppressLint("ClickableViewAccessibility")
