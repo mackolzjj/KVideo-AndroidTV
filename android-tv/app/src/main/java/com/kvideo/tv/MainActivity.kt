@@ -1745,7 +1745,7 @@ class MainActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_NUMPAD_ENTER,
                 KeyEvent.KEYCODE_MENU,
                 KeyEvent.KEYCODE_SETTINGS -> {
-                    setPlaybackLocked(false)
+                    setPlaybackLocked(false, showUnlockHint = true)
                     return true
                 }
             }
@@ -1990,7 +1990,7 @@ class MainActivity : ComponentActivity() {
         lockToggle.visibility = View.GONE
     }
 
-    private fun updateLockUi() {
+    private fun updateLockUi(showUnlockHint: Boolean = false) {
         val show = canShowLockToggle()
         lockOverlay.visibility =
             if (playbackLocked && show) View.VISIBLE else View.GONE
@@ -2003,9 +2003,12 @@ class MainActivity : ComponentActivity() {
             if (playbackLocked) R.string.lock_button_unlock
             else R.string.lock_button_lock
         )
-        lockHint.text = getString(R.string.lock_hint_locked)
+        lockHint.text = getString(
+            if (playbackLocked) R.string.lock_hint_locked
+            else R.string.lock_hint_unlocked
+        )
         lockHintHandler.removeCallbacks(hideLockHint)
-        if (playbackLocked) {
+        if (playbackLocked || showUnlockHint) {
             lockHint.visibility = View.VISIBLE
             lockHintHandler.postDelayed(hideLockHint, 2500L)
         } else {
@@ -2013,12 +2016,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun setPlaybackLocked(locked: Boolean) {
+    private fun setPlaybackLocked(locked: Boolean, showUnlockHint: Boolean = false) {
         playbackLocked = locked
-        updateLockUi()
+        updateLockUi(showUnlockHint)
     }
 
-    private fun togglePlaybackLock() = setPlaybackLocked(!playbackLocked)
+    private fun togglePlaybackLock() = setPlaybackLocked(!playbackLocked, showUnlockHint = true)
 
     /** 只观察手势、不消费事件，网页自身的滚动/点击/横滑/拖动进度条都不受影响。 */
     @SuppressLint("ClickableViewAccessibility")

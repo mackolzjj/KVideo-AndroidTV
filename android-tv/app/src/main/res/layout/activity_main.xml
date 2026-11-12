@@ -267,20 +267,7 @@
         android:background="#00000000"
         android:clickable="true"
         android:focusable="false"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/lock_hint"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:background="#B3101115"
-            android:paddingHorizontal="18dp"
-            android:paddingVertical="10dp"
-            android:text="@string/lock_hint_locked"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp" />
-    </FrameLayout>
+        android:visibility="gone" />
 
     <!-- 与网页底栏 .btn-icon 统一：40dp 圆钮、10% 白底、20% 白描边、白色线性图标。
          放在画面左侧中部，避开顶部画质标签与右上角倍速；滑动快退闪现时
@@ -297,5 +284,19 @@
         android:padding="10dp"
         android:scaleType="fitCenter"
         android:src="@drawable/ic_lock_open_24"
+        android:visibility="gone" />
+
+    <!-- 锁定/解锁提示独立于遮罩：解锁后遮罩收起，仍可显示「已解锁」 -->
+    <TextView
+        android:id="@+id/lock_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#B3101115"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="10dp"
+        android:text="@string/lock_hint_locked"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
         android:visibility="gone" />
 </FrameLayout>
