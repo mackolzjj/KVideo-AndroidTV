@@ -184,40 +184,47 @@ class MainActivity : ComponentActivity() {
 
   var BTN = '[data-kvideo-menu] button';
   var MENU_CSS =
-    // 6 个圆钮与 5 条竖线作为同级 flex 项整条等距铺开；
-    // 不再分组给不同权重，首页与播放页的每个间隔完全一致。
-    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:1 1 auto;' +
+    // 菜单块按内容宽度收拢、从左侧起排：space-evenly 会把首尾空白也均分，
+    // 导致 logo 与第一个圆钮之间空出一大格。5 个分隔符保留 DOM 与占位，
+    // 只做透明间距，syncSeparators() 的隐藏逻辑仍然生效。
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:0 1 auto;' +
       'position:relative;margin-left:8px;min-width:0;' +
-      'justify-content:space-evenly;}' +
-    // 播放页会把 --glass-border 设成透明，竖线颜色必须固定，否则两页不一致。
-    '[data-kvideo-menu] .kvideo-menu-sep{width:1px;height:22px;flex:0 0 auto;' +
-      'background:rgba(127,127,127,.45) !important;margin:0 2px;}' +
+      'justify-content:flex-start;}' +
+    // 竖线不再可见，改为透明占位；第 6 个子元素（「更多」之后）加宽成分组留白。
+    '[data-kvideo-menu] .kvideo-menu-sep{width:4px;height:1px;flex:0 0 auto;' +
+      'background:transparent !important;margin:0;}' +
+    '[data-kvideo-menu] .kvideo-menu-sep:nth-child(6){width:14px;}' +
     BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
-      'display:inline-flex;align-items:center;justify-content:center;' +
+      'display:inline-flex;align-items:center;justify-content:center;position:relative;' +
       'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
       // 播放页会把 --glass-bg/--glass-border 设成透明，圆钮会退化成裸图标，
-      // 和原生按钮糊在同一行；这里固定中性底色与描边，不依赖网页变量。
-      'border:1px solid rgba(127,127,127,.34) !important;' +
-      'background:rgba(127,127,127,.14) !important;' +
+      // 和原生按钮糊在同一行；这里固定与底栏 .btn-icon / 倍速圆钮 / 原生锁钮
+      // 同款的 10% 白底 + 20% 白描边，不依赖网页变量。
+      'border:1px solid rgba(255,255,255,.20) !important;' +
+      'background:rgba(255,255,255,.10) !important;' +
       // 不再吃网页的 --text-color：圆钮颜色随网页前景（等同 inherit），
       // 弹层的文字另给固定浅色，避免深底配深字。
       'color:inherit;font:inherit;' +
       '-webkit-tap-highlight-color:transparent;' +
       'transition:transform .16s ease,border-color .16s ease,color .16s ease;}' +
     BTN + ':active{transform:scale(.9);}' +
-    BTN + '[data-kvideo-active="1"]{border-color:#3b82f6;' +
-      'color:#3b82f6;}' +
+    // 选中态不再用「蓝边 + 蓝字 + 蓝底」三重强调，只留蓝色图标和底部小蓝点。
+    BTN + '[data-kvideo-active="1"]{color:#3b82f6;}' +
+    '[data-kvideo-menu] button[data-kvideo-active="1"]::after{' +
+      'content:"";position:absolute;bottom:3px;left:50%;' +
+      'transform:translateX(-50%);width:3px;height:3px;border-radius:50%;' +
+      'background:#3b82f6 !important;}' +
     BTN + ' svg{width:24px;height:24px;flex:0 0 auto;}' +
     // 播放页对 button 有全局重置（border-radius:0），用更高特异性兜底
     '[data-kvideo-menu] button[data-kvideo-act]{' +
       'border-radius:999px !important;' +
-      'border:1px solid rgba(127,127,127,.34) !important;' +
-      'background:rgba(127,127,127,.14) !important;}' +
-    // 当前主题档位（也用于「更多」展开态）：特异性要高于上面的兜底规则
+      'border:1px solid rgba(255,255,255,.20) !important;' +
+      'background:rgba(255,255,255,.10) !important;}' +
+    // 当前主题档位（也用于「更多」展开态）：特异性要高于上面的兜底规则，
+    // 选中时描边与底色保持中性，只把图标染蓝（蓝点由上面的 ::after 提供）。
     '[data-kvideo-menu] button[data-kvideo-act][data-kvideo-active="1"]{' +
-      'border-color:#3b82f6 !important;' +
       'color:#3b82f6 !important;' +
-      'background:rgba(59,130,246,.16) !important;}' +
+      'background:rgba(255,255,255,.10) !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层自带不透明深色底与固定文字色：播放页会把 --glass-bg 设成透明，
     // 上游浅色主题也可能只定义了 --text-color，靠网页变量必然糊字。
@@ -240,12 +247,13 @@ class MainActivity : ComponentActivity() {
     '[data-kvideo-menu] .kvideo-menu-popover button svg{width:18px;height:18px;}' +
     '@media (min-width:640px){' +
       BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
-    // 6 个圆钮是固定 32px 不会缩，原先 5 条竖线各带 4px margin、10 个
-    // 5px gap，合计约 267px，320dp 设备会把最右钮挤出去或反压 logo。
-    // 压成 2px gap + 无 margin 后约 217px；超窄屏再降一档到约 199px。
+    // 6 个圆钮是固定 32px 不会缩。窄屏把透明占位压到 2px、分组占位 8px，
+    // 配合 2px gap 后总宽约 228px，320dp 设备不会把最右钮挤出去或反压 logo；
+    // 超窄屏再降一档 gap 到 1px。
     '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:2px;margin-left:4px;}' +
-      '[data-kvideo-menu] .kvideo-menu-sep{margin:0;height:18px;}' +
+      '[data-kvideo-menu] .kvideo-menu-sep{width:2px;margin:0;}' +
+      '[data-kvideo-menu] .kvideo-menu-sep:nth-child(6){width:8px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:20px;height:20px;}}' +
     '@media (max-width:360px){' +
@@ -415,7 +423,7 @@ class MainActivity : ComponentActivity() {
       '<span>' + label + '</span></button>';
   }
   // 「直播」收进「更多」弹层：顶栏按钮过多会挤压左侧 logo。
-  // 6 个圆钮之间各有一条竖线，不再分组，视觉与间距完全统一。
+  // 6 个圆钮之间各保留一个透明分隔占位，「更多」之后那一个更宽作分组。
   function menuHtml() {
     var sep = '<span class="kvideo-menu-sep"></span>';
     return btn('favorites', '我的收藏', ICON.heart) + sep +
@@ -584,8 +592,8 @@ class MainActivity : ComponentActivity() {
       if (b.style.display !== want) b.style.display = want;
     }
   }
-  // 功能不可用时按钮会被隐藏，同步收掉它两侧多余的竖线，
-  // 避免出现落单分隔线或两条竖线连在一起。
+  // 功能不可用时按钮会被隐藏，同步收掉它两侧多余的分隔占位，
+  // 避免留下多余的间距或让两个占位连在一起。
   function syncSeparators() {
     if (!root) return;
     var kids = root.children;
