@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.33`（`versionCode 35`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.34`（`versionCode 36`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -27,7 +27,7 @@
 - 主题三档**并排直接切换**，点哪个切哪个，当前档蓝色高亮；「跟随系统」是让网页配色随手机深浅色模式变化，不改系统设置。
 - 「更多」弹层：**直播 / 退出登录 / 网站设置 / 应用设置**。不透明深色底 + 固定白字，不依赖网页 CSS 变量；某项功能在当前账号/页面不可用时自动隐藏，两侧竖线同步收起。直播受账号 `iptv_access` 权限控制。
 - 播放页没有「我的收藏」导航链接，心形会兜底点「收藏这个视频」——语义变成收藏当前视频，但**两页按钮数量与外观一致**。
-- 顶栏原生右侧按钮组、logo 旁的站名文字（保留紫色 logo）、画面中间可拖动的收藏/历史悬浮钮、右下角齿轮悬浮钮全部隐藏。齿轮已彻底停用，设置入口由「更多 → 应用设置」和返回键兜底。
+- 顶栏原生右侧按钮组、logo 旁的站名文字（保留 logo，改为同款圆形线性标）、画面中间可拖动的收藏/历史悬浮钮、右下角齿轮悬浮钮全部隐藏。齿轮已彻底停用，设置入口由「更多 → 应用设置」和返回键兜底。
 - 圆钮 36px / 图标 24px（宽屏 40px、≤430px 32px、≤360px 30px），窄屏压缩间距避免溢出。
 - **上滑 ≥48dp 收起整条顶栏，下滑恢复**；显隐只听手势，不跟随横竖屏或播放状态，横屏播放时不再触发。原生层只观察、不消费触摸事件，网页滚动 / 点击 / 横滑不受影响。
 
@@ -80,7 +80,7 @@
 | 输入 | 说明 |
 | --- | --- |
 | `kvideo_url` | 预置进 APK 的默认地址，留空则首次启动手填 |
-| `release_tag` | 填了才创建 / 更新 Release（如 `v1.1.33`） |
+| `release_tag` | 填了才创建 / 更新 Release（如 `v1.1.34`） |
 | `release_title` | Release 标题，留空用默认 |
 
 产物：`kvideo-android-phone-apk-<versionName>-r<run_number>` artifact；填了 `release_tag` 时，Release 资产名为 `KVideo-Android-<versionName>.apk`。`versionName` 直接从 `app/build.gradle.kts` 读取，不用手工同步。
@@ -107,7 +107,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### 发版规则
 
-每次发布在 `android-tv/app/build.gradle.kts` 递增 `versionCode`（只增不减，Android 靠它判断能否覆盖安装）并更新 `versionName`；Release tag 与 `versionName` 对齐（如 `v1.1.33`）。**不要删除或重新生成 `.github/debug-keystore.b64`** —— 换密钥等于要求所有已安装用户卸载重装。
+每次发布在 `android-tv/app/build.gradle.kts` 递增 `versionCode`（只增不减，Android 靠它判断能否覆盖安装）并更新 `versionName`；Release tag 与 `versionName` 对齐（如 `v1.1.34`）。**不要删除或重新生成 `.github/debug-keystore.b64`** —— 换密钥等于要求所有已安装用户卸载重装。
 
 ## 实现要点 / 排障
 

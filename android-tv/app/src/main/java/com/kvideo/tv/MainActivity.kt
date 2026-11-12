@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
          *    主题当前状态取原生按钮 className 的 scale-105，点击切到下一档。
          * 6. 菜单是 nav 的后代，天然随顶部条一起上滑收起、下滑恢复；收起时
          *    自动关闭「更多」弹出层。圆钮 36px / 图标 24px，宽屏 40px，
-         *    380px 以下超窄屏回落 32px / 20px，避免再次挤到紫色 logo 上。
+         *    380px 以下超窄屏回落 32px / 20px，避免再次挤到 logo 上。
          * 7. mark() 给贴顶元素打 data-kvideo-topbar 兜底；MutationObserver 用
          *    「节流立即扫 + 尾部补扫」，syncMenu() 稳态不产生 DOM 变更。
          * 8. 播放页左右快退/快进圆钮按 aria-label 打标后缩小，保留 44px 热区。
@@ -96,8 +96,36 @@ class MainActivity : ComponentActivity() {
   var NATIVE_ATTR = 'data-kvideo-native';
   var BRAND_ATTR = 'data-kvideo-brand';
   var BRAND_TEXT_ATTR = 'data-kvideo-brand-text';
+  var LOGO_ATTR = 'data-kvideo-logo';
+  var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
+
+  // 顶栏 logo：上游是紫色实心方块 + 白色实心三角，和旁边空心白线性圆钮
+  // 形状、底色、图标语言全不一致。隐藏原图，插入同尺寸圆形矢量标：
+  // 与圆钮共用 10% 白底 + 20% 白描边，紫色只留在线性播放三角上。
+  var LOGO_SVG =
+    '<svg viewBox="0 0 36 36" width="36" height="36" ' +
+      'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<circle cx="18" cy="18" r="17" fill="#FFFFFF" fill-opacity=".10" ' +
+        'stroke="#FFFFFF" stroke-opacity=".20" stroke-width="1"/>' +
+      '<path d="M16 12 L16 24 L26 18 Z" fill="none" stroke="#7F77DD" ' +
+        'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '</svg>';
+  var LOGO_CSS =
+    '[' + BRAND_IMG_ATTR + ']{display:none !important;}' +
+    '[' + LOGO_ATTR + ']{width:36px;height:36px;min-width:36px;min-height:36px;' +
+      'display:inline-flex !important;align-items:center !important;' +
+      'justify-content:center !important;vertical-align:middle !important;' +
+      'box-sizing:border-box !important;flex:0 0 auto !important;}' +
+    '[' + LOGO_ATTR + '] svg{width:100% !important;height:100% !important;' +
+      'display:block !important;}' +
+    '@media (min-width:640px){' +
+      '[' + LOGO_ATTR + ']{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
+    '@media (max-width:430px){' +
+      '[' + LOGO_ATTR + ']{width:32px;height:32px;min-width:32px;min-height:32px;}}' +
+    '@media (max-width:360px){' +
+      '[' + LOGO_ATTR + ']{width:30px;height:30px;min-width:30px;min-height:30px;}}';
 
   // 两个可拖动的全局悬浮圆钮：收藏是重复入口，历史由顶部菜单代理
   var favorites = [
@@ -376,7 +404,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -679,7 +707,7 @@ class MainActivity : ComponentActivity() {
   // 只隐藏文字、保住图片；没有图片的纯文字 logo 一律不动。
   function hideBrandText(row, m) {
     var kids = row.children;
-    var brand = null, brandIdx = -1, i, j, el, n, txt;
+    var brand = null, brandIdx = -1, i, j, el, n, txt, raw, logo;
     for (i = 0; i < kids.length; i++) {
       el = kids[i];
       if (!el || el.nodeType !== 1 || el === m ||
@@ -690,6 +718,18 @@ class MainActivity : ComponentActivity() {
     }
     if (!brand) return;
     if (!brand.hasAttribute(BRAND_ATTR)) brand.setAttribute(BRAND_ATTR, '1');
+    // 同尺寸圆形矢量 logo 替换上游紫色实心方块。幂等：已插入就不再动 DOM，
+    // 避免 MutationObserver 反复触发；原图只打标隐藏，不删除，保住品牌容器宽度。
+    if (!brand.querySelector('[' + LOGO_ATTR + ']')) {
+      raw = brand.querySelector('img,svg,picture,canvas');
+      if (raw) {
+        if (!raw.hasAttribute(BRAND_IMG_ATTR)) raw.setAttribute(BRAND_IMG_ATTR, '1');
+        logo = document.createElement('span');
+        logo.setAttribute(LOGO_ATTR, '1');
+        logo.innerHTML = LOGO_SVG;
+        if (raw.parentNode) raw.parentNode.insertBefore(logo, raw);
+      }
+    }
     var nodes = brand.querySelectorAll('*');
     for (j = 0; j < nodes.length; j++) {
       n = nodes[j];
