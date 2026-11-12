@@ -98,8 +98,6 @@ class MainActivity : ComponentActivity() {
   var BRAND_TEXT_ATTR = 'data-kvideo-brand-text';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
-  var GLASS_ATTR = 'data-kvideo-glass';
-  var ROW_ATTR = 'data-kvideo-topbar-row';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
              'pointer-events:none !important;';
 
@@ -400,19 +398,6 @@ class MainActivity : ComponentActivity() {
     '.kv-hud-track i{display:block !important;height:100% !important;width:0 !important;' +
       'background:#3b82f6 !important;border-radius:2px !important;}';
 
-  // 收窄顶栏胶囊（方案 2）：上游那个大圆角玻璃容器原本撑满全宽，
-  // logo 与圆钮之间显得很空。只在 compactTopbar() 成功打标后才覆盖，
-  // 认不出容器时这些规则一条都不生效，自动保持 MENU_CSS 的均分整条版本。
-  var COMPACT_CSS =
-    prefixed('html.' + READY_CLS + ' ', ['[' + ROW_ATTR + ']']) +
-      '{justify-content:flex-start !important;}' +
-    prefixed('html.' + READY_CLS + ' ', ['[' + GLASS_ATTR + ']']) +
-      '{width:max-content !important;min-width:0 !important;' +
-      'max-width:calc(100vw - 32px) !important;' +
-      'margin-left:0 !important;margin-right:auto !important;}' +
-    prefixed('html.' + READY_CLS + ' ', ['[' + GLASS_ATTR + '] [data-kvideo-menu]']) +
-      '{flex:0 1 auto !important;justify-content:flex-start !important;}';
-
   var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
@@ -428,7 +413,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS + COMPACT_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -1347,36 +1332,6 @@ class MainActivity : ComponentActivity() {
   }
 
   // 播放页浮动控件统一同步：三点位置、倍速钮位置、速度菜单定位。
-  // 收窄上游大胶囊：不写死上游 class（React 会变），从菜单所在行往上
-  // 找「带圆角 + 有背景」的容器并打标。先清掉旧标，避免页面重渲染后
-  // 残留到别的节点上。找不到就一个标都不打 —— COMPACT_CSS 全部失效，
-  // 保持均分整条，宁可不变化也不再出现 logo 与按钮之间的大空白。
-  function compactTopbar(bar, row) {
-    var old = document.querySelectorAll('[' + GLASS_ATTR + '],[' + ROW_ATTR + ']');
-    for (var k = 0; k < old.length; k++) {
-      old[k].removeAttribute(GLASS_ATTR);
-      old[k].removeAttribute(ROW_ATTR);
-    }
-    var el = row, glass = null, i, cls, cs, r, rounded, bg;
-    for (i = 0; i < 4 && el; i++) {
-      cls = String(el.className || '');
-      cs = window.getComputedStyle(el);
-      r = el.getBoundingClientRect();
-      rounded = (parseFloat(cs.borderTopLeftRadius) || 0) >= 12 ||
-                cls.indexOf('rounded') >= 0;
-      bg = (cs.backgroundColor && cs.backgroundColor !== 'transparent' &&
-            cs.backgroundColor !== 'rgba(0, 0, 0, 0)') ||
-           (cs.backdropFilter && cs.backdropFilter !== 'none') ||
-           cls.indexOf('glass') >= 0 || cls.indexOf('bg-') >= 0;
-      if (rounded && bg && r.width > 120) { glass = el; break; }
-      if (el === bar) break;
-      el = el.parentElement;
-    }
-    if (!glass) return;
-    glass.setAttribute(GLASS_ATTR, '1');
-    row.setAttribute(ROW_ATTR, '1');
-  }
-
   // 这个函数已挂在 syncMenu 开头 / 1s 补扫 / pageshow / resize /
   // orientationchange 上，加在这里就等于全部钩子自动生效。
   function syncRateUi() {
@@ -1404,7 +1359,6 @@ class MainActivity : ComponentActivity() {
     if (m.parentNode !== row) row.appendChild(m);
     hideNativeControls(row, m);
     hideBrandText(row, m);
-    compactTopbar(bar, row);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncSeparators();
