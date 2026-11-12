@@ -57,7 +57,7 @@
 ## 防误触锁
 
 - **出现条件**：横屏且网页上报有 `<video>`；锁钮在**画面左侧中部**，40dp、10% 白底 + 20% 白描边、白色线性锁图标，与底栏圆钮同款。
-- **静止 5 秒自动淡出**，任意触摸或按键立即唤出并重新计时。即便上锁后覆盖层吞了触摸，Activity 的 `dispatchTouchEvent` 仍先收到事件，所以触屏一定能把锁钮唤回来。
+- **静止 3 秒自动淡出**，任意触摸或按键立即唤出并重新计时。即便上锁后覆盖层吞了触摸，Activity 的 `dispatchTouchEvent` 仍先收到事件，所以触屏一定能把锁钮唤回来。
 - **上锁时**：透明覆盖层吞掉所有触摸；`dispatchKeyEvent` 吞方向键、数字键、媒体键；**音量键与 HOME 放行**，视频照常播放。上锁瞬间画面中央只显示「已锁定」，2.5 秒后淡出。
 - **解锁**：点锁钮，或按 OK / 返回 / MENU / SETTINGS，保证遥控器用户不会被锁死。
 - **自动解锁**：退出系统全屏、进设置页、页面重载、离开播放页；锁状态**不持久化**。手势调过的窗口亮度在离开播放页时交还给系统亮度。
@@ -132,7 +132,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - Manifest 必须保留 `android:usesCleartextTraffic="true"`，否则局域网 `http://` 在 Android 9+ 连不上。
 - 上游网页全屏时会调用 `screen.orientation.lock('landscape')`，Android WebView 一般不支持该 API（调用处已有异常捕获），实际方向由本壳 `onShowCustomView` 控制。
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
-- 锁钮 5 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
+- 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
 
 ## 版本与许可

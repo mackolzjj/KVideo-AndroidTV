@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "KVideoMainActivity"
         private const val SWIPE_THRESHOLD_DP = 48f
         /** 锁按钮空闲多久后自动隐藏；触屏或按任意键重新计时并显示。 */
-        private const val LOCK_TOGGLE_IDLE_MS = 5_000L
+        private const val LOCK_TOGGLE_IDLE_MS = 3_000L
 
                                 /**
          * 注入到网页：把顶部菜单重排为「内容组 + 分隔线 + 工具组 + 更多」。
@@ -1972,7 +1972,7 @@ class MainActivity : ComponentActivity() {
         playbackActive && !isSetupVisible() &&
             errorContainer.visibility != View.VISIBLE
 
-    /** 有输入时调用：立刻显示锁钮并重新计 5 秒空闲；离开播放页则立即收起。 */
+    /** 有输入时调用：立刻显示锁钮并重新计 3 秒空闲；离开播放页则立即收起。 */
     private fun scheduleLockToggleHide() {
         if (!viewsReady) return
         lockIdleHandler.removeCallbacks(hideLockToggle)
