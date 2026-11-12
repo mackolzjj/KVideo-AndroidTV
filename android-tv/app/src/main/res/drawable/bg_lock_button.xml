@@ -1,9 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <!-- 与网页底栏 .btn-icon 一致：#ffffff1a 底 + #fff3 描边 -->
-    <solid android:color="#1AFFFFFF" />
-    <stroke
-        android:width="1dp"
-        android:color="#33FFFFFF" />
-</shape>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 按下：底色与描边同时加亮，形状仍是 oval，不会画成方框 -->
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="#4DFFFFFF" />
+            <stroke
+                android:width="1dp"
+                android:color="#99FFFFFF" />
+        </shape>
+    </item>
+    <!-- 遥控器焦点：只把圆形描边加亮 -->
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="#1AFFFFFF" />
+            <stroke
+                android:width="1dp"
+                android:color="#80FFFFFF" />
+        </shape>
+    </item>
+    <!-- 默认：与网页底栏 .btn-icon 一致，10% 白底 + 20% 白描边 -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#1AFFFFFF" />
+            <stroke
+                android:width="1dp"
+                android:color="#33FFFFFF" />
+        </shape>
+    </item>
+</selector>
