@@ -223,35 +223,36 @@
         android:visibility="gone" />
 
     <!-- 手势提示浮层：左右半屏上下滑调音量/亮度时由壳层原生显示，绕开网页 CSS 不确定性。
-         小尺寸居中卡片（约 118x48dp），避免遮挡画面主体；松手约 800ms 后自动隐藏。
-         音量与亮度共用此卡片，外观完全一致。 -->
+         单行小胶囊，与锁定/解锁提示共用半透明背景，字号、内边距、圆角一致；
+         松手约 800ms 后自动隐藏。音量与亮度共用此卡片，外观完全一致。 -->
     <LinearLayout
         android:id="@+id/gesture_hud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:background="@drawable/bg_hud_card"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
+        android:background="@drawable/bg_lock_hint"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingHorizontal="14dp"
-        android:paddingVertical="9dp"
+        android:paddingVertical="7dp"
         android:visibility="gone">
 
         <TextView
             android:id="@+id/gesture_hud_value"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:fontFamily="sans"
             android:text="亮度 100%"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:textSize="14sp"
+            android:textStyle="normal" />
 
         <ProgressBar
             android:id="@+id/gesture_hud_bar"
             style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="88dp"
+            android:layout_width="48dp"
             android:layout_height="3dp"
-            android:layout_marginTop="7dp"
+            android:layout_marginStart="8dp"
             android:max="100"
             android:progress="100"
             android:progressTint="#3B82F6" />
@@ -287,19 +288,22 @@
         android:visibility="gone" />
 
     <!-- 锁定/解锁提示独立于遮罩：解锁后遮罩收起，仍可显示「已解锁」。
-         复用亮度/音量 HUD 的灰白卡片，图标与文字由代码按状态切换，不用状态色。 -->
+         专用半透明背景，字号、内边距、圆角与亮度/音量 HUD 一致；
+         图标与文字由代码按状态切换，不用状态色。 -->
     <TextView
         android:id="@+id/lock_hint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:background="@drawable/bg_hud_card"
+        android:background="@drawable/bg_lock_hint"
         android:drawablePadding="8dp"
+        android:fontFamily="sans"
         android:gravity="center_vertical"
         android:paddingHorizontal="14dp"
         android:paddingVertical="7dp"
         android:text="@string/lock_hint_locked"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
+        android:textStyle="normal"
         android:visibility="gone" />
 </FrameLayout>
