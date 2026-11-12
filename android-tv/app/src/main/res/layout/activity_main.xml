@@ -19,7 +19,7 @@
         android:indeterminate="false"
         android:max="100"
         android:progress="0"
-        android:progressTint="#5B9CFF"
+        android:progressTint="#3B82F6"
         android:visibility="gone" />
 
     <!-- 主框架加载失败时盖住 WebView 黑屏，给出原因与两个出口。
@@ -125,10 +125,12 @@
             android:orientation="vertical"
             android:padding="20dp">
 
+            <!-- 卡片提亮并加 12% 白细描边，与播放页提示同一套视觉；
+                 之前卡片底色与全屏遮罩几乎同色，深色下看不出边界。 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="#F31A1C22"
+                android:background="@drawable/bg_setup_card"
                 android:elevation="12dp"
                 android:maxWidth="480dp"
                 android:orientation="vertical"
@@ -155,7 +157,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
-                    android:background="#FF0D0F14"
+                    android:background="@drawable/bg_url_input"
                     android:hint="@string/setup_hint"
                     android:importantForAutofill="no"
                     android:imeOptions="actionDone"

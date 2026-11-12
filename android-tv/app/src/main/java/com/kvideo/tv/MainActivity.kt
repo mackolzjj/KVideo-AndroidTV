@@ -339,22 +339,24 @@ class MainActivity : ComponentActivity() {
 
   // 手势提示浮层：跟手拖进度时显示目标时间/偏移/进度条，音量亮度时显示百分比。
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
+  // 1.1.33 起与原生音量/亮度/锁定提示统一：45% 半透底、12% 白细描边、10px 圆角、蓝色进度条，
+  // 主字收到 18px；去掉实心深底与投影，避免同一播放页交替弹出「大黑框」和「小胶囊」。
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
-      'transform:translate(-50%,-50%) !important;min-width:176px !important;' +
-      'padding:14px 20px 12px !important;box-sizing:border-box !important;' +
-      'background:rgba(20,22,26,.92) !important;' +
-      'border:1px solid rgba(255,255,255,.18) !important;border-radius:14px !important;' +
-      'box-shadow:0 8px 28px rgba(0,0,0,.35) !important;color:#FFFFFF !important;' +
+      'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
+      'padding:10px 16px !important;box-sizing:border-box !important;' +
+      'background:rgba(16,17,21,.45) !important;' +
+      'border:1px solid rgba(255,255,255,.12) !important;border-radius:10px !important;' +
+      'color:#FFFFFF !important;' +
       'text-align:center !important;z-index:2147483647 !important;' +
       'pointer-events:none !important;display:none !important;font-family:sans-serif !important;}' +
-    '.kv-hud-main{font-size:22px !important;font-weight:600 !important;' +
+    '.kv-hud-main{font-size:18px !important;font-weight:500 !important;' +
       'line-height:1.2 !important;font-variant-numeric:tabular-nums !important;' +
       'color:#FFFFFF !important;}' +
     '.kv-hud-sub{font-size:12px !important;color:rgba(255,255,255,.68) !important;' +
       'margin-top:4px !important;line-height:1.3 !important;}' +
     '.kv-hud-track{height:4px !important;border-radius:2px !important;' +
-      'margin-top:10px !important;background:rgba(255,255,255,.20) !important;' +
+      'margin-top:8px !important;background:rgba(255,255,255,.20) !important;' +
       'overflow:hidden !important;}' +
     '.kv-hud-track i{display:block !important;height:100% !important;width:0 !important;' +
       'background:#3b82f6 !important;border-radius:2px !important;}';
