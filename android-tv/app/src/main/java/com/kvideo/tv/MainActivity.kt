@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
       'min-width:0 !important;overflow:visible !important;z-index:45 !important;' +
       // 控制条淡出时同步淡出：没有这条过渡，按钮是「啪」地消失/出现，
       // 和旁边柔和淡出的图标对不上，看起来就是在闪。
-      'transition:opacity .12s ease !important;}';
+      'transition:opacity .18s ease !important;}';
 
   // 胶囊：把「1x / 画中画 / 全屏」从三个各自带圆底的小件，收成一条共用底色的
   // 长条控件。做法是给整段区域垫一层圆角底（PILL），再把按钮组自己的圆底
@@ -334,13 +334,14 @@ class MainActivity : ComponentActivity() {
     '[' + PILL_ATTR + '="1"]{position:absolute !important;pointer-events:none !important;' +
       'border-radius:999px !important;box-sizing:border-box !important;' +
       'background:rgba(255,255,255,.10) !important;z-index:44 !important;' +
-      'transition:opacity .12s ease !important;}' +
+      'transition:opacity .18s ease !important;}' +
     // 组本身和组内每个圆钮的圆底都抹掉，整段只留一条胶囊底色。
+    // 选择器排除胶囊自身：万一胶囊被挂成了组的直接子元素，别把自己也抹透明。
     '[' + BAR_ATTR + '="1"]{background-color:transparent !important;}' +
-    '[' + BAR_ATTR + '="1"] > *{background-color:transparent !important;' +
+    '[' + BAR_ATTR + '="1"] > *:not([' + PILL_ATTR + ']){background-color:transparent !important;' +
       'box-shadow:none !important;border-color:transparent !important;}' +
-    '[' + BAR_ATTR + '="1"] > *:hover{background-color:rgba(255,255,255,.14) !important;}' +
-    '[' + BAR_ATTR + '="1"] > *:active{background-color:rgba(255,255,255,.20) !important;}';
+    '[' + BAR_ATTR + '="1"] > *:not([' + PILL_ATTR + ']):hover{background-color:rgba(255,255,255,.14) !important;}' +
+    '[' + BAR_ATTR + '="1"] > *:not([' + PILL_ATTR + ']):active{background-color:rgba(255,255,255,.20) !important;}';
 
   // 网页自带的「向上还是向下展开」判定，在倍速钮被移到底栏后会算错：
   // 菜单从按钮下沿往下弹，被屏幕底边裁到只剩 0.5x / 0.75x。
@@ -1285,19 +1286,27 @@ class MainActivity : ComponentActivity() {
     var ar = anchor.getBoundingClientRect();
     if (ar.width < 4 || ar.height < 4) return;
     var host = wrap.offsetParent || wrap.parentElement;
+    // 兜底：万一 offsetParent 正好是按钮组本身，胶囊就会被挂成组的直接子元素，
+    // 于是吃到 PILL_CSS 里「组内直接子元素一律透明」那条规则，胶囊底色被抹掉。
+    if (host === anchor) host = anchor.parentElement;
     if (!host) return;
     var hr = host.getBoundingClientRect();
 
-    // 尺寸与间距都取右侧按钮组的实测值：组内图标钮可能是 40px 也可能是 36px，
-    // 间距可能是 gap-2 也可能是 margin，写死会显得比邻钮大一圈、比邻钮远一截。
+    // 纵向对齐、胶囊右沿以「最后一个图标钮」为准；横向插入点必须用「第一个
+    // 图标钮」的左沿——拿最后一个的左沿去减，倍速钮会直接压在倒数第二个图标上。
     var mate = lastIconIn(anchor);
-    var size = mate ? Math.round(mate.getBoundingClientRect().width) : 40;
+    var mr = mate ? mate.getBoundingClientRect() : null;
+    var first = firstIconIn(anchor);
+    var fr = first ? first.getBoundingClientRect() : null;
+    var size = mr ? Math.round(mr.width) : 40;
     if (!(size >= 24 && size <= 64)) size = 40;
     var gap = groupGap(anchor);
     if (!(gap >= 0 && gap <= 32)) gap = 8;
 
-    var left = ar.left - hr.left - size - gap;
-    var top = ar.top - hr.top + (ar.height - size) / 2;
+    var left = (fr ? fr.left : ar.left) - hr.left - size - gap;
+    var top = mr
+      ? mr.top - hr.top + (mr.height - size) / 2
+      : ar.top - hr.top + (ar.height - size) / 2;
     if (left < 8) left = 8;
     if (top < 0) top = 0;
     forceStyle(wrap, {
@@ -1310,15 +1319,22 @@ class MainActivity : ComponentActivity() {
     // 外观向组内图标钮看齐（尺寸、圆角、字色），但底色/描边交给胶囊。
     matchSiblingLook(b, mate);
 
-    // 胶囊垫层：从倍速钮左沿一直铺到按钮组右沿，整段共用一条圆角底色。
+    // 胶囊垫层：上下左右各留 4px 内缩，正好把「倍速 + 组内图标」这一整段
+    // 严丝合缝地包住——左右余量相等，看起来才是一条对称的胶囊，而不是
+    // 一头紧一头松。
     var pill = ensurePill(host);
     if (pill) {
-      var span = ar.right - hr.left - left;
+      var pad = 4;
+      var pillLeft = left - pad;
+      if (pillLeft < 4) pillLeft = 4;
+      var pillRight = (mr ? mr.right : ar.right) - hr.left + pad;
+      var pillTop = (mr ? mr.top - hr.top : top) - pad;
+      var pillH = (mr ? mr.height : size) + pad * 2;
       forceStyle(pill, {
-        'left': left.toFixed(1) + 'px',
-        'top': top.toFixed(1) + 'px',
-        'width': (span > size ? span : size) + 'px',
-        'height': size + 'px'
+        'left': pillLeft.toFixed(1) + 'px',
+        'top': pillTop.toFixed(1) + 'px',
+        'width': (pillRight - pillLeft).toFixed(1) + 'px',
+        'height': pillH.toFixed(1) + 'px'
       });
     }
     if (anchor.getAttribute(BAR_ATTR) !== '1') anchor.setAttribute(BAR_ATTR, '1');
@@ -1348,26 +1364,36 @@ class MainActivity : ComponentActivity() {
     return el;
   }
 
-  // 控制条整体是否处于「已隐藏」状态。逐级往上找：Tailwind 换的是祖先的
-  // opacity-0 / pointer-events-none 类，个别情况下才是 style.opacity 渐变。
-  function barHidden(node) {
-    var el = node, i = 0;
-    while (el && el.nodeType === 1 && i < 7) {
-      var cls = String(el.className || '');
-      if (cls.indexOf('opacity-0') >= 0 || cls.indexOf('pointer-events-none') >= 0) return true;
-      if (el.hasAttribute('hidden')) return true;
+  // 控制条整体的「有效不透明度」：从 anchor 往上逐级累加，取最小值。
+  //
+  // 两条红线（1.1.39 的线上故障就是踩了第一条）：
+  //   1. 不认 pointer-events-none。这类播放器为了让点击穿透到视频，控制层
+  //      常年挂着 pointer-events-none，靠子按钮自己 pointer-events-auto 接事件。
+  //      把它当「已隐藏」，倍速容器和胶囊就会被永久写成 opacity:0——按钮直接
+  //      消失，而且组内圆底已被胶囊方案抹平，右侧只剩三个裸图标。
+  //   2. 不采样组内兄弟按钮的 opacity。兄弟可能常态就是 0.3（禁用态/分隔条），
+  //      采到一次就再也不会亮。
+  // 宁可「控制条淡出时倍速钮多亮半拍」，也不接受它消失。
+  function barOpacity(node) {
+    var el = node, i = 0, min = 1;
+    while (el && el.nodeType === 1 && i < 8) {
       var cs = null;
       try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
       if (cs) {
-        if (cs.display === 'none' || cs.visibility === 'hidden') return true;
+        if (cs.display === 'none' || cs.visibility === 'hidden') return 0;
         var op = parseFloat(cs.opacity);
-        if (!isNaN(op) && op < 0.15) return true;
+        if (!isNaN(op) && op < min) min = op;
       }
       el = el.parentElement;
       i++;
     }
-    return false;
+    return min;
   }
+
+  // 阈值 0.5：淡出走到一半就判定「已隐藏」，由 .18s 过渡把剩下的路走完，
+  // 视觉上和整条控制条同时收尾。判早了只是同步得早一点，判晚了也仍会收，
+  // 不存在卡死在某一个中间值的可能。
+  function barHidden(node) { return barOpacity(node) < 0.5; }
 
   // 三个节点（容器 / 垫层 / 按钮）用同一套判断，避免出现「垫层淡出了、
   // 按钮还亮着」这种半截状态。只动 opacity 不碰 visibility，才有淡出过程。
@@ -1397,6 +1423,15 @@ class MainActivity : ComponentActivity() {
       if (isIconNode(kids[i])) found = kids[i];
     }
     return found;
+  }
+
+  // 组内第一个可见的图标钮：倍速钮要插在它左边 size+gap 处。
+  function firstIconIn(group) {
+    var kids = group.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (isIconNode(kids[i])) return kids[i];
+    }
+    return null;
   }
 
   // 组内相邻两个按钮的真实水平间隔；取不到给 -1，由调用方回落到 8px。
@@ -1660,7 +1695,32 @@ class MainActivity : ComponentActivity() {
   // 播放器由 React 挂载/重渲染：只监听 class 与 aria-label（不监听 style，
   // 否则 forceStyle 会自触发）；再补一个 1s 低频全量扫描，覆盖注入早于
   // hydrate、以及 Portal 挂载等 MutationObserver 漏掉的情况。
-  new MutationObserver(function () { schedule(); }).observe(
+  //
+  // 控制条显隐走的是换 class，schedule() 有 120ms 节流：对布局没影响，但
+  // 对「点一下屏幕」这种即时反馈就慢了半拍——控制条已经淡完，倍速钮才跟上，
+  // 看上去仍像在闪。所以 class 变化额外走一条 60ms 的轻量通道，只动显隐。
+  var lastVisSync = 0;
+  function syncRateVisibilityNow() {
+    var anchor = document.querySelector('.player-controls-right');
+    if (!anchor) return;
+    var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
+    if (!wrap) return;
+    syncRateVisibility(anchor, wrap,
+      document.querySelector('[' + PILL_ATTR + '="1"]'),
+      document.querySelector('[' + RATE_ATTR + '="1"]'));
+  }
+  new MutationObserver(function (list) {
+    schedule();
+    var now = Date.now();
+    if (now - lastVisSync < 60) return;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].type === 'attributes') {
+        lastVisSync = now;
+        syncRateVisibilityNow();
+        return;
+      }
+    }
+  }).observe(
     document.documentElement,
     { childList: true, subtree: true, attributes: true,
       attributeFilter: ['class', 'aria-label'] });
