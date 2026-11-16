@@ -1,6 +1,11 @@
 name: Android Phone APK
 
 on:
+  # 1.1.38 起恢复 push 触发：分支只出 artifact，v* 标签直接发 Release。
+  # 之前只留 workflow_dispatch，本地没有 JDK/SDK 时改完代码根本编不出包。
+  push:
+    branches: ["**"]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -95,11 +100,11 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+        if: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') }}
         working-directory: .
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
           RELEASE_TITLE: ${{ inputs.release_title }}
         run: |
           release_notes="$(mktemp)"
