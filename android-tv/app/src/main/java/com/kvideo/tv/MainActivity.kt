@@ -285,11 +285,10 @@ class MainActivity : ComponentActivity() {
       'min-width:16px !important;min-height:16px !important;' +
       'max-width:16px !important;max-height:16px !important;}';
 
-  // 倍速圆钮从右上角挪到底栏后，外观必须与底栏 .btn-icon 完全一致：
-  // 40px 圆、rgba(255,255,255,.10) 底、1px rgba(255,255,255,.20) 描边、白字。
-  // 底色/描边/blur 压成固定值（不依赖网页变量），但 1.1.29 起把 hover/active
-  // 的缩放动画补回来：三点按钮没被我们接管 transform，一直保留网页原生的
-  // scale-110 反馈，倍速钮之前被 transform:none 压死，点起来是「死」的。
+  // 倍速圆钮从右上角挪到底栏后，外观要跟底栏右侧按钮组「并成一排」：
+  // 之前在组外留 12px 间距、自己画 10% 白底 + 1px 描边，看上去就是浮在
+  // 组旁边的一个独立小件。现在底色/描边改为透明，实际外观由 moveRateButton
+  // 照抄组内图标钮的计算样式（内联 important 优先级高于本表的 important）。
   var RATE_ATTR = 'data-kvideo-rate';
   var RATE_WRAP_ATTR = 'data-kvideo-rate-wrap';
   var RATE_CSS =
@@ -297,8 +296,8 @@ class MainActivity : ComponentActivity() {
       'min-width:40px !important;min-height:40px !important;' +
       'max-width:40px !important;max-height:40px !important;' +
       'padding:0 !important;margin:0 !important;box-sizing:border-box !important;' +
-      'border-radius:999px !important;background:rgba(255,255,255,.10) !important;' +
-      'border:1px solid rgba(255,255,255,.20) !important;color:#FFFFFF !important;' +
+      'border-radius:999px !important;background:transparent !important;' +
+      'border:0 !important;color:#FFFFFF !important;' +
       'font-size:13px !important;font-weight:500 !important;line-height:1 !important;' +
       'backdrop-filter:none !important;-webkit-backdrop-filter:none !important;' +
       'box-shadow:none !important;pointer-events:auto !important;' +
@@ -308,7 +307,7 @@ class MainActivity : ComponentActivity() {
       'transform:none !important;' +
       'transition:transform .16s ease,background-color .16s ease,border-color .16s ease !important;}' +
     '[' + RATE_ATTR + '="1"]:hover{' +
-      'transform:scale(1.1) !important;background:rgba(255,255,255,.20) !important;}' +
+      'transform:scale(1.1) !important;background:rgba(255,255,255,.14) !important;}' +
     '[' + RATE_ATTR + '="1"]:active{' +
       'transform:scale(.95) !important;background:rgba(255,255,255,.20) !important;}' +
     // 移动的是右上角那个 absolute 定位容器，left/top 由 moveRateButton 内联写入。
@@ -1262,7 +1261,15 @@ class MainActivity : ComponentActivity() {
     var host = wrap.offsetParent || wrap.parentElement;
     if (!host) return;
     var hr = host.getBoundingClientRect();
-    var size = 40, gap = 12;
+
+    // 尺寸与间距都取右侧按钮组的实测值：组内图标钮可能是 40px 也可能是 36px，
+    // 间距可能是 gap-2 也可能是 margin，写死会显得比邻钮大一圈、比邻钮远一截。
+    var mate = lastIconIn(anchor);
+    var size = mate ? Math.round(mate.getBoundingClientRect().width) : 40;
+    if (!(size >= 24 && size <= 64)) size = 40;
+    var gap = groupGap(anchor);
+    if (!(gap >= 0 && gap <= 32)) gap = 8;
+
     var left = ar.left - hr.left - size - gap;
     var top = ar.top - hr.top + (ar.height - size) / 2;
     if (left < 8) left = 8;
@@ -1270,8 +1277,74 @@ class MainActivity : ComponentActivity() {
     forceStyle(wrap, {
       'position': 'absolute',
       'left': left.toFixed(1) + 'px',
-      'top': top.toFixed(1) + 'px'
+      'top': top.toFixed(1) + 'px',
+      'width': size + 'px',
+      'height': size + 'px'
     });
+    // 外观直接照抄组内图标钮：圆角、底色、描边、字色、尺寸全部对齐，
+    // 看上去就是「全屏 / 画中画」这一排里的第一个，而不是旁边浮着的圆件。
+    matchSiblingLook(b, mate);
+  }
+
+  // 只认「看得见的按钮 / 含 svg 的节点」：组里可能夹着分隔条、占位 div，
+  // 拿它们的尺寸当基准会把倍速钮撑成一整条。
+  function isIconNode(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width < 20 || r.height < 20) return false;
+    if (window.getComputedStyle(el).display === 'none') return false;
+    if (el.tagName === 'BUTTON') return true;
+    return !!(el.querySelector && el.querySelector('svg'));
+  }
+
+  // 组内最后一个可见的图标钮（右侧组最右通常是全屏，最适合作为外观基准）。
+  function lastIconIn(group) {
+    var kids = group.children, found = null;
+    for (var i = 0; i < kids.length; i++) {
+      if (isIconNode(kids[i])) found = kids[i];
+    }
+    return found;
+  }
+
+  // 组内相邻两个按钮的真实水平间隔；取不到给 -1，由调用方回落到 8px。
+  function groupGap(group) {
+    var kids = group.children, prev = null;
+    for (var i = 0; i < kids.length; i++) {
+      if (!isIconNode(kids[i])) continue;
+      var r = kids[i].getBoundingClientRect();
+      if (prev) return Math.round(r.left - prev.right);
+      prev = r;
+    }
+    return -1;
+  }
+
+  // 只读计算样式、只写内联样式，不动 DOM 结构、不碰事件，因此不可能影响
+  // 播放器本身的点击与播放逻辑。
+  function matchSiblingLook(btn, ref) {
+    if (!ref) return;
+    try {
+      var cs = window.getComputedStyle(ref);
+      if (!cs) return;
+      // 尺寸仍然夹一道：基准节点若是弹性容器，cs.width 会是整组宽度。
+      var w = parseFloat(cs.width);
+      var box = {};
+      if (w >= 24 && w <= 64) {
+        box['width'] = cs.width;
+        box['height'] = cs.height;
+        box['min-width'] = cs.width;
+        box['min-height'] = cs.height;
+        box['max-width'] = cs.width;
+        box['max-height'] = cs.height;
+      }
+      box['background-color'] = cs.backgroundColor;
+      box['background-image'] = cs.backgroundImage;
+      box['border'] = cs.border;
+      box['border-radius'] = cs.borderRadius;
+      box['color'] = cs.color;
+      box['box-shadow'] = cs.boxShadow;
+      box['opacity'] = cs.opacity;
+      forceStyle(btn, box);
+    } catch (e) {}
   }
 
   // 速度菜单是 Portal 出来的独立 div，直接子元素是一串

@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.37`（`versionCode 39`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.38`（`versionCode 40`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,13 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.38 变更（相对 1.1.37）
+
+只动播放页倍速钮的排布，播放逻辑、导航、注入时机一律未改：
+
+- **倍速钮并入底部按钮组**：原来在右侧按钮组左边留 12px 间距、自绘 10% 白底 + 1px 描边，看起来是浮在旁边的独立小件。现在间距取组内相邻按钮的实测值，外观直接照抄组内图标钮的计算样式（底色、描边、圆角、字色、尺寸），排在「画中画 / 全屏」左边成为同一排里的第一个。
+- 只读计算样式、只写内联样式，不移动 DOM 节点、不改事件绑定，因此不影响播放器自身的点击与播放。
 
 ## 版本与许可
 
