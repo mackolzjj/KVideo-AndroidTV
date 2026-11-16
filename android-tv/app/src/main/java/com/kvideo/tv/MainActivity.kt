@@ -194,22 +194,21 @@ class MainActivity : ComponentActivity() {
 
   var BTN = '[data-kvideo-menu] button';
   var MENU_CSS =
-    // 顶栏右侧从「6 个各自画圆底的小圆钮」改成「两段胶囊」：
-    //   第一段导航：收藏 / 历史 / 直播 / 设置齿轮
-    //   第二段外观：浅色 / 深色 / 跟随系统
-    // 底色与描边只画在胶囊外框上，里面的按钮一律透明——半透明圆角形状从
-    // 6+4=10 个降到 2+4=6 个，顶栏与底栏有了「导航 / 播放控制」的层次差，
-    // 也不再是一排圈。
-    // 两段分居两端：导航段紧贴 logo，外观段贴右边缘。中间留白自然把
-    // 「导航」和「外观」分成两块，也让顶栏左右配重平衡，不再一边挤一边空。
-    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:1 1 auto;' +
+    // 顶栏右侧不再有任何「壳」：胶囊方案（外框底色 + 描边）整套去掉，
+    // 7 个图标直接浮在顶栏上——导航段（收藏 / 历史 / 直播 / 设置齿轮）紧贴
+    // logo，外观段（浅色 / 深色 / 跟随系统）贴右边缘。
+    //
+    // 为什么彻底不留壳：只要有一个圆角外框，它就会和底栏那四个圆钮抢视觉
+    // 重量，顶栏显得比播放控制还重。裸图标把「导航」降为背景层，播放控制
+    // 才是主角。两个分组容器仍保留（.kvideo-group），只为定位弹层和分组
+    // 间距服务，本身完全透明。
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:12px;flex:1 1 auto;' +
       'position:relative;margin-left:10px;min-width:0;' +
       'justify-content:space-between;}' +
     '[data-kvideo-menu] .kvideo-group{display:inline-flex;align-items:center;' +
-      'gap:2px;padding:2px;flex:0 0 auto;position:relative;' +
-      'border-radius:999px !important;' +
-      'border:1px solid rgba(255,255,255,.20) !important;' +
-      'background:rgba(255,255,255,.10) !important;}' +
+      'gap:4px;padding:0;flex:0 0 auto;position:relative;' +
+      'border:0 !important;background:transparent !important;' +
+      'border-radius:0 !important;box-shadow:none !important;}' +
     BTN + '{width:34px;height:34px;min-width:34px;min-height:34px;' +
       'display:inline-flex;align-items:center;justify-content:center;position:relative;' +
       'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
@@ -220,16 +219,16 @@ class MainActivity : ComponentActivity() {
       'transition:background-color .16s ease,color .16s ease,transform .16s ease;}' +
     BTN + ':active{transform:scale(.92);}' +
     BTN + ' svg{width:20px;height:20px;flex:0 0 auto;}' +
-    // 当前主题档位：蓝底胶囊 + 蓝图标。蓝色只用来表示「当前是哪一档」。
-    BTN + '[data-kvideo-active="1"]{color:#3b82f6 !important;' +
-      'background:rgba(59,130,246,.16) !important;}' +
+    // 当前主题档位：只把图标染蓝，不画底——壳都去掉了，再冒一个蓝色圆点
+    // 反而比原来更像「多出来一个控件」。蓝色只表示「当前是哪一档」。
+    BTN + '[data-kvideo-active="1"]{color:#60A5FA !important;}' +
     // 齿轮弹层展开：用中性「加深底色」，绝不用蓝色——否则会被读成主题被切换。
     BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
-    // 弹层挂在第一段胶囊里，以胶囊为定位父级；right:-69px 让 176px 宽的弹层
-    // 正好居中在齿轮（4 个钮里最后一个）下方。
+    // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
+    // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
     '[data-kvideo-menu] .kvideo-menu-popover{' +
-      'position:absolute;top:calc(100% + 10px);right:-69px;z-index:3000;' +
+      'position:absolute;top:calc(100% + 10px);right:-72px;z-index:3000;' +
       'min-width:176px;padding:6px;display:flex;flex-direction:column;gap:2px;' +
       'border-radius:16px;' +
       'border:1px solid rgba(127,127,127,.42) !important;' +
@@ -254,11 +253,11 @@ class MainActivity : ComponentActivity() {
     '@media (min-width:640px){' +
       BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}' +
       BTN + ' svg{width:22px;height:22px;}}' +
-    // 窄屏：间距收到 1px、按钮 32px。两段胶囊合计约 250px，加 logo 与边距
-    // 共约 315px，360dp 也放得下，不会反压 logo。
+    // 窄屏：按钮 32px、图标间距 4px。7 个图标合计 7×32+6×4 = 248px，
+    // 加 logo 与边距约 300px，320dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
-      '[data-kvideo-menu]{gap:8px;margin-left:8px;}' +
-      '[data-kvideo-menu] .kvideo-group{gap:1px;}' +
+      '[data-kvideo-menu]{gap:12px;margin-left:8px;}' +
+      '[data-kvideo-menu] .kvideo-group{gap:4px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +

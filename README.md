@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.47`（`versionCode 49`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.48`（`versionCode 50`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,18 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.48 变更（相对 1.1.47）
+
+**顶栏彻底去壳**：胶囊方案整套撤掉，7 个图标直接浮在顶栏上。
+
+- 导航段（收藏 / 历史 / 直播 / 设置齿轮）紧贴 logo，外观段（浅色 / 深色 / 跟随系统）贴右边缘，中间留白 82px。
+- 只要留一个圆角外框，它就会和底栏那四个圆钮抢视觉重量，顶栏显得比播放控制还重。裸图标把「导航」降为背景层，播放控制才是主角。
+- 分组容器 `.kvideo-group` 仍保留，但只用于弹层定位与分组间距（`border:0` / `background:transparent` / `padding:0`），本身完全不可见。
+- 主题选中态改为**只把图标染蓝**（`#60A5FA`），不再画蓝底圆——壳都去掉了，再冒一个蓝色圆点反而像多出来一个控件。
+- 弹层偏移量随组壳去掉同步调整：组右沿 == 齿轮右沿，`right:-72px` 让 176px 弹层正好居中在齿轮下方（实测弹层中心 176 / 齿轮中心 176）。
+- 间距：图标间 4px、两组间 12px；390dp 下 7 个图标占 248px，右侧余 12px；320dp 下按钮 30px，右侧仍余 12px，不重叠不越界。
+- 只改顶栏 CSS，未动菜单 DOM 结构、事件绑定与播放路径。
 
 ## 1.1.47 变更（相对 1.1.46）
 
