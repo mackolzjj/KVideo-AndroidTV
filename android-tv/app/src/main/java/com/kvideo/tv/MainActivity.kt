@@ -303,9 +303,10 @@ class MainActivity : ComponentActivity() {
       'box-shadow:none !important;pointer-events:auto !important;' +
       'display:flex !important;align-items:center !important;justify-content:center !important;' +
       // 常态仍锁死 transform（网页可能拿 translate 做定位），只加过渡曲线；
-      // hover/active 选择器特异性更高，同为 important 时会覆盖这一条。
+      // 底色/描边**不给过渡**：外观规则一旦被重写，过渡会把变化播成一段渐变，
+      // 叠在「每个 tick 重写一次」上就是肉眼可见的闪烁。
       'transform:none !important;' +
-      'transition:transform .16s ease,background-color .16s ease,border-color .16s ease !important;}' +
+      'transition:transform .16s ease !important;}' +
     // 只留按下的轻微缩放做触感反馈：底色/描边已经是照抄相邻钮的内联 important，
     // 再写 hover 底色也压不过它，写进去只会让 1x 在按下时跟邻居「不一样」。
     '[' + RATE_ATTR + '="1"]:active{transform:scale(.96) !important;}' +
@@ -314,9 +315,9 @@ class MainActivity : ComponentActivity() {
     '[' + RATE_WRAP_ATTR + '="1"]{top:auto !important;right:auto !important;' +
       'bottom:auto !important;width:40px !important;height:40px !important;' +
       'min-width:0 !important;overflow:visible !important;z-index:45 !important;' +
-      // 控制条淡出时同步淡出：没有这条过渡，按钮是「啪」地消失/出现，
-      // 和旁边柔和淡出的图标对不上，看起来就是在闪。
-      'transition:opacity .18s ease !important;}';
+      // 透明度是「跟随控制条实测值」逐帧写进来的，这里只需要一点点平滑把
+      // 采样台阶抹掉，过渡越长越滞后，反而和旁边图标对不齐。
+      'transition:opacity .1s linear !important;}';
 
   // 曾经想把「1x + 画中画 / 网页全屏 / 全屏」收成一条共用底色的胶囊，做法是给
   // 整段垫一层圆角底、再把组内按钮自己的圆底抹平。实际效果是**改掉了原样式**：
@@ -1294,9 +1295,17 @@ class MainActivity : ComponentActivity() {
       'width': size + 'px',
       'height': size + 'px'
     });
-    // 外观整份照抄组内图标钮：底色、描边、圆角、阴影、字色、尺寸。
-    // 「在一起」靠的就是这一条——四个按钮长得一模一样，自然属于同一排。
-    matchSiblingLook(b, mate);
+    // 尺寸是几何值，直接内联写死；外观（底色/描边/圆角/阴影/字色）交给
+    // applyLook 生成的样式规则——只采样一次，不再每个 tick 重写。
+    if (mr) {
+      var px = size + 'px';
+      forceStyle(b, {
+        'width': px, 'height': px,
+        'min-width': px, 'min-height': px,
+        'max-width': px, 'max-height': px
+      });
+      applyLook(anchor);
+    }
 
     // 显示/隐藏完全跟随控制条：点屏幕时整条一起淡出、再一起淡入，
     // 倍速钮不再自己闪。
@@ -1329,17 +1338,34 @@ class MainActivity : ComponentActivity() {
     return min;
   }
 
-  // 阈值 0.5：淡出走到一半就判定「已隐藏」，由 .18s 过渡把剩下的路走完，
-  // 视觉上和整条控制条同时收尾。判早了只是同步得早一点，判晚了也仍会收，
-  // 不存在卡死在某一个中间值的可能。
-  function barHidden(node) { return barOpacity(node) < 0.5; }
+  // 组内按钮透明度中位数。播放器也可能直接把 opacity 挂在每个按钮上做淡出，
+  // 这时祖先链恒为 1，只看祖先链会漏掉整条控制条的淡出。
+  // 用中位数而不是最小值：组里常混着禁用态、分隔条（常态 0.3），取最小会被
+  // 它们带偏，导致倍速钮永远半透明。奇数个时取偏小的那一个——宁可早淡出。
+  function groupOpacity(group) {
+    var kids = group.children, ops = [];
+    for (var i = 0; i < kids.length; i++) {
+      if (!isIconNode(kids[i])) continue;
+      var o = parseFloat(window.getComputedStyle(kids[i]).opacity);
+      if (!isNaN(o)) ops.push(o);
+    }
+    if (!ops.length) return 1;
+    ops.sort(function (a, b) { return a - b; });
+    return ops[Math.floor((ops.length - 1) / 2)];
+  }
 
-  // 三个节点（容器 / 垫层 / 按钮）用同一套判断，避免出现「垫层淡出了、
-  // 按钮还亮着」这种半截状态。只动 opacity 不碰 visibility，才有淡出过程。
+  // 不再用「隐藏 / 显示」二值判断：阈值落在半透明区间时，实测值在阈值两侧
+  // 来回抖动就会连续翻转，一次淡出闪好几下。这里把倍速钮的透明度直接映射成
+  // 控制条的实测值，跟着一起淡、一起亮，不存在翻转。
   function syncRateVisibility(anchor, wrap, btn) {
-    var off = barHidden(anchor);
-    forceStyle(wrap, { 'opacity': off ? '0' : '1' });
-    if (btn) forceStyle(btn, { 'pointer-events': off ? 'none' : 'auto' });
+    var op = barOpacity(anchor);
+    var g = groupOpacity(anchor);
+    if (g < op) op = g;
+    if (op < 0.03) op = 0;
+    forceStyle(wrap, {
+      'opacity': op === 0 ? '0' : (op > 0.97 ? '1' : op.toFixed(2))
+    });
+    if (btn) forceStyle(btn, { 'pointer-events': op === 0 ? 'none' : 'auto' });
   }
 
   // 只认「看得见的按钮 / 含 svg 的节点」：组里可能夹着分隔条、占位 div，
@@ -1383,41 +1409,74 @@ class MainActivity : ComponentActivity() {
     return -1;
   }
 
-  // 只读计算样式、只写内联样式，不动 DOM 结构、不碰事件，因此不可能影响
-  // 播放器本身的点击与播放逻辑。
-  function matchSiblingLook(btn, ref) {
+  // ── 外观：只采样一次，写进一条独立样式规则 ─────────────────────────────
+  //
+  // 之前的做法是每个 tick 都从相邻按钮「照抄」底色/描边再写成内联。相邻按钮
+  // 的底色会随焦点、悬停变化（全屏钮拿到焦点时会高亮），抄一次写一次，配合
+  // CSS 里的 background-color 过渡，底色就在「有」和「没有」之间来回渐变——
+  // 用户看到的现象就是 1x 一直在闪。
+  //
+  // 现在：采样一次 → 生成一条 button[data-kvideo-rate="1"] 规则 → 之后不再重写。
+  // 选择器比 RATE_CSS 里的 [data-kvideo-rate="1"] 多一个元素名，特异性更高，
+  // 所以能压过它的 background:transparent / border:0 兜底值。
+  var LOOK_STYLE_ID = 'kvideo-rate-look';
+  var lookEl = null;
+  var lookRef = null;
+
+  // 基准节点必须是「没被聚焦的真 button」：组内最后一个通常是全屏，它拿到
+  // 焦点时底色会被高亮，抄它等于把高亮样式固化到 1x 上。
+  function pickLookRef(group) {
+    var kids = group.children, fallback = null;
+    for (var i = kids.length - 1; i >= 0; i--) {
+      if (!isIconNode(kids[i])) continue;
+      if (kids[i] === document.activeElement) continue;
+      if (kids[i].tagName === 'BUTTON') return kids[i];
+      if (!fallback) fallback = kids[i];
+    }
+    return fallback;
+  }
+
+  // 组内底色取「众数」：触屏上 :hover / 焦点会粘在刚点过的那个按钮上（比如
+  // 全屏钮一直是高亮白底），单取某一个按钮就会把高亮态当成常态抄过来。
+  // 组里通常三个按钮，众数必然是那两个没被碰过的。
+  function groupBgMode(group) {
+    var kids = group.children, m = {}, best = null, bestN = 0;
+    for (var i = 0; i < kids.length; i++) {
+      if (!isIconNode(kids[i])) continue;
+      var bg = window.getComputedStyle(kids[i]).backgroundColor;
+      if (!bg) continue;
+      m[bg] = (m[bg] || 0) + 1;
+      if (m[bg] > bestN) { bestN = m[bg]; best = bg; }
+    }
+    return best;
+  }
+
+  function applyLook(group) {
+    var ref = pickLookRef(group);
     if (!ref) return;
-    try {
-      var cs = window.getComputedStyle(ref);
-      if (!cs) return;
-      // 尺寸仍然夹一道：基准节点若是弹性容器，cs.width 会是整组宽度。
-      var w = parseFloat(cs.width);
-      var box = {};
-      if (w >= 24 && w <= 64) {
-        box['width'] = cs.width;
-        box['height'] = cs.height;
-        box['min-width'] = cs.width;
-        box['min-height'] = cs.height;
-        box['max-width'] = cs.width;
-        box['max-height'] = cs.height;
+    // 规则内容没变就绝不重写：重写一次就是一次样式重算，反复写等于把「闪」
+    // 换个地方复现。React 每秒换新节点、但外观一致时也会走到这里并直接返回。
+    var bg = groupBgMode(group);
+    var cs = null;
+    try { cs = window.getComputedStyle(ref); } catch (e) { return; }
+    if (!cs) return;
+    var css = 'button[' + RATE_ATTR + '="1"],[' + RATE_ATTR + '="1"]{' +
+      'background-color:' + (bg || cs.backgroundColor) + ' !important;' +
+      'background-image:' + (cs.backgroundImage || 'none') + ' !important;' +
+      'border:' + (cs.border || '0 none transparent') + ' !important;' +
+      'border-radius:' + cs.borderRadius + ' !important;' +
+      'box-shadow:' + (cs.boxShadow || 'none') + ' !important;' +
+      'color:' + cs.color + ' !important;}';
+    if (!lookEl || !lookEl.isConnected) {
+      lookEl = document.getElementById(LOOK_STYLE_ID);
+      if (!lookEl) {
+        lookEl = document.createElement('style');
+        lookEl.id = LOOK_STYLE_ID;
+        (document.head || document.documentElement).appendChild(lookEl);
       }
-      // 底色 / 描边 / 阴影 / 圆角全部照抄：相邻圆钮什么样，1x 就什么样——
-      // 「跟画中画、全屏在一起」靠的是同款外观，不是给它们套一个统一外框。
-      // RATE_CSS 里写死的 transparent / border:0 是给「抄不到基准」时的兜底，
-      // 内联 important 优先级更高，抄到就以抄到的为准。
-      box['background-color'] = cs.backgroundColor;
-      box['background-image'] = cs.backgroundImage;
-      box['border'] = cs.border;
-      box['box-shadow'] = cs.boxShadow;
-      box['border-radius'] = cs.borderRadius;
-      box['color'] = cs.color;
-      box['backdrop-filter'] = cs.backdropFilter;
-      box['-webkit-backdrop-filter'] = cs.webkitBackdropFilter || cs.backdropFilter;
-      // opacity 绝不能照抄：控制条淡出时基准钮的 opacity 正处在 0.3、0.6 这种
-      // 中间值，照抄等于把它冻成一个静态内联值，点屏幕一次闪一下。显示/隐藏
-      // 统一交给 syncRateVisibility 按整条控制条的状态处理。
-      forceStyle(btn, box);
-    } catch (e) {}
+    }
+    if (lookEl.textContent !== css) lookEl.textContent = css;
+    lookRef = ref;
   }
 
   // 速度菜单是 Portal 出来的独立 div，直接子元素是一串

@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.41`（`versionCode 43`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.42`（`versionCode 44`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,17 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.42 变更（相对 1.1.41）
+
+修 1x 一直闪的问题：
+
+- **外观只采样一次**：1.1.41 是每个 tick 都把相邻按钮的底色/描边「照抄」成内联样式。相邻按钮的底色会随焦点、悬停变化（全屏钮拿到焦点时会变白底），抄一次写一次，再叠上 `background-color` 的过渡，1x 的底色就在「有」和「没有」之间来回渐变——看起来就是一直在闪。
+- 现在改为：采样一次 → 生成一条 `button[data-kvideo-rate="1"]` 样式规则 → 内容不变就绝不重写。规则写在独立的 `<style>` 里，React 重渲染擦不掉。
+- 底色取组内**众数**、基准节点取「未被聚焦的按钮」：触屏上 `:hover` 会粘在刚点过的按钮上，单取某一个会把高亮态当成常态抄过来。
+- 底色/描边不再挂 CSS 过渡（只保留 `transform`），避免任何一次重写被播成一段渐变。
+- **透明度改为连续跟随**：不再用「隐藏 / 显示」二值判断（实测值在阈值附近抖动会连续翻转，一次淡出闪好几下），而是把 1x 的 opacity 直接映射成控制条实测值，跟着一起淡、一起亮。组内按钮自身挂 opacity 淡出的播放器也覆盖到了（取中位数，避免被禁用态带偏）。
+- 仍只读写样式，不搬 DOM 节点、不改事件绑定，播放路径未改。
 
 ## 1.1.41 变更（相对 1.1.40）
 
