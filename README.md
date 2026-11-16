@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.45`（`versionCode 47`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.46`（`versionCode 48`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,22 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.46 变更（相对 1.1.45）
+
+顶栏改版：从「6 个各自带圆底的小圆钮」改成「两段胶囊」。
+
+- **两段胶囊**：
+  - 第一段（导航）收藏 / 历史 / 直播 / 设置齿轮，**紧贴左侧 logo**（间距 8px）；
+  - 第二段（外观）浅色 / 深色 / 跟随系统。
+  - 底色与描边只画在胶囊外框上，里面的按钮一律透明。半透明圆角形状从 6+4=10 个降到 2+4=6 个，顶栏与底栏有了「导航 / 播放控制」的层次差。
+- **去掉「更多」三点**：原来的 ⋯ 换成齿轮，且直播从弹层里提出来常驻；弹层只剩网站设置 / 应用设置 / 退出登录。
+- **破坏性操作下沉**：退出登录压到弹层最底、中间加一条分隔线、文字标红，不再排在第二位容易误触。
+- **选中语义拆开**：蓝色只表示「当前主题档位」（蓝底胶囊 + 蓝图标）；齿轮展开态改用中性的 `data-kvideo-open`（加深底色），不再借 `data-kvideo-active`，点开菜单不会再把主题图标染蓝。
+- **图标**：原 `gear` 是「圆 + 八条短线」，与太阳几乎同形，换成带齿的经典齿轮；弹层里的「网站设置」改用地球图标，避免两个齿轮。
+- **整组左对齐**：菜单块改成 `justify-content:flex-start`，不再 `space-evenly` 撑满，logo 与第一个按钮之间不再空一大块。
+- 尺寸：390dp 下按钮 32px（≥640dp 用 40px，≤360dp 用 30px），两段胶囊 + logo 在 320dp 也放得下（实测右余量 35px）。
+- 只动顶栏 CSS 与菜单 DOM 顺序，不改事件绑定、不碰播放路径、不碰底栏。
 
 ## 1.1.45 变更（相对 1.1.44）
 

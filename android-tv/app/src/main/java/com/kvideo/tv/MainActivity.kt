@@ -174,64 +174,61 @@ class MainActivity : ComponentActivity() {
     logout: svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
                 '<polyline points="16 17 21 12 16 7"/>' +
                 '<line x1="21" y1="12" x2="9" y2="12"/>'),
-    gear: svg('<circle cx="12" cy="12" r="3"/>' +
-              '<path d="M12 2.5v2.3M12 19.2v2.3M2.5 12h2.3M19.2 12h2.3' +
-              'M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6' +
-              'M6.8 17.2l-1.6 1.6"/>'),
+    // 原来的「圆 + 八条短线」跟太阳几乎一样，放在同一排分不清；换成带齿的
+    // 经典齿轮，并且弹层里的「网站设置」改用地球，避免两个齿轮撞图标。
+    gear: svg('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25' +
+              'a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1' +
+              'a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38' +
+              'a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20' +
+              'a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25' +
+              'a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08' +
+              'a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38' +
+              'a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4' +
+              'a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
+    globe: svg('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>' +
+               '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10' +
+               ' 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'),
     link: svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/>' +
               '<path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/>')
   };
 
   var BTN = '[data-kvideo-menu] button';
   var MENU_CSS =
-    // 上游顶栏是 justify-between 的一行：菜单块必须撑满 logo 右侧剩余空间，
-    // 否则整组圆钮会被推到最右、logo 与按钮之间空出一大块。内部用
-    // space-evenly 让首尾与按钮间距均分；5 个分隔符保留 DOM 与占位，
-    // 只做透明间距，syncSeparators() 的隐藏逻辑仍然生效。
+    // 顶栏右侧从「6 个各自画圆底的小圆钮」改成「两段胶囊」：
+    //   第一段导航：收藏 / 历史 / 直播 / 设置齿轮
+    //   第二段外观：浅色 / 深色 / 跟随系统
+    // 底色与描边只画在胶囊外框上，里面的按钮一律透明——半透明圆角形状从
+    // 6+4=10 个降到 2+4=6 个，顶栏与底栏有了「导航 / 播放控制」的层次差，
+    // 也不再是一排圈。整组紧贴 logo 左对齐（margin-left 10px），不再撑满铺开。
     '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:1 1 auto;' +
-      'position:relative;margin-left:8px;min-width:0;' +
-      'justify-content:space-evenly;}' +
-    // 竖线不再可见，改为透明占位；第 6 个子元素（「更多」之后）加宽成分组留白。
-    '[data-kvideo-menu] .kvideo-menu-sep{width:4px;height:1px;flex:0 0 auto;' +
-      'background:transparent !important;margin:0;}' +
-    '[data-kvideo-menu] .kvideo-menu-sep:nth-child(6){width:14px;}' +
-    BTN + '{width:36px;height:36px;min-width:36px;min-height:36px;' +
-      'display:inline-flex;align-items:center;justify-content:center;position:relative;' +
-      'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
-      // 播放页会把 --glass-bg/--glass-border 设成透明，圆钮会退化成裸图标，
-      // 和原生按钮糊在同一行；这里固定与底栏 .btn-icon / 倍速圆钮 / 原生锁钮
-      // 同款的 10% 白底 + 20% 白描边，不依赖网页变量。
-      'border:1px solid rgba(255,255,255,.20) !important;' +
-      'background:rgba(255,255,255,.10) !important;' +
-      // 不再吃网页的 --text-color：圆钮颜色随网页前景（等同 inherit），
-      // 弹层的文字另给固定浅色，避免深底配深字。
-      'color:inherit;font:inherit;' +
-      '-webkit-tap-highlight-color:transparent;' +
-      'transition:transform .16s ease,border-color .16s ease,color .16s ease;}' +
-    BTN + ':active{transform:scale(.9);}' +
-    // 选中态不再用「蓝边 + 蓝字 + 蓝底」三重强调，只留蓝色图标和底部小蓝点。
-    BTN + '[data-kvideo-active="1"]{color:#3b82f6;}' +
-    '[data-kvideo-menu] button[data-kvideo-active="1"]::after{' +
-      'content:"";position:absolute;bottom:3px;left:50%;' +
-      'transform:translateX(-50%);width:3px;height:3px;border-radius:50%;' +
-      'background:#3b82f6 !important;}' +
-    BTN + ' svg{width:24px;height:24px;flex:0 0 auto;}' +
-    // 播放页对 button 有全局重置（border-radius:0），用更高特异性兜底
-    '[data-kvideo-menu] button[data-kvideo-act]{' +
+      'position:relative;margin-left:10px;min-width:0;' +
+      'justify-content:flex-start;}' +
+    '[data-kvideo-menu] .kvideo-group{display:inline-flex;align-items:center;' +
+      'gap:2px;padding:2px;flex:0 0 auto;position:relative;' +
       'border-radius:999px !important;' +
       'border:1px solid rgba(255,255,255,.20) !important;' +
       'background:rgba(255,255,255,.10) !important;}' +
-    // 当前主题档位（也用于「更多」展开态）：特异性要高于上面的兜底规则，
-    // 选中时描边与底色保持中性，只把图标染蓝（蓝点由上面的 ::after 提供）。
-    '[data-kvideo-menu] button[data-kvideo-act][data-kvideo-active="1"]{' +
-      'color:#3b82f6 !important;' +
-      'background:rgba(255,255,255,.10) !important;}' +
+    BTN + '{width:34px;height:34px;min-width:34px;min-height:34px;' +
+      'display:inline-flex;align-items:center;justify-content:center;position:relative;' +
+      'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
+      // 圆底交给胶囊：按钮自己不画描边和底色，否则胶囊里会再浮出一串圆点。
+      'border:0 !important;background:transparent !important;' +
+      'color:inherit;font:inherit;' +
+      '-webkit-tap-highlight-color:transparent;' +
+      'transition:background-color .16s ease,color .16s ease,transform .16s ease;}' +
+    BTN + ':active{transform:scale(.92);}' +
+    BTN + ' svg{width:20px;height:20px;flex:0 0 auto;}' +
+    // 当前主题档位：蓝底胶囊 + 蓝图标。蓝色只用来表示「当前是哪一档」。
+    BTN + '[data-kvideo-active="1"]{color:#3b82f6 !important;' +
+      'background:rgba(59,130,246,.16) !important;}' +
+    // 齿轮弹层展开：用中性「加深底色」，绝不用蓝色——否则会被读成主题被切换。
+    BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
-    // 弹层自带不透明深色底与固定文字色：播放页会把 --glass-bg 设成透明，
-    // 上游浅色主题也可能只定义了 --text-color，靠网页变量必然糊字。
+    // 弹层挂在第一段胶囊里，以胶囊为定位父级；right:-69px 让 176px 宽的弹层
+    // 正好居中在齿轮（4 个钮里最后一个）下方。
     '[data-kvideo-menu] .kvideo-menu-popover{' +
-      'position:absolute;top:calc(100% + 10px);right:0;z-index:3000;' +
-      'min-width:172px;padding:6px;display:flex;flex-direction:column;gap:2px;' +
+      'position:absolute;top:calc(100% + 10px);right:-69px;z-index:3000;' +
+      'min-width:176px;padding:6px;display:flex;flex-direction:column;gap:2px;' +
       'border-radius:16px;' +
       'border:1px solid rgba(127,127,127,.42) !important;' +
       'background:rgba(26,27,31,.97) !important;' +
@@ -239,27 +236,32 @@ class MainActivity : ComponentActivity() {
       'backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);' +
       'box-shadow:0 12px 32px rgba(0,0,0,.42);}' +
     '[data-kvideo-menu] .kvideo-menu-popover button{' +
-      'width:100%;height:40px;min-height:40px;border:0;border-radius:10px;' +
+      'width:100%;height:44px;min-height:44px;' +
+      'border:0 !important;border-radius:10px !important;' +
       'background:transparent !important;color:#F2F3F5 !important;' +
       'justify-content:flex-start;gap:10px;padding:0 10px;' +
       'font-size:14px;white-space:nowrap;}' +
     '[data-kvideo-menu] .kvideo-menu-popover button:active{' +
       'background:rgba(255,255,255,.12) !important;}' +
-    '[data-kvideo-menu] .kvideo-menu-popover button svg{width:18px;height:18px;}' +
+    '[data-kvideo-menu] .kvideo-menu-popover button svg{width:20px;height:20px;}' +
+    // 破坏性操作单独标红，并压到最底（中间用一条分隔线隔开）。
+    '[data-kvideo-menu] .kvideo-menu-popover button[data-kvideo-act="logout"]{' +
+      'color:#F87171 !important;}' +
+    '[data-kvideo-menu] .kvideo-menu-hr{' +
+      'height:1px;margin:6px 8px;background:rgba(255,255,255,.10);}' +
     '@media (min-width:640px){' +
-      BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}}' +
-    // 6 个圆钮是固定 32px 不会缩。窄屏把透明占位压到 2px、分组占位 8px，
-    // 配合 2px gap 后总宽约 228px，320dp 设备不会把最右钮挤出去或反压 logo；
-    // 超窄屏再降一档 gap 到 1px。
+      BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}' +
+      BTN + ' svg{width:22px;height:22px;}}' +
+    // 窄屏：间距收到 1px、按钮 32px。两段胶囊合计约 250px，加 logo 与边距
+    // 共约 315px，360dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
-      '[data-kvideo-menu]{gap:2px;margin-left:4px;}' +
-      '[data-kvideo-menu] .kvideo-menu-sep{width:2px;margin:0;}' +
-      '[data-kvideo-menu] .kvideo-menu-sep:nth-child(6){width:8px;}' +
+      '[data-kvideo-menu]{gap:8px;margin-left:8px;}' +
+      '[data-kvideo-menu] .kvideo-group{gap:1px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
-      BTN + ' svg{width:20px;height:20px;}}' +
+      BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
-      '[data-kvideo-menu]{gap:1px;}' +
-      BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}}';
+      BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}' +
+      BTN + ' svg{width:18px;height:18px;}}';
 
   // 播放页左右快退/快进圆钮：网页原生按钮 aria-label 是「后退 N 秒」/「前进 N 秒」。
   // 1.1.15 用 @media(min-width:768px) 分档，WebView 宽度不到 768px 时窄屏档
@@ -431,22 +433,32 @@ class MainActivity : ComponentActivity() {
     return '<button type="button" data-kvideo-act="' + act + '">' + icon +
       '<span>' + label + '</span></button>';
   }
-  // 「直播」收进「更多」弹层：顶栏按钮过多会挤压左侧 logo。
-  // 6 个圆钮之间各保留一个透明分隔占位，「更多」之后那一个更宽作分组。
+  // 顶栏右侧分两段胶囊：
+  //   第一段（导航）收藏 / 历史 / 直播 / 设置齿轮 —— 紧贴 logo
+  //   第二段（外观）浅色 / 深色 / 跟随系统
+  // 原来的「更多」三点去掉，改成齿轮直接弹层；直播从弹层里提出来成为常驻图标，
+  // 弹层只剩网站设置 / 应用设置 / 退出登录（破坏性操作压到最底并标红）。
+  function grp(inner) {
+    return '<div class="kvideo-group">' + inner + '</div>';
+  }
   function menuHtml() {
-    var sep = '<span class="kvideo-menu-sep"></span>';
-    return btn('favorites', '我的收藏', ICON.heart) + sep +
-        btn('history', '观看历史', ICON.history) + sep +
-        btn('more', '更多', ICON.more) + sep +
-        btn('theme0', '浅色主题', ICON.sun) + sep +
-        btn('theme1', '深色主题', ICON.moon) + sep +
-        btn('theme2', '跟随系统', ICON.monitor) +
-      '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
-        item('live', '直播', ICON.tv) +
-        item('logout', '退出登录', ICON.logout) +
-        item('websettings', '网站设置', ICON.gear) +
-        item('appsettings', '应用设置', ICON.link) +
-      '</div>';
+    return grp(
+        btn('favorites', '我的收藏', ICON.heart) +
+        btn('history', '观看历史', ICON.history) +
+        btn('live', '直播', ICON.tv) +
+        btn('more', '设置', ICON.gear) +
+        '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
+          item('websettings', '网站设置', ICON.globe) +
+          item('appsettings', '应用设置', ICON.link) +
+          '<div class="kvideo-menu-hr"></div>' +
+          item('logout', '退出登录', ICON.logout) +
+        '</div>'
+      ) +
+      grp(
+        btn('theme0', '浅色主题', ICON.sun) +
+        btn('theme1', '深色主题', ICON.moon) +
+        btn('theme2', '跟随系统', ICON.monitor)
+      );
   }
 
   var root = null;
@@ -542,8 +554,10 @@ class MainActivity : ComponentActivity() {
     if (p) p.hidden = !open;
     if (m) {
       m.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (open) m.setAttribute('data-kvideo-active', '1');
-      else m.removeAttribute('data-kvideo-active');
+      // 展开态用独立属性：以前借用 data-kvideo-active，导致点开「更多」时
+      // 主题图标跟着变蓝，看起来像主题被切换。
+      if (open) m.setAttribute('data-kvideo-open', '1');
+      else m.removeAttribute('data-kvideo-open');
     }
   }
   function closePopover() { setPopover(false); }
