@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.46`（`versionCode 48`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.47`（`versionCode 49`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,12 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.47 变更（相对 1.1.46）
+
+- **两段胶囊分居两端**：导航段（收藏 / 历史 / 直播 / 设置）继续紧贴 logo，外观段（浅色 / 深色 / 跟随系统）改为贴右边缘（`justify-content:space-between`）。中间留白自然把「导航」和「外观」分成两块，顶栏左右配重也平衡了，不再一边挤、一边空一大块。
+- 实测：390dp 下第一段 52–189、第二段 274–378（右余量 12px）；320dp 下第二段 210–308，中间仍有 31px 间隔，不重叠、不越界。
+- 仅一处对齐方式改动，其余（按钮尺寸、弹层定位、选中态）不变。
 
 ## 1.1.46 变更（相对 1.1.45）
 

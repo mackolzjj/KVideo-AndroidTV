@@ -199,10 +199,12 @@ class MainActivity : ComponentActivity() {
     //   第二段外观：浅色 / 深色 / 跟随系统
     // 底色与描边只画在胶囊外框上，里面的按钮一律透明——半透明圆角形状从
     // 6+4=10 个降到 2+4=6 个，顶栏与底栏有了「导航 / 播放控制」的层次差，
-    // 也不再是一排圈。整组紧贴 logo 左对齐（margin-left 10px），不再撑满铺开。
+    // 也不再是一排圈。
+    // 两段分居两端：导航段紧贴 logo，外观段贴右边缘。中间留白自然把
+    // 「导航」和「外观」分成两块，也让顶栏左右配重平衡，不再一边挤一边空。
     '[data-kvideo-menu]{display:flex;align-items:center;gap:8px;flex:1 1 auto;' +
       'position:relative;margin-left:10px;min-width:0;' +
-      'justify-content:flex-start;}' +
+      'justify-content:space-between;}' +
     '[data-kvideo-menu] .kvideo-group{display:inline-flex;align-items:center;' +
       'gap:2px;padding:2px;flex:0 0 auto;position:relative;' +
       'border-radius:999px !important;' +
