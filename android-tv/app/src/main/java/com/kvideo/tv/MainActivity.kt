@@ -315,9 +315,9 @@ class MainActivity : ComponentActivity() {
     '[' + RATE_WRAP_ATTR + '="1"]{top:auto !important;right:auto !important;' +
       'bottom:auto !important;width:40px !important;height:40px !important;' +
       'min-width:0 !important;overflow:visible !important;z-index:45 !important;' +
-      // 透明度是「跟随控制条实测值」逐帧写进来的，这里只需要一点点平滑把
-      // 采样台阶抹掉，过渡越长越滞后，反而和旁边图标对不齐。
-      'transition:opacity .1s linear !important;}';
+      // 透明度由 rAF 逐帧写成控制条的实测值，这里**不能**再挂过渡：
+      // 过渡 + 采样台阶叠在一起，淡入淡出的那一下就会跳一下。
+      'transition:none !important;}';
 
   // 曾经想把「1x + 画中画 / 网页全屏 / 全屏」收成一条共用底色的胶囊，做法是给
   // 整段垫一层圆角底、再把组内按钮自己的圆底抹平。实际效果是**改掉了原样式**：
@@ -1354,18 +1354,51 @@ class MainActivity : ComponentActivity() {
     return ops[Math.floor((ops.length - 1) / 2)];
   }
 
-  // 不再用「隐藏 / 显示」二值判断：阈值落在半透明区间时，实测值在阈值两侧
-  // 来回抖动就会连续翻转，一次淡出闪好几下。这里把倍速钮的透明度直接映射成
-  // 控制条的实测值，跟着一起淡、一起亮，不存在翻转。
-  function syncRateVisibility(anchor, wrap, btn) {
+  // 控制条此刻的「有效不透明度」：祖先链最小值与组内按钮中位数取小。
+  // 祖先链覆盖「整条控制条挂 opacity 淡出」，组内中位数覆盖「每个按钮各自
+  // 挂 opacity 淡出」——两种播放器实现都能跟住。
+  function barVisibleOpacity(anchor) {
     var op = barOpacity(anchor);
     var g = groupOpacity(anchor);
-    if (g < op) op = g;
-    if (op < 0.03) op = 0;
+    return g < op ? g : op;
+  }
+
+  // 淡入淡出期间用 rAF 逐帧跟随，而不是每 60ms 采样一次：
+  // 200ms 的淡出只采到三四个点，写成台阶状；台阶本身加上任何 CSS 过渡，
+  // 在「点屏幕」那一下就是一次可见的跳动。逐帧写入没有台阶、也没有滞后。
+  var fadeRaf = 0;
+  function fadeTick() {
+    fadeRaf = 0;
+    var anchor = document.querySelector('.player-controls-right');
+    var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
+    if (!anchor || !wrap) return;
+    var op = barVisibleOpacity(anchor);
+    if (op < 0.02) op = 0;
+    if (op > 0.98) op = 1;
     forceStyle(wrap, {
-      'opacity': op === 0 ? '0' : (op > 0.97 ? '1' : op.toFixed(2))
+      'opacity': op === 0 ? '0' : (op === 1 ? '1' : op.toFixed(3))
+    });
+    // 还在半透明区间就继续跟，停在 0 / 1 就收工。
+    if (op > 0 && op < 1) fadeRaf = window.requestAnimationFrame(fadeTick);
+  }
+  function startFade() {
+    if (!fadeRaf && window.requestAnimationFrame) {
+      fadeRaf = window.requestAnimationFrame(fadeTick);
+    }
+  }
+
+  // 不再用「隐藏 / 显示」二值判断：阈值落在半透明区间时，实测值在阈值两侧
+  // 来回抖动就会连续翻转，一次淡出闪好几下。这里直接把倍速钮的透明度映射成
+  // 控制条的实测值，跟着一起淡、一起亮。
+  function syncRateVisibility(anchor, wrap, btn) {
+    var op = barVisibleOpacity(anchor);
+    if (op < 0.02) op = 0;
+    if (op > 0.98) op = 1;
+    forceStyle(wrap, {
+      'opacity': op === 0 ? '0' : (op === 1 ? '1' : op.toFixed(3))
     });
     if (btn) forceStyle(btn, { 'pointer-events': op === 0 ? 'none' : 'auto' });
+    if (op > 0 && op < 1) startFade();
   }
 
   // 只认「看得见的按钮 / 含 svg 的节点」：组里可能夹着分隔条、占位 div，

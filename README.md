@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.42`（`versionCode 44`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.43`（`versionCode 45`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,15 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.43 变更（相对 1.1.42）
+
+修「点屏幕、控制条淡出/淡入那一下，1x 会闪一下」：
+
+- 原因是**采样台阶 + 容器过渡**叠在一起。上一版每 60ms 采一次控制条透明度再写一次，200ms 的淡出只采到三四个点；容器上又挂着 0.1s 的 opacity 过渡，台阶和过渡互相追，那一下看起来就是跳了一下。
+- 现在淡入淡出期间改用 `requestAnimationFrame` **逐帧跟随**控制条的实测透明度，容器上的 opacity 过渡整条去掉：控制条走到哪一帧，1x 就是那一帧的值，没有台阶也没有滞后。停在 0 / 1 时 rAF 自动收工，不空转。
+- 同时把「有效透明度」的取值收敛成一处（祖先链最小值 + 组内按钮中位数取小），两条路径写的是同一个值，不会再出现两个来源打架。
+- 仍只读写样式，不搬 DOM 节点、不改事件绑定，播放路径未改。
 
 ## 1.1.42 变更（相对 1.1.41）
 
