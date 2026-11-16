@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.40`（`versionCode 42`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.41`（`versionCode 43`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,13 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.41 变更（相对 1.1.40）
+
+- **撤掉胶囊方案**：1.1.39 / 1.1.40 把「1x / 画中画 / 网页全屏 / 全屏」收成一条共用底色的长条，同时把三个图标自己的圆底抹平——这等于改掉了播放器原有的按钮样式，视觉上变成「一排裸图标套一个框」。现在整段撤除：底栏按钮的圆底、描边、阴影一律不动。
+- **改成「第四个同款圆钮」**：1x 的底色、描边、圆角、阴影、字色、尺寸全部照抄相邻图标钮（内联 important），间距取组内实测值，插在画中画左边。四个按钮长得一模一样、间距一致，看起来天然属于同一排。
+- 控制条淡出时 1x 跟着一起淡出，逻辑不变（只认 opacity / display / visibility）。
+- 仍只读计算样式、只写内联样式，不搬 DOM 节点、不改事件绑定，播放路径未改。
 
 ## 1.1.40 变更（相对 1.1.39）
 

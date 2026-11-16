@@ -306,10 +306,9 @@ class MainActivity : ComponentActivity() {
       // hover/active 选择器特异性更高，同为 important 时会覆盖这一条。
       'transform:none !important;' +
       'transition:transform .16s ease,background-color .16s ease,border-color .16s ease !important;}' +
-    '[' + RATE_ATTR + '="1"]:hover{' +
-      'transform:scale(1.1) !important;background:rgba(255,255,255,.14) !important;}' +
-    '[' + RATE_ATTR + '="1"]:active{' +
-      'transform:scale(.95) !important;background:rgba(255,255,255,.20) !important;}' +
+    // 只留按下的轻微缩放做触感反馈：底色/描边已经是照抄相邻钮的内联 important，
+    // 再写 hover 底色也压不过它，写进去只会让 1x 在按下时跟邻居「不一样」。
+    '[' + RATE_ATTR + '="1"]:active{transform:scale(.96) !important;}' +
     // 移动的是右上角那个 absolute 定位容器，left/top 由 moveRateButton 内联写入。
     // Tailwind 的 top-8 / right-6 必须先置 auto，否则两个方向会互相拉扯。
     '[' + RATE_WRAP_ATTR + '="1"]{top:auto !important;right:auto !important;' +
@@ -319,29 +318,11 @@ class MainActivity : ComponentActivity() {
       // 和旁边柔和淡出的图标对不上，看起来就是在闪。
       'transition:opacity .18s ease !important;}';
 
-  // 胶囊：把「1x / 画中画 / 全屏」从三个各自带圆底的小件，收成一条共用底色的
-  // 长条控件。做法是给整段区域垫一层圆角底（PILL），再把按钮组自己的圆底
-  // 抹成透明——按钮仍然压在垫层之上，点击不受影响，但看起来是一个控件。
-  // 只抹 background-color / box-shadow，不碰 background-image：万一某个图标是
-  // 用背景图画出来的，抹掉就变空白了。
-  var PILL_ATTR = 'data-kvideo-rate-pill';
-  var BAR_ATTR = 'data-kvideo-bar';
-  var PILL_CSS =
-    // 垫层压在所有底栏元素之上（44 < 倍速容器 45），但不吃点击。压在图标
-    // 上面不会把图标涂灰：图标本来就是纯白，再叠 10% 白仍是纯白，被改变的
-    // 只有图标周围那圈底色——正是想要的胶囊。反过来若把垫层放到下面，
-    // 底栏自带的深色渐变会把它整块盖掉，胶囊就白做了。
-    '[' + PILL_ATTR + '="1"]{position:absolute !important;pointer-events:none !important;' +
-      'border-radius:999px !important;box-sizing:border-box !important;' +
-      'background:rgba(255,255,255,.10) !important;z-index:44 !important;' +
-      'transition:opacity .18s ease !important;}' +
-    // 组本身和组内每个圆钮的圆底都抹掉，整段只留一条胶囊底色。
-    // 选择器排除胶囊自身：万一胶囊被挂成了组的直接子元素，别把自己也抹透明。
-    '[' + BAR_ATTR + '="1"]{background-color:transparent !important;}' +
-    '[' + BAR_ATTR + '="1"] > *:not([' + PILL_ATTR + ']){background-color:transparent !important;' +
-      'box-shadow:none !important;border-color:transparent !important;}' +
-    '[' + BAR_ATTR + '="1"] > *:not([' + PILL_ATTR + ']):hover{background-color:rgba(255,255,255,.14) !important;}' +
-    '[' + BAR_ATTR + '="1"] > *:not([' + PILL_ATTR + ']):active{background-color:rgba(255,255,255,.20) !important;}';
+  // 曾经想把「1x + 画中画 / 网页全屏 / 全屏」收成一条共用底色的胶囊，做法是给
+  // 整段垫一层圆角底、再把组内按钮自己的圆底抹平。实际效果是**改掉了原样式**：
+  // 三个原本各自独立的圆钮被抹成一排裸图标，外面套一个长条——用户要的是
+  // 「1x 跟他们并排、长得一模一样」，不是「换一种控件」。所以胶囊方案整体撤掉，
+  // 底栏按钮的圆底一律不动，只让 1x 变成第四个同款圆钮。
 
   // 网页自带的「向上还是向下展开」判定，在倍速钮被移到底栏后会算错：
   // 菜单从按钮下沿往下弹，被屏幕底边裁到只剩 0.5x / 0.75x。
@@ -439,7 +420,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + PILL_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -1286,14 +1267,11 @@ class MainActivity : ComponentActivity() {
     var ar = anchor.getBoundingClientRect();
     if (ar.width < 4 || ar.height < 4) return;
     var host = wrap.offsetParent || wrap.parentElement;
-    // 兜底：万一 offsetParent 正好是按钮组本身，胶囊就会被挂成组的直接子元素，
-    // 于是吃到 PILL_CSS 里「组内直接子元素一律透明」那条规则，胶囊底色被抹掉。
-    if (host === anchor) host = anchor.parentElement;
     if (!host) return;
     var hr = host.getBoundingClientRect();
 
-    // 纵向对齐、胶囊右沿以「最后一个图标钮」为准；横向插入点必须用「第一个
-    // 图标钮」的左沿——拿最后一个的左沿去减，倍速钮会直接压在倒数第二个图标上。
+    // 纵向以「最后一个图标钮」为基准，横向插入点必须用「第一个图标钮」的左沿：
+    // 拿最后一个的左沿去减，倍速钮会直接压在倒数第二个图标上。
     var mate = lastIconIn(anchor);
     var mr = mate ? mate.getBoundingClientRect() : null;
     var first = firstIconIn(anchor);
@@ -1316,52 +1294,13 @@ class MainActivity : ComponentActivity() {
       'width': size + 'px',
       'height': size + 'px'
     });
-    // 外观向组内图标钮看齐（尺寸、圆角、字色），但底色/描边交给胶囊。
+    // 外观整份照抄组内图标钮：底色、描边、圆角、阴影、字色、尺寸。
+    // 「在一起」靠的就是这一条——四个按钮长得一模一样，自然属于同一排。
     matchSiblingLook(b, mate);
-
-    // 胶囊垫层：上下左右各留 4px 内缩，正好把「倍速 + 组内图标」这一整段
-    // 严丝合缝地包住——左右余量相等，看起来才是一条对称的胶囊，而不是
-    // 一头紧一头松。
-    var pill = ensurePill(host);
-    if (pill) {
-      var pad = 4;
-      var pillLeft = left - pad;
-      if (pillLeft < 4) pillLeft = 4;
-      var pillRight = (mr ? mr.right : ar.right) - hr.left + pad;
-      var pillTop = (mr ? mr.top - hr.top : top) - pad;
-      var pillH = (mr ? mr.height : size) + pad * 2;
-      forceStyle(pill, {
-        'left': pillLeft.toFixed(1) + 'px',
-        'top': pillTop.toFixed(1) + 'px',
-        'width': (pillRight - pillLeft).toFixed(1) + 'px',
-        'height': pillH.toFixed(1) + 'px'
-      });
-    }
-    if (anchor.getAttribute(BAR_ATTR) !== '1') anchor.setAttribute(BAR_ATTR, '1');
 
     // 显示/隐藏完全跟随控制条：点屏幕时整条一起淡出、再一起淡入，
     // 倍速钮不再自己闪。
-    syncRateVisibility(anchor, wrap, pill, b);
-  }
-
-  // 垫层只需要一个，挂在和倍速容器同一个定位父级里；React 重渲染把它摘掉时
-  // 由下一次 moveRateButton 重新挂回去。
-  var pillNode = null;
-  function ensurePill(host) {
-    var el = pillNode;
-    if (!el || !el.isConnected) {
-      el = document.querySelector('[' + PILL_ATTR + '="1"]');
-    }
-    if (!el) {
-      el = document.createElement('div');
-      el.setAttribute(PILL_ATTR, '1');
-      el.setAttribute('aria-hidden', 'true');
-    }
-    if (el.parentNode !== host) {
-      try { host.appendChild(el); } catch (e) { return null; }
-    }
-    pillNode = el;
-    return el;
+    syncRateVisibility(anchor, wrap, b);
   }
 
   // 控制条整体的「有效不透明度」：从 anchor 往上逐级累加，取最小值。
@@ -1397,11 +1336,9 @@ class MainActivity : ComponentActivity() {
 
   // 三个节点（容器 / 垫层 / 按钮）用同一套判断，避免出现「垫层淡出了、
   // 按钮还亮着」这种半截状态。只动 opacity 不碰 visibility，才有淡出过程。
-  function syncRateVisibility(anchor, wrap, pill, btn) {
+  function syncRateVisibility(anchor, wrap, btn) {
     var off = barHidden(anchor);
-    var v = off ? '0' : '1';
-    forceStyle(wrap, { 'opacity': v });
-    if (pill) forceStyle(pill, { 'opacity': v });
+    forceStyle(wrap, { 'opacity': off ? '0' : '1' });
     if (btn) forceStyle(btn, { 'pointer-events': off ? 'none' : 'auto' });
   }
 
@@ -1464,13 +1401,18 @@ class MainActivity : ComponentActivity() {
         box['max-width'] = cs.width;
         box['max-height'] = cs.height;
       }
-      // 底色/描边/阴影一律不再照抄：胶囊模式下整组共用一条底色，逐个圆钮
-      // 再画一层会在胶囊里叠出一串「圆点」，正是「看上去还是独立件」的来源。
-      // 这几项已经由 RATE_CSS / PILL_CSS 用 important 写死，这里也就不用
-      // 再写内联——顺带避开 'transparent' 被 CSSOM 规范化成 'rgba(0, 0, 0, 0)'
-      // 之后每次比对都不相等、每个 tick 重复写一遍的无谓抖动。
+      // 底色 / 描边 / 阴影 / 圆角全部照抄：相邻圆钮什么样，1x 就什么样——
+      // 「跟画中画、全屏在一起」靠的是同款外观，不是给它们套一个统一外框。
+      // RATE_CSS 里写死的 transparent / border:0 是给「抄不到基准」时的兜底，
+      // 内联 important 优先级更高，抄到就以抄到的为准。
+      box['background-color'] = cs.backgroundColor;
+      box['background-image'] = cs.backgroundImage;
+      box['border'] = cs.border;
+      box['box-shadow'] = cs.boxShadow;
       box['border-radius'] = cs.borderRadius;
       box['color'] = cs.color;
+      box['backdrop-filter'] = cs.backdropFilter;
+      box['-webkit-backdrop-filter'] = cs.webkitBackdropFilter || cs.backdropFilter;
       // opacity 绝不能照抄：控制条淡出时基准钮的 opacity 正处在 0.3、0.6 这种
       // 中间值，照抄等于把它冻成一个静态内联值，点屏幕一次闪一下。显示/隐藏
       // 统一交给 syncRateVisibility 按整条控制条的状态处理。
@@ -1706,7 +1648,6 @@ class MainActivity : ComponentActivity() {
     var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
     if (!wrap) return;
     syncRateVisibility(anchor, wrap,
-      document.querySelector('[' + PILL_ATTR + '="1"]'),
       document.querySelector('[' + RATE_ATTR + '="1"]'));
   }
   new MutationObserver(function (list) {
