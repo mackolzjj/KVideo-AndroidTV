@@ -1363,44 +1363,136 @@ class MainActivity : ComponentActivity() {
     return g < op ? g : op;
   }
 
+  // 祖先链（**不含自身**）的透明度乘积。
+  //
+  // 用来回答一个问题：倍速容器自己是不是已经站在控制条的淡出链里了？
+  // 很多播放器淡出控制条就是把整条 bar 的 opacity 从 1 拉到 0，如果 1x 挂在
+  // bar 里面，它本来就会被父级带着一起淡——这时我再写一遍 opacity 就是
+  // **双重淡出**：两层相乘，比邻居暗得更快、更早看不见，表现就是
+  // 「不跟别人一起走、还慢半拍」。所以要先把父级已经贡献掉的那部分除掉。
+  function chainOpacity(node) {
+    var el = node ? node.parentElement : null, i = 0, prod = 1;
+    while (el && el.nodeType === 1 && i < 12) {
+      var cs = null;
+      try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
+      if (cs) {
+        if (cs.display === 'none') return 0;
+        var o = parseFloat(cs.opacity);
+        if (!isNaN(o)) prod *= o;
+      }
+      if (prod <= 0.0001) return 0;
+      el = el.parentElement;
+      i++;
+    }
+    return prod;
+  }
+
+  // 倍速容器该写多少 opacity，才是「和画中画/全屏同一个亮度」。
+  //
+  //   v = 控制条祖先链透明度 / 容器祖先链透明度 × 组内按钮透明度
+  //
+  //   · 容器在淡出链里   → 前两项相除恒为 1，只剩组内那层；一般就是 1，
+  //                        也就是**完全不干预**，由父级带着淡，天然同帧
+  //   · 容器在淡出链外   → 分母为 1，直接跟随控制条
+  //   · 播放器按按钮淡出 → 乘上组内中位数，逐帧对齐
+  //
+  // 三种实现都不需要我猜，也不存在「我淡一半、它淡一半」的叠加。
+  function applyRateOpacity(anchor, wrap) {
+    var bar = barOpacity(anchor);
+    var base = chainOpacity(wrap);
+    var grp = groupOpacity(anchor);
+    var v;
+    if (base <= 0.0005) {
+      // 父级已经彻底不可见：这里写 1，不要跟父级抢着归零。
+      v = 1;
+    } else {
+      v = (bar / base) * grp;
+    }
+    if (v > 1) v = 1;
+    if (v < 0) v = 0;
+    if (v < 0.02) v = 0;
+    if (v > 0.98) v = 1;
+    // 记下控制条自己的实测值：pointer-events 要按它判，不能按映射值判
+    // （容器在淡出链里时映射值恒 1，但播放器此刻已经不让点了）。
+    wrap.__kvBarOp = bar;
+    forceStyle(wrap, {
+      'opacity': v === 0 ? '0' : (v === 1 ? '1' : v.toFixed(3))
+    });
+    return v;
+  }
+
   // 淡入淡出期间用 rAF 逐帧跟随，而不是每 60ms 采样一次：
   // 200ms 的淡出只采到三四个点，写成台阶状；台阶本身加上任何 CSS 过渡，
   // 在「点屏幕」那一下就是一次可见的跳动。逐帧写入没有台阶、也没有滞后。
   var fadeRunning = false;
+  var fadeFrames = 0;      // 这次跟随已经跑了多少帧
+  var fadePrevBar = -1;    // 上一帧读到的控制条透明度
+  var fadeSame = 0;        // 连续多少帧「控制条没再变」
+
   function fadeTick() {
     var anchor = document.querySelector('.player-controls-right');
     var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
     if (!anchor || !wrap) { fadeRunning = false; return; }
-    var op = barVisibleOpacity(anchor);
-    if (op < 0.02) op = 0;
-    if (op > 0.98) op = 1;
-    // forceStyle 值相同就不写，所以这轮写入不会再激起下一轮 mutation。
-    forceStyle(wrap, {
-      'opacity': op === 0 ? '0' : (op === 1 ? '1' : op.toFixed(3))
-    });
-    // 还在半透明区间就继续跟，停在 0 / 1 就收工。
-    if (op > 0 && op < 1) window.requestAnimationFrame(fadeTick);
-    else fadeRunning = false;
+
+    var bar = barOpacity(anchor);
+    applyRateOpacity(anchor, wrap);
+
+    // 控制条淡出的同时常常会上滑/下移。只跟透明度的话，1x 是「留在原地
+    // 慢慢变淡」，邻居却已经滑走——用户看到的就是「不整体」。
+    // 淡出窗口内顺带逐帧重算位置，几何和透明度走同一条链。
+    try { moveRateButton(); } catch (e) {}
+
+    fadeFrames++;
+    if (Math.abs(bar - fadePrevBar) < 0.004) fadeSame++; else fadeSame = 0;
+    fadePrevBar = bar;
+
+    // 收工条件：控制条已经停在「完全显示」或「完全隐藏」并且连续若干帧
+    // 不再变化，且这次跟随已经跑满一小段（约 0.5s）。
+    //
+    // 之前这里写的是「只要当前值不在 0 和 1 之间就停」——过渡刚起步的第一帧
+    // 读出来往往还是 1，于是循环当场就停了；而 CSS 过渡不会产生 DOM 变更，
+    // 之后再没有任何东西唤醒它，1x 只能等 1s 保底扫描才跟上。控制条慢慢淡完
+    // （250ms），1x 却要等 1s 才「啪」地消失——就是「慢半拍」和「不同步」的
+    // 真正来源。现在保证至少跟满 FADE_MIN_FRAMES 帧，不会一启动就退出。
+    var settled = fadeSame >= 8 && (bar < 0.02 || bar > 0.98) &&
+                  fadeFrames >= 30;
+    if (settled || fadeFrames >= 150) {
+      fadeRunning = false;
+    } else {
+      window.requestAnimationFrame(fadeTick);
+    }
   }
-  // 任何一次 DOM 变化都可以唤起它：已经在跟就不重复起，停下来了才重新起。
+  // 任何一次变化都可以唤起它：已经在跟就不重复起，停下来了才重新起。
   function startFade() {
     if (fadeRunning || !window.requestAnimationFrame) return;
     fadeRunning = true;
+    fadeFrames = 0;
+    fadePrevBar = -1;
+    fadeSame = 0;
     window.requestAnimationFrame(fadeTick);
   }
 
-  // 不再用「隐藏 / 显示」二值判断：阈值落在半透明区间时，实测值在阈值两侧
-  // 来回抖动就会连续翻转，一次淡出闪好几下。这里直接把倍速钮的透明度映射成
-  // 控制条的实测值，跟着一起淡、一起亮。
+  // 控制条显隐可能是「换 class」「写内联 style」「CSS 过渡」「CSS 动画」里的
+  // 任何一种。前两种 MutationObserver 能看到，后两种只有过渡/动画事件能听到；
+  // 全都接上，1x 就不会漏拍。
+  function hookMotion() {
+    var evts = ['transitionrun', 'transitionstart', 'animationstart'];
+    for (var i = 0; i < evts.length; i++) {
+      try {
+        document.addEventListener(evts[i], function () { startFade(); }, true);
+      } catch (e) {}
+    }
+  }
+
   function syncRateVisibility(anchor, wrap, btn) {
-    var op = barVisibleOpacity(anchor);
-    if (op < 0.02) op = 0;
-    if (op > 0.98) op = 1;
-    forceStyle(wrap, {
-      'opacity': op === 0 ? '0' : (op === 1 ? '1' : op.toFixed(3))
-    });
-    if (btn) forceStyle(btn, { 'pointer-events': op === 0 ? 'none' : 'auto' });
-    if (op > 0 && op < 1) startFade();
+    var v = applyRateOpacity(anchor, wrap);
+    var barOp = wrap.__kvBarOp;
+    if (btn) {
+      forceStyle(btn, {
+        'pointer-events': (barOp === 0 || v === 0) ? 'none' : 'auto'
+      });
+    }
+    if (v > 0 && v < 1) startFade();
   }
 
   // 只认「看得见的按钮 / 含 svg 的节点」：组里可能夹着分隔条、占位 div，
@@ -1728,13 +1820,13 @@ class MainActivity : ComponentActivity() {
 
   mark();
   syncMenu();
-  // 播放器由 React 挂载/重渲染：只监听 class 与 aria-label（不监听 style，
-  // 否则 forceStyle 会自触发）；再补一个 1s 低频全量扫描，覆盖注入早于
-  // hydrate、以及 Portal 挂载等 MutationObserver 漏掉的情况。
+  // 播放器由 React 挂载/重渲染：监听 class / aria-label / style 三种变化
+  // （自己的写入靠 forceStyle「值相同不写」+ fadeRunning 闸门收尾，不会自触发），
+  // 再补一个 1s 低频全量扫描，覆盖注入早于 hydrate、Portal 挂载等漏掉的情况。
   //
-  // 控制条显隐走的是换 class，schedule() 有 120ms 节流：对布局没影响，但
-  // 对「点一下屏幕」这种即时反馈就慢了半拍——控制条已经淡完，倍速钮才跟上，
-  // 看上去仍像在闪。所以 class 变化额外走一条 60ms 的轻量通道，只动显隐。
+  // 显隐不能只靠变更通知：播放器也可能用 CSS 过渡/动画来淡出控制条，
+  // 那种情况没有属性变更可听。所以额外挂 transitionrun / animationstart，
+  // 一有「动」的迹象就起逐帧跟随。
   var lastVisSync = 0;
   function syncRateVisibilityNow() {
     var anchor = document.querySelector('.player-controls-right');
@@ -1760,6 +1852,8 @@ class MainActivity : ComponentActivity() {
     document.documentElement,
     { childList: true, subtree: true, attributes: true,
       attributeFilter: ['class', 'aria-label', 'style'] });
+  // CSS 过渡 / 动画驱动的淡出不会产生属性变更，靠事件补上这一路。
+  hookMotion();
   setInterval(function () {
     if (document.visibilityState === 'visible') {
       shrinkSeekButtons();
