@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.38`（`versionCode 40`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.39`（`versionCode 41`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,12 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.39 变更（相对 1.1.38）
+
+- **倍速钮不再「自己闪」**：控制条淡出时，倍速钮原来会把相邻图标钮当时的透明度（0.3、0.6 这种中间值）抄成静态内联值，于是每点一次屏幕它就闪一下，且不会跟着整条控制条一起消失。现在透明度不再抄写，改为按整条控制条的状态（`opacity-0` / `pointer-events-none` / 计算透明度）统一淡出淡入，和画中画、全屏完全同步。
+- **四个按钮收进同一条胶囊**：1x、画中画、网页全屏、全屏原本各画一个圆底，排在一起仍是「四个独立圆钮」。现在整段共用一条圆角底色，各按钮自身的圆底抹平，视觉上是一个控件组。
+- 仍然只读计算样式、只写内联样式，不搬 DOM 节点、不改事件绑定，播放路径未改。
 
 ## 1.1.38 变更（相对 1.1.37）
 

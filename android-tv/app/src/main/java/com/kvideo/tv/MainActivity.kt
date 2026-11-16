@@ -314,7 +314,33 @@ class MainActivity : ComponentActivity() {
     // Tailwind 的 top-8 / right-6 必须先置 auto，否则两个方向会互相拉扯。
     '[' + RATE_WRAP_ATTR + '="1"]{top:auto !important;right:auto !important;' +
       'bottom:auto !important;width:40px !important;height:40px !important;' +
-      'min-width:0 !important;overflow:visible !important;z-index:45 !important;}';
+      'min-width:0 !important;overflow:visible !important;z-index:45 !important;' +
+      // 控制条淡出时同步淡出：没有这条过渡，按钮是「啪」地消失/出现，
+      // 和旁边柔和淡出的图标对不上，看起来就是在闪。
+      'transition:opacity .12s ease !important;}';
+
+  // 胶囊：把「1x / 画中画 / 全屏」从三个各自带圆底的小件，收成一条共用底色的
+  // 长条控件。做法是给整段区域垫一层圆角底（PILL），再把按钮组自己的圆底
+  // 抹成透明——按钮仍然压在垫层之上，点击不受影响，但看起来是一个控件。
+  // 只抹 background-color / box-shadow，不碰 background-image：万一某个图标是
+  // 用背景图画出来的，抹掉就变空白了。
+  var PILL_ATTR = 'data-kvideo-rate-pill';
+  var BAR_ATTR = 'data-kvideo-bar';
+  var PILL_CSS =
+    // 垫层压在所有底栏元素之上（44 < 倍速容器 45），但不吃点击。压在图标
+    // 上面不会把图标涂灰：图标本来就是纯白，再叠 10% 白仍是纯白，被改变的
+    // 只有图标周围那圈底色——正是想要的胶囊。反过来若把垫层放到下面，
+    // 底栏自带的深色渐变会把它整块盖掉，胶囊就白做了。
+    '[' + PILL_ATTR + '="1"]{position:absolute !important;pointer-events:none !important;' +
+      'border-radius:999px !important;box-sizing:border-box !important;' +
+      'background:rgba(255,255,255,.10) !important;z-index:44 !important;' +
+      'transition:opacity .12s ease !important;}' +
+    // 组本身和组内每个圆钮的圆底都抹掉，整段只留一条胶囊底色。
+    '[' + BAR_ATTR + '="1"]{background-color:transparent !important;}' +
+    '[' + BAR_ATTR + '="1"] > *{background-color:transparent !important;' +
+      'box-shadow:none !important;border-color:transparent !important;}' +
+    '[' + BAR_ATTR + '="1"] > *:hover{background-color:rgba(255,255,255,.14) !important;}' +
+    '[' + BAR_ATTR + '="1"] > *:active{background-color:rgba(255,255,255,.20) !important;}';
 
   // 网页自带的「向上还是向下展开」判定，在倍速钮被移到底栏后会算错：
   // 菜单从按钮下沿往下弹，被屏幕底边裁到只剩 0.5x / 0.75x。
@@ -412,7 +438,7 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + PILL_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -1281,9 +1307,76 @@ class MainActivity : ComponentActivity() {
       'width': size + 'px',
       'height': size + 'px'
     });
-    // 外观直接照抄组内图标钮：圆角、底色、描边、字色、尺寸全部对齐，
-    // 看上去就是「全屏 / 画中画」这一排里的第一个，而不是旁边浮着的圆件。
+    // 外观向组内图标钮看齐（尺寸、圆角、字色），但底色/描边交给胶囊。
     matchSiblingLook(b, mate);
+
+    // 胶囊垫层：从倍速钮左沿一直铺到按钮组右沿，整段共用一条圆角底色。
+    var pill = ensurePill(host);
+    if (pill) {
+      var span = ar.right - hr.left - left;
+      forceStyle(pill, {
+        'left': left.toFixed(1) + 'px',
+        'top': top.toFixed(1) + 'px',
+        'width': (span > size ? span : size) + 'px',
+        'height': size + 'px'
+      });
+    }
+    if (anchor.getAttribute(BAR_ATTR) !== '1') anchor.setAttribute(BAR_ATTR, '1');
+
+    // 显示/隐藏完全跟随控制条：点屏幕时整条一起淡出、再一起淡入，
+    // 倍速钮不再自己闪。
+    syncRateVisibility(anchor, wrap, pill, b);
+  }
+
+  // 垫层只需要一个，挂在和倍速容器同一个定位父级里；React 重渲染把它摘掉时
+  // 由下一次 moveRateButton 重新挂回去。
+  var pillNode = null;
+  function ensurePill(host) {
+    var el = pillNode;
+    if (!el || !el.isConnected) {
+      el = document.querySelector('[' + PILL_ATTR + '="1"]');
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.setAttribute(PILL_ATTR, '1');
+      el.setAttribute('aria-hidden', 'true');
+    }
+    if (el.parentNode !== host) {
+      try { host.appendChild(el); } catch (e) { return null; }
+    }
+    pillNode = el;
+    return el;
+  }
+
+  // 控制条整体是否处于「已隐藏」状态。逐级往上找：Tailwind 换的是祖先的
+  // opacity-0 / pointer-events-none 类，个别情况下才是 style.opacity 渐变。
+  function barHidden(node) {
+    var el = node, i = 0;
+    while (el && el.nodeType === 1 && i < 7) {
+      var cls = String(el.className || '');
+      if (cls.indexOf('opacity-0') >= 0 || cls.indexOf('pointer-events-none') >= 0) return true;
+      if (el.hasAttribute('hidden')) return true;
+      var cs = null;
+      try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
+      if (cs) {
+        if (cs.display === 'none' || cs.visibility === 'hidden') return true;
+        var op = parseFloat(cs.opacity);
+        if (!isNaN(op) && op < 0.15) return true;
+      }
+      el = el.parentElement;
+      i++;
+    }
+    return false;
+  }
+
+  // 三个节点（容器 / 垫层 / 按钮）用同一套判断，避免出现「垫层淡出了、
+  // 按钮还亮着」这种半截状态。只动 opacity 不碰 visibility，才有淡出过程。
+  function syncRateVisibility(anchor, wrap, pill, btn) {
+    var off = barHidden(anchor);
+    var v = off ? '0' : '1';
+    forceStyle(wrap, { 'opacity': v });
+    if (pill) forceStyle(pill, { 'opacity': v });
+    if (btn) forceStyle(btn, { 'pointer-events': off ? 'none' : 'auto' });
   }
 
   // 只认「看得见的按钮 / 含 svg 的节点」：组里可能夹着分隔条、占位 div，
@@ -1336,13 +1429,16 @@ class MainActivity : ComponentActivity() {
         box['max-width'] = cs.width;
         box['max-height'] = cs.height;
       }
-      box['background-color'] = cs.backgroundColor;
-      box['background-image'] = cs.backgroundImage;
-      box['border'] = cs.border;
+      // 底色/描边/阴影一律不再照抄：胶囊模式下整组共用一条底色，逐个圆钮
+      // 再画一层会在胶囊里叠出一串「圆点」，正是「看上去还是独立件」的来源。
+      // 这几项已经由 RATE_CSS / PILL_CSS 用 important 写死，这里也就不用
+      // 再写内联——顺带避开 'transparent' 被 CSSOM 规范化成 'rgba(0, 0, 0, 0)'
+      // 之后每次比对都不相等、每个 tick 重复写一遍的无谓抖动。
       box['border-radius'] = cs.borderRadius;
       box['color'] = cs.color;
-      box['box-shadow'] = cs.boxShadow;
-      box['opacity'] = cs.opacity;
+      // opacity 绝不能照抄：控制条淡出时基准钮的 opacity 正处在 0.3、0.6 这种
+      // 中间值，照抄等于把它冻成一个静态内联值，点屏幕一次闪一下。显示/隐藏
+      // 统一交给 syncRateVisibility 按整条控制条的状态处理。
       forceStyle(btn, box);
     } catch (e) {}
   }
