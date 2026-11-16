@@ -1366,25 +1366,27 @@ class MainActivity : ComponentActivity() {
   // 淡入淡出期间用 rAF 逐帧跟随，而不是每 60ms 采样一次：
   // 200ms 的淡出只采到三四个点，写成台阶状；台阶本身加上任何 CSS 过渡，
   // 在「点屏幕」那一下就是一次可见的跳动。逐帧写入没有台阶、也没有滞后。
-  var fadeRaf = 0;
+  var fadeRunning = false;
   function fadeTick() {
-    fadeRaf = 0;
     var anchor = document.querySelector('.player-controls-right');
     var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
-    if (!anchor || !wrap) return;
+    if (!anchor || !wrap) { fadeRunning = false; return; }
     var op = barVisibleOpacity(anchor);
     if (op < 0.02) op = 0;
     if (op > 0.98) op = 1;
+    // forceStyle 值相同就不写，所以这轮写入不会再激起下一轮 mutation。
     forceStyle(wrap, {
       'opacity': op === 0 ? '0' : (op === 1 ? '1' : op.toFixed(3))
     });
     // 还在半透明区间就继续跟，停在 0 / 1 就收工。
-    if (op > 0 && op < 1) fadeRaf = window.requestAnimationFrame(fadeTick);
+    if (op > 0 && op < 1) window.requestAnimationFrame(fadeTick);
+    else fadeRunning = false;
   }
+  // 任何一次 DOM 变化都可以唤起它：已经在跟就不重复起，停下来了才重新起。
   function startFade() {
-    if (!fadeRaf && window.requestAnimationFrame) {
-      fadeRaf = window.requestAnimationFrame(fadeTick);
-    }
+    if (fadeRunning || !window.requestAnimationFrame) return;
+    fadeRunning = true;
+    window.requestAnimationFrame(fadeTick);
   }
 
   // 不再用「隐藏 / 显示」二值判断：阈值落在半透明区间时，实测值在阈值两侧
@@ -1744,19 +1746,20 @@ class MainActivity : ComponentActivity() {
   }
   new MutationObserver(function (list) {
     schedule();
+    // 显隐先跟：控制条改透明度可能是「换 class」，也可能是直接写内联
+    // style.opacity。只监听 class 的话，内联那种写法要等到 1s 扫描才同步，
+    // 1x 就总是比别人晚一拍——这正是「延迟 1 秒」的来源。
+    // 自己写 style 也会触发这里，所以必须靠 fadeRunning 去重、
+    // 靠 forceStyle「值相同不写」收尾，否则会自我循环。
+    startFade();
     var now = Date.now();
     if (now - lastVisSync < 60) return;
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].type === 'attributes') {
-        lastVisSync = now;
-        syncRateVisibilityNow();
-        return;
-      }
-    }
+    lastVisSync = now;
+    syncRateVisibilityNow();
   }).observe(
     document.documentElement,
     { childList: true, subtree: true, attributes: true,
-      attributeFilter: ['class', 'aria-label'] });
+      attributeFilter: ['class', 'aria-label', 'style'] });
   setInterval(function () {
     if (document.visibilityState === 'visible') {
       shrinkSeekButtons();

@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.43`（`versionCode 45`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.44`（`versionCode 46`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,15 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.44 变更（相对 1.1.43）
+
+修「1x 比画中画/全屏晚一拍（约 1 秒）」：
+
+- **根因**：显隐同步原来只挂在 `class` / `aria-label` 的 MutationObserver 上，另加每秒一次的全量扫描。而这个播放器是直接写**内联 `style.opacity`** 来淡出控制条的——只监听 class 就收不到通知，1x 只能等 1 秒后的扫描才跟着消失，看起来就是它自己慢半拍、还跳一下。
+- 现在把 `style` 也纳入监听，并且任何一次 DOM 变化都立刻唤起逐帧跟随（`requestAnimationFrame`）。实测：控制条开始淡出后 **33ms（约 2 帧）** 1x 就跟上了，和相邻图标同步走完。
+- 自己的写入不会引起死循环：跟随循环有「运行中」闸门去重，样式写入靠「值相同就不写」收尾。
+- 仍只读写样式，不搬 DOM 节点、不改事件绑定，播放路径未改。
 
 ## 1.1.43 变更（相对 1.1.42）
 
