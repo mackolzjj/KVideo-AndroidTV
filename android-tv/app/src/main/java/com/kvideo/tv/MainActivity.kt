@@ -1201,7 +1201,14 @@ class MainActivity : ComponentActivity() {
       if (olds[j] !== best) olds[j].removeAttribute(MORE_MENU_ATTR);
     }
     if (best && best.getAttribute(MORE_MENU_ATTR) !== '1') {
+      // 和倍速菜单同一个道理：先藏起来把 zoom/宽度写进去再显示。
+      // 否则网页会先按原尺寸把这面板画出来，我们再缩到 82% —— 用户看到的
+      // 就是「弹出来一次、又挪/缩一次」。
+      best.style.setProperty('visibility', 'hidden', 'important');
       best.setAttribute(MORE_MENU_ATTR, '1');
+      // 触发一次样式重算，确保新规则（zoom / width）先落地再显示
+      void best.offsetWidth;
+      best.style.setProperty('visibility', 'visible', 'important');
     }
   }
   function elInOverlay(el) {
@@ -1904,11 +1911,14 @@ class MainActivity : ComponentActivity() {
   // 值相同且不缺 important 时不会写，因此不会自触发死循环。
   var speedMenuObserver = null;
   var speedMenuWatched = null;
-  var speedPos = { left: -9999, bottom: -9999 };
+  // 位置只钉一次：首次算出来就冻结，之后无论网页怎么改写 style，
+  // 我们都只写回这同一组数值。之前每次按按钮实时坐标重算，按钮随控制栏
+  // 滑动时弹层就跟着挪一次 —— 那就是用户看到的「第二段」。
+  var speedPin = null;
   function watchSpeedMenu(menu) {
     if (speedMenuWatched === menu || !window.MutationObserver) return;
-    // 换了一个菜单节点（重新打开）→ 位置缓存作废
-    speedPos.left = -9999; speedPos.bottom = -9999;
+    speedPin = null;   // 换了一个菜单节点（重新打开）→ 重新钉
+    if (speedMenuObserver) speedMenuObserver.disconnect();
     if (speedMenuObserver) speedMenuObserver.disconnect();
     speedMenuWatched = menu;
     speedMenuObserver = new MutationObserver(function () { placeSpeedMenu(); });
@@ -1929,21 +1939,22 @@ class MainActivity : ComponentActivity() {
     var br = b.getBoundingClientRect();
     if (br.width < 1) return;
     var bottom = (window.innerHeight || 0) - br.top + 10;
-    var mw = menu.getBoundingClientRect().width || 72;
+    var mw = menu.getBoundingClientRect().width || 136;
     var left = br.right - mw;
     if (left < 8) left = 8;
-    // 控制栏滑动时按钮坐标每帧都变，重写会让弹层跟着跳一下——
-    // 又是一次「动画」。差不到 2px 就认为位置没变，不写。
-    if (speedPos.left > -9000 &&
-        Math.abs(left - speedPos.left) < 2 &&
-        Math.abs(bottom - speedPos.bottom) < 2) return;
-    speedPos.left = left; speedPos.bottom = bottom;
+    if (!speedPin) {
+      speedPin = { left: left, bottom: bottom };
+      // 关键：先藏起来把属性写完再显示。否则网页会先用它自己的位置/
+      // 尺寸画一帧，我们再跳到最终值 —— 这一跳就是「第二段」。
+      menu.style.setProperty('visibility', 'hidden', 'important');
+    }
     forceStyle(menu, {
       'width': '136px',
       'min-width': '0px',
-      'left': left.toFixed(1) + 'px',
-      'bottom': bottom.toFixed(1) + 'px'
+      'left': speedPin.left.toFixed(1) + 'px',
+      'bottom': speedPin.bottom.toFixed(1) + 'px'
     });
+    menu.style.setProperty('visibility', 'visible', 'important');
   }
 
   // 播放页浮动控件统一同步：三点位置、倍速钮位置、速度菜单定位。
