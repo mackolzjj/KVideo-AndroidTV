@@ -994,6 +994,40 @@ class MainActivity : ComponentActivity() {
   // 菜单展开瞬间的样式快照：确认「两次动画」到底来自网页的 transition、
   // 我们自己的 animation，还是子元素各自动了一套。
   var menuDiag = { speed: null, more: null };
+  var menuTrace = [];
+  var menuTraceSeq = 0;
+  function startMenuTrace(menu) {
+    menuTrace = [];
+    var seq = ++menuTraceSeq;
+    menu.__kvSeq = seq;
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var last = null;
+    function nowMs() { return ((window.performance && performance.now) ? performance.now() : Date.now()) - t0; }
+    function tick() {
+      var t = Math.round(nowMs());
+      var el = findSpeedMenu();
+      var r = el ? el.getBoundingClientRect() : null;
+      var cs = null;
+      try { cs = el ? window.getComputedStyle(el) : null; } catch (e) { cs = null; }
+      var rec = {
+        t: t,
+        sameNode: el === menu,
+        seq: el ? (el.__kvSeq || 0) : -1,
+        x: r ? Math.round(r.left) : 0, y: r ? Math.round(r.top) : 0,
+        w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0,
+        il: el ? String(el.style.left || '') : '',
+        ib: el ? String(el.style.bottom || '') : '',
+        tf: cs ? String(cs.transform || '').slice(0, 28) : ''
+      };
+      if (!last || rec.x !== last.x || rec.y !== last.y || rec.w !== last.w || rec.h !== last.h ||
+          rec.seq !== last.seq || rec.il !== last.il || rec.ib !== last.ib) {
+        if (menuTrace.length < 20) menuTrace.push(rec);
+        last = rec;
+      }
+      if (t < 700) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
   function snapMenu(el) {
     if (!el) return null;
     try {
@@ -1915,9 +1949,12 @@ class MainActivity : ComponentActivity() {
   // 我们都只写回这同一组数值。之前每次按按钮实时坐标重算，按钮随控制栏
   // 滑动时弹层就跟着挪一次 —— 那就是用户看到的「第二段」。
   var speedPin = null;
+  var speedPinAt = 0;
   function watchSpeedMenu(menu) {
     if (speedMenuWatched === menu || !window.MutationObserver) return;
-    speedPin = null;   // 换了一个菜单节点（重新打开）→ 重新钉
+    // 800ms 内换节点当「同一次打开的重新挂载」（Portals 常见）：沿用原位置，
+    // 否则会按新按钮坐标再算一遍，屏幕上就是又挪一次。
+    if (!speedPin || Date.now() - speedPinAt > 800) speedPin = null;
     if (speedMenuObserver) speedMenuObserver.disconnect();
     if (speedMenuObserver) speedMenuObserver.disconnect();
     speedMenuWatched = menu;
@@ -1932,6 +1969,7 @@ class MainActivity : ComponentActivity() {
     if (menu.getAttribute(SPEED_MENU_ATTR) !== '1') {
       menu.setAttribute(SPEED_MENU_ATTR, '1');
       menuDiag.speed = snapMenu(menu);
+      startMenuTrace(menu);
     }
     watchSpeedMenu(menu);
     var b = document.querySelector('[' + RATE_ATTR + '="1"]') || findRateButton();
@@ -1944,6 +1982,7 @@ class MainActivity : ComponentActivity() {
     if (left < 8) left = 8;
     if (!speedPin) {
       speedPin = { left: left, bottom: bottom };
+      speedPinAt = Date.now();
       // 关键：先藏起来把属性写完再显示。否则网页会先用它自己的位置/
       // 尺寸画一帧，我们再跳到最终值 —— 这一跳就是「第二段」。
       menu.style.setProperty('visibility', 'hidden', 'important');
@@ -2093,6 +2132,7 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
+        menuTrace: menuTrace,
         gestureEnv: (function () {
           var v = document.querySelector('video');
           var r = v ? v.getBoundingClientRect() : null;
