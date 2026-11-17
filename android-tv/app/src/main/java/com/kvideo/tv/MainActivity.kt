@@ -393,20 +393,13 @@ class MainActivity : ComponentActivity() {
 
   // 倍速菜单的 transform 被接管成 none（left/bottom 定位需要），网页原生的
   // zoom-in 弹出动画因此跟着失效，只剩「啪」地瞬间出现；三点面板没被接管，
-  // 一直是柔和淡入。这里补一套同款：容器只动 opacity（绝不碰 transform，
-  // 否则菜单位置会跑偏），条目再叠一点 translateY + scale 做放大感。
-  //
-  // 1.1.61 起改成「只保留容器这一条动画」：之前容器淡入 + 每个条目各自
-  // translateY/scale，网页自己还给条目挂 animate-in，两套叠在一起就是
-  // 「点一次、动两次」。现在条目上的 animation / transition 全部禁掉，
-  // 唯一在动的只有容器的 opacity 淡入。
+  // 1.1.62：直接走「固定弹出」——两个弹层都不做任何动画，元素一挂出来就
+  // 停在最终位置。之前尝试过对齐网页动画，但只要网页那边还有 transition /
+  // animate-in，就会叠出第二段；索性全部压平。
+  // 只压 animation 与 transition，绝不动 transform（三个点菜单靠 transform
+  // 做 align:right 的位移，一动就会跑出屏幕）。
   var SPEED_MENU_ANIM =
-    '@keyframes kvideoSpeedFade{from{opacity:0;}to{opacity:1;}}' +
-    '[' + SPEED_MENU_ATTR + '="1"]{' +
-      'animation:kvideoSpeedFade .18s ease-out !important;' +
-      // 网页常挂 transition-all：我们在展开瞬间写 left/bottom/width 会被它
-      // 播成第二段位移，同样表现为「两次动画」。
-      'transition:none !important;}' +
+    '[' + SPEED_MENU_ATTR + '="1"],' +
     '[' + SPEED_MENU_ATTR + '="1"] *{' +
       'animation:none !important;transition:none !important;}';
 
@@ -430,14 +423,14 @@ class MainActivity : ComponentActivity() {
   // transform（那个一旦覆盖，菜单就会跑出屏幕或贴错位置）。
   var MORE_MENU_ATTR = 'data-kvideo-more-menu';
   var MORE_MENU_CSS =
+    '[' + MORE_MENU_ATTR + '="1"],' +
+    '[' + MORE_MENU_ATTR + '="1"] *{' +
+      // 同样走固定弹出：网页的淡入/缩放也一并压掉，避免第二段动画。
+      // transform 不能碰（对齐靠它），所以只清 animation 与 transition。
+      'animation:none !important;transition:none !important;}' +
     '[' + MORE_MENU_ATTR + '="1"]{' +
       'zoom:0.82 !important;width:max-content !important;min-width:0 !important;' +
-      'max-width:300px !important;box-sizing:border-box !important;' +
-      // 只禁 transition：网页的 transition-all 会把我们展开瞬间写的 width/zoom
-      // 播成第二段动画；animation 留给网页自己那一次淡入，不叠第二套。
-      'transition:none !important;}' +
-    '[' + MORE_MENU_ATTR + '="1"] *{' +
-      'transition:none !important;}';
+      'max-width:300px !important;box-sizing:border-box !important;}';
 
   // 手势提示浮层：跟手拖进度时显示目标时间/偏移/进度条，音量亮度时显示百分比。
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
@@ -1911,8 +1904,11 @@ class MainActivity : ComponentActivity() {
   // 值相同且不缺 important 时不会写，因此不会自触发死循环。
   var speedMenuObserver = null;
   var speedMenuWatched = null;
+  var speedPos = { left: -9999, bottom: -9999 };
   function watchSpeedMenu(menu) {
     if (speedMenuWatched === menu || !window.MutationObserver) return;
+    // 换了一个菜单节点（重新打开）→ 位置缓存作废
+    speedPos.left = -9999; speedPos.bottom = -9999;
     if (speedMenuObserver) speedMenuObserver.disconnect();
     speedMenuWatched = menu;
     speedMenuObserver = new MutationObserver(function () { placeSpeedMenu(); });
@@ -1936,6 +1932,12 @@ class MainActivity : ComponentActivity() {
     var mw = menu.getBoundingClientRect().width || 72;
     var left = br.right - mw;
     if (left < 8) left = 8;
+    // 控制栏滑动时按钮坐标每帧都变，重写会让弹层跟着跳一下——
+    // 又是一次「动画」。差不到 2px 就认为位置没变，不写。
+    if (speedPos.left > -9000 &&
+        Math.abs(left - speedPos.left) < 2 &&
+        Math.abs(bottom - speedPos.bottom) < 2) return;
+    speedPos.left = left; speedPos.bottom = bottom;
     forceStyle(menu, {
       'width': '136px',
       'min-width': '0px',
