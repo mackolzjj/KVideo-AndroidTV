@@ -525,7 +525,9 @@ class MainActivity : ComponentActivity() {
     '.kv-hud-track i{display:block !important;height:100% !important;width:0 !important;' +
       'background:#3b82f6 !important;border-radius:2px !important;}';
 
-  var sels = ['[' + ATTR + ']', NAV, HEADER];
+  // 隐藏时既要收顶栏行，也要收**注入菜单自己**：ATTR 是行属性
+  // (data-kvideo-topbar)，只藏行的话菜单还浮在那儿（只剩图标）。
+  var sels = ['[data-kvideo-menu]', '[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
