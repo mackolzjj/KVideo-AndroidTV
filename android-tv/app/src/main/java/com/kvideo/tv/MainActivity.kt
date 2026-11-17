@@ -1266,6 +1266,19 @@ class MainActivity : ComponentActivity() {
     }
     return null;
   }
+  var panelSeenCount = 0;
+  var panelSeenAt = 0;
+  var panelFlagOn = false;
+  // JS 与原生共享「网页面板开着」这个状态：原生全屏手势要靠它让开。
+  function pushPanelFlag(open) {
+    if (panelFlagOn === open) return;
+    panelFlagOn = open;
+    try {
+      if (window.KVideoAndroid && window.KVideoAndroid.setWebPanelOpen) {
+        window.KVideoAndroid.setWebPanelOpen(open);
+      }
+    } catch (e) {}
+  }
   // 菜单开着时，连菜单外面那一片也不该起手势：手指往往从面板边缘外落下。
   function panelOpen() {
     var l = document.querySelectorAll(PANEL_SEL);
@@ -1350,6 +1363,7 @@ class MainActivity : ComponentActivity() {
     }
     // 网页自带的浮层面板（播放设置 / 倍速）：落在面板上或面板开着时都不起手势
     var pnl = panelAt(el) || panelOpen();
+    pushPanelFlag(!!pnl);
     if (pnl) {
       gestureDiag.reject = 'panel';
       gestureDiag.hitBlock = 'PANEL.' + String(pnl.className || '').slice(0, 40);
@@ -2199,6 +2213,8 @@ class MainActivity : ComponentActivity() {
         gesture: gestureDiag,
         menus: menuDiag,
         panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
+        panelSeen: panelSeenCount,
+        panelAgoMs: panelSeenAt ? (Date.now() - panelSeenAt) : -1,
         lastReject: gestureDiag.reject,
         lastHitBlock: gestureDiag.hitBlock,
         menuTrace: menuTrace,
@@ -2355,6 +2371,10 @@ class MainActivity : ComponentActivity() {
   hookMotion();
   setInterval(function () {
     if (document.visibilityState === 'visible') {
+      var pnlNow = null;
+      try { pnlNow = panelOpen(); } catch (eP) { pnlNow = null; }
+      if (pnlNow) { panelSeenCount++; panelSeenAt = Date.now(); }
+      pushPanelFlag(!!pnlNow);
       shrinkSeekButtons();
       syncRateUi();
       syncPlaybackState();
@@ -2429,6 +2449,8 @@ class MainActivity : ComponentActivity() {
      * 回到网页再切回来 —— 否则深色网页配浅色设置页，状态栏会对着其中一边黑到底。
      */
     private var webLight: Boolean? = null
+    /** 网页里有浮层面板（播放设置 / 倍速菜单）开着：此时原生全屏手势必须让开。 */
+    private var webPanelOpen = false
     /** 最近一次收到的右侧安全边距（CSS px），注入脚本首帧要用它。 */
     private var lastSafeRightCss = -1
     /** 手势百分比最近一次到达的边界值（0 / 100），用于只在刚碰到边界时震一下。 */
@@ -3025,7 +3047,9 @@ class MainActivity : ComponentActivity() {
      * 这样锁钮的点击、以及全屏里的其它控件都不受影响。
      */
     private fun handleFullscreenGesture(event: MotionEvent): Boolean {
-        if (customView == null || !playbackActive || playbackLocked) {
+        // 网页里有浮层面板（播放设置 / 倍速）开着时必须让开：
+        // 否则在面板上滑一下，全屏的亮度/音量手势也会跟着跑。
+        if (customView == null || !playbackActive || playbackLocked || webPanelOpen) {
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                 fsMode = 0
                 fsClockReady = false
@@ -3479,6 +3503,7 @@ class MainActivity : ComponentActivity() {
             append("KVideo 手势诊断 v").append(BuildConfig.VERSION_NAME)
             append('(').append(BuildConfig.VERSION_CODE).append(")\n")
             append("playbackActive=").append(playbackActive)
+            append(" webPanelOpen=").append(webPanelOpen)
             append(" customView=").append(customView != null)
             append(" fullscreenContainer=").append(fullscreenContainer.visibility == View.VISIBLE)
             append(" webViewVisible=").append(webView.visibility == View.VISIBLE)
@@ -3506,6 +3531,12 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun copyDiagnostics(js: String) {
             runOnUiThread { copyDiagReport(js) }
+        }
+
+        /** 网页上报「有浮层面板开着」（播放设置 / 倍速菜单）：原生全屏手势据此让开。 */
+        @JavascriptInterface
+        fun setWebPanelOpen(open: Boolean) {
+            runOnUiThread { webPanelOpen = open }
         }
 
         /**
