@@ -2257,12 +2257,6 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
-  function pageName() {
-    var t = '';
-    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
-    if (!t || t.length > 14) t = 'KVideo';
-    return t;
-  }
   // 没有顶栏的页面（播放页）顶部那条是 div 形态，nav/header 选择器命不中，
   // 会和我们的固定栏叠在一起。按几何兜底：贴顶、横向 ≥60%、高 18–120px。
   function hideStrayHeaders() {
@@ -2309,7 +2303,7 @@ class MainActivity : ComponentActivity() {
       if (!m.querySelector('.kvideo-float-brand')) {
         var brand = document.createElement('span');
         brand.className = 'kvideo-float-brand';
-        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
+        brand.innerHTML = LOGO_SVG + '<b>KVideo</b>';
         m.insertBefore(brand, m.firstChild);
       }
     }
