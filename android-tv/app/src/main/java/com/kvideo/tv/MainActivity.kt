@@ -484,7 +484,8 @@ class MainActivity : ComponentActivity() {
   var DOCK_CSS =
     '[' + DOCK_ATTR + '="fixed"]{' +
       'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
-      'width:100% !important;height:36px !important;margin:0 !important;' +
+      // 56dp 是从首页截图量出来的胶囊高度（168px ÷ 3），与首页对齐
+      'width:100% !important;height:56px !important;margin:0 !important;' +
       // 横向 37 / 47 = 网页顶栏的 29px + 品牌 8 / 主题钮留白 18（本地实测对齐）
       'padding-left:37px !important;padding-right:47px !important;box-sizing:border-box;' +
       'display:flex !important;align-items:center;' +
@@ -800,8 +801,15 @@ class MainActivity : ComponentActivity() {
   }
 
   // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
+  // 图标恒定显示：以前「页面上找不到原生控件就隐藏」，播放页没有收藏/历史/
+  // 直播入口就少几个图标，顶栏自然和首页不一致。
   function syncAvailability() {
     if (!root) return;
+    var all = root.querySelectorAll('[data-kvideo-act]');
+    for (var ai = 0; ai < all.length; ai++) {
+      if (all[ai].style.display === 'none') all[ai].style.display = '';
+    }
+    if (true) return;
     var checks = {
       live: 'a[aria-label="直播"]',
       history: history[0],
@@ -2258,17 +2266,39 @@ class MainActivity : ComponentActivity() {
   // 没有顶栏的页面（播放页）顶部那条是 div 形态，nav/header 选择器命不中，
   // 会和我们的固定栏叠在一起。按几何兜底：贴顶、横向 ≥60%、高 18–120px。
   function hideStrayHeaders() {
-    var l = document.querySelectorAll(
-      'nav,header,[class*="navbar"],[class*="topbar"],[class*="top-0"],[class*="sticky"]');
+    // 不再依赖 class/tag 选择器：播放页那条是任意 div，选择器命不中。
+    // 改成在顶部横向取 3 个点，把命中元素及其 3 层祖先里「贴顶 + 宽 ≥60% +
+    // 高 18–120px」的都标掉 —— 只在我们自己挂固定栏时执行。
     var vw = window.innerWidth || 0;
-    for (var i = 0; i < l.length; i++) {
-      var e = l[i];
-      if (!e || !e.getBoundingClientRect) continue;
-      if (root && (e === root || (e.contains && e.contains(root)))) continue;
+    if (!vw) return;
+    var xs = [Math.round(vw * 0.2), Math.round(vw * 0.5), Math.round(vw * 0.8)];
+    var ys = [10, 26];
+    var seen = [];
+    function consider(e) {
+      if (!e || !e.getBoundingClientRect) return;
+      if (root && (e === root || (e.contains && e.contains(root)))) return;
+      for (var k = 0; k < seen.length; k++) if (seen[k] === e) return;
+      seen.push(e);
       var r = e.getBoundingClientRect();
-      if (r.width < vw * 0.6 || r.height < 18 || r.height > 120) continue;
-      if (r.top > 120 || r.bottom < 0) continue;
+      if (r.width < vw * 0.6 || r.height < 18 || r.height > 120) return;
+      if (r.top > 120 || r.bottom < 0) return;
       if (!e.hasAttribute(STRAY_ATTR)) e.setAttribute(STRAY_ATTR, '1');
+    }
+    for (var yi = 0; yi < ys.length; yi++) {
+      for (var xi = 0; xi < xs.length; xi++) {
+        // 我们的固定栏就压在页面头上面，elementFromPoint 只会拿到自己；
+        // 用 elementsFromPoint 取整摞，逐个往上找页面的那条。
+        var stack = document.elementsFromPoint ?
+          document.elementsFromPoint(xs[xi], ys[yi]) : [document.elementFromPoint(xs[xi], ys[yi])];
+        for (var si = 0; si < stack.length; si++) {
+          var el = stack[si], hops = 0;
+          while (el && hops < 4) {
+            consider(el);
+            el = el.parentElement;
+            hops++;
+          }
+        }
+      }
     }
   }
   function dockFixed() {
