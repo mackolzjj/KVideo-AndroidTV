@@ -2,7 +2,7 @@
 
 把 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 的网页包成 Android App 的 **WebView 壳**：顶栏按触屏重排，补上播放手势与防误触锁。APK 内**不含服务端**，需要你自己的 KVideo 地址。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.75`（`versionCode 77`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.76`（`versionCode 78`）
 - 运行要求：Android 8.0（API 26）以上；手机与服务端网络互通
 - 目录 `android-tv/` 与包名 `com.kvideo.tv` 沿用上游，只是标识，**不代表只能跑在 TV 上**
 - 上游 MIT，见 [LICENSE](LICENSE)
@@ -29,7 +29,7 @@ logo 右侧 6 个图标，分两组：
 - 齿轮弹层：网站设置 / 应用设置 /（分隔线）/ 退出登录（标红、压最底）。当前账号或页面不可用的项自动隐藏。
 - 弹层位置**按实测几何居中**到齿轮，并夹住屏幕边缘，30 / 34 / 40 三档按钮下都对齐。
 - **上滑 ≥48dp 收起整条顶栏，下滑恢复**；只听手势，横屏播放时不触发；原生层只观察、不消费触摸事件。
-- 网页自带的右侧按钮组、站名文字、可拖动的收藏 / 历史悬浮钮全部隐藏。
+- **站名文字显示在 logo 右侧**（15sp / 600 字重 / 最长 96px 超出省略）；≤360dp 为给 6 个图标让位会自动隐藏。网页自带的右侧按钮组、可拖动的收藏 / 历史悬浮钮仍然隐藏。
 
 ### 播放页
 

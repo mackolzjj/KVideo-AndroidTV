@@ -300,6 +300,9 @@ class MainActivity : ComponentActivity() {
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
+      // 320dp 上「圆标 + 站名 + 6 个图标」会挤到重叠，这一档藏回文字
+      prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
+        '{display:none !important;}' +
       BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}' +
       BTN + ' svg{width:18px;height:18px;}}' +
     // 浅色主题：网页顶栏是白底，上面所有「白色 alpha」的层级反馈都会失效
@@ -494,11 +497,18 @@ class MainActivity : ComponentActivity() {
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
       '{display:none !important;}' +
-    // 站名文字：只藏文字元素，不碰 img/svg；font-size:0 处理容器里的裸文本节点
+    // 站名文字：以前整段藏掉（只留 logo 圆标），现在按效果图放出来。
+    // 只给文字元素定排版，容器不再 font-size:0（否则裸文本节点一起被清空）；
+    // img/svg 仍然藏，避免和圆标重复。
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
-      '{display:none !important;}' +
+      '{display:inline-block !important;' +
+      'font-size:15px !important;font-weight:600 !important;line-height:1.2 !important;' +
+      'letter-spacing:.2px !important;margin-left:8px !important;' +
+      'max-width:96px !important;white-space:nowrap !important;overflow:hidden !important;' +
+      'text-overflow:ellipsis !important;vertical-align:middle !important;' +
+      'color:inherit !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
-      '{font-size:0 !important;}' +
+      '{font-size:inherit !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
