@@ -187,6 +187,12 @@ class MainActivity : ComponentActivity() {
     moon: svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
     monitor: svg('<rect x="2" y="3" width="20" height="14" rx="2"/>' +
                  '<path d="M8 21h8M12 17v4"/>'),
+    // 三档合成一个循环钮：图标永远等于「当前档位」。
+    // 「跟随系统」用半黑半白的圆，和太阳、月亮都分得开。
+    autoTheme: svg('<circle cx="12" cy="12" r="9"/>' +
+                   '<path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>'),
+    refresh: svg('<path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/>' +
+                 '<polyline points="20.5 3.5 20.5 8.5 15.5 8.5"/>'),
     logout: svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
                 '<polyline points="16 17 21 12 16 7"/>' +
                 '<line x1="21" y1="12" x2="9" y2="12"/>'),
@@ -218,11 +224,13 @@ class MainActivity : ComponentActivity() {
     // 重量，顶栏显得比播放控制还重。裸图标把「导航」降为背景层，播放控制
     // 才是主角。两个分组容器仍保留（.kvideo-group），只为定位弹层和分组
     // 间距服务，本身完全透明。
-    '[data-kvideo-menu]{display:flex;align-items:center;gap:12px;flex:1 1 auto;' +
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:14px;flex:1 1 auto;' +
       'position:relative;margin-left:10px;min-width:0;' +
       'justify-content:space-between;}' +
     '[data-kvideo-menu] .kvideo-group{display:inline-flex;align-items:center;' +
-      'gap:4px;padding:0;flex:0 0 auto;position:relative;' +
+      // 三档主题合成一个循环钮后空出一个位置，间距 4 → 8px：
+      // 6×32+5×8=232px，比原来 7×32+6×4=248px 更窄，同时更好按。
+      'gap:8px;padding:0;flex:0 0 auto;position:relative;' +
       'border:0 !important;background:transparent !important;' +
       'border-radius:0 !important;box-shadow:none !important;}' +
     BTN + '{width:34px;height:34px;min-width:34px;min-height:34px;' +
@@ -235,6 +243,7 @@ class MainActivity : ComponentActivity() {
       'transition:background-color .16s ease,color .16s ease,transform .16s ease;}' +
     BTN + ':active{transform:scale(.92);}' +
     BTN + ' svg{width:20px;height:20px;flex:0 0 auto;}' +
+    BTN + ' .kvideo-ico{display:inline-flex;align-items:center;justify-content:center;}' +
     // 当前主题档位：只把图标染蓝，不画底——壳都去掉了，再冒一个蓝色圆点
     // 反而比原来更像「多出来一个控件」。蓝色只表示「当前是哪一档」。
     BTN + '[data-kvideo-active="1"]{color:#60A5FA !important;}' +
@@ -277,7 +286,7 @@ class MainActivity : ComponentActivity() {
     // 加 logo 与边距约 300px，320dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:12px;margin-left:8px;}' +
-      '[data-kvideo-menu] .kvideo-group{gap:4px;}' +
+      '[data-kvideo-menu] .kvideo-group{gap:6px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
@@ -436,6 +445,15 @@ class MainActivity : ComponentActivity() {
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
   // 1.1.33 起与原生音量/亮度/锁定提示统一：45% 半透底、12% 白细描边、10px 圆角、蓝色进度条，
   // 主字收到 18px；去掉实心深底与投影，避免同一播放页交替弹出「大黑框」和「小胶囊」。
+  // 三档合成一个钮后，第一次切档浮一条提示说明循环顺序；2.5 秒淡出，只出现一次。
+  var THEME_HINT_CSS =
+    '[data-kvideo-theme-hint]{position:fixed;left:50%;transform:translateX(-50%);' +
+      'top:calc(env(safe-area-inset-top, 0px) + 62px);z-index:2147483646;' +
+      'padding:8px 14px;border-radius:999px;background:rgba(20,22,28,.94);' +
+      'color:#F2F3F5;font-size:12px;line-height:1.3;white-space:nowrap;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
+      'opacity:0;transition:opacity .25s ease;}';
+
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -471,7 +489,8 @@ class MainActivity : ComponentActivity() {
       '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
+    THEME_HINT_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -490,10 +509,13 @@ class MainActivity : ComponentActivity() {
     return '<div class="kvideo-group">' + inner + '</div>';
   }
   function menuHtml() {
+    // 图标 7 → 6：三档主题合成一个循环钮，空出来的位置给「重新加载」，
+    // 组内间距同时从 4px 放到 8px。7×32+6×4=248 → 6×32+5×8=232，反而更宽。
     return grp(
         btn('favorites', '我的收藏', ICON.heart) +
         btn('history', '观看历史', ICON.history) +
         btn('live', '直播', ICON.tv) +
+        btn('reload', '重新加载页面', ICON.refresh) +
         btn('more', '设置', ICON.gear) +
         '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
           item('websettings', '网站设置', ICON.globe) +
@@ -503,9 +525,8 @@ class MainActivity : ComponentActivity() {
         '</div>'
       ) +
       grp(
-        btn('theme0', '浅色主题', ICON.sun) +
-        btn('theme1', '深色主题', ICON.moon) +
-        btn('theme2', '跟随系统', ICON.monitor)
+        '<button type="button" data-kvideo-act="themecycle" aria-label="切换主题"' +
+          ' title="切换主题"><span class="kvideo-ico">' + ICON.monitor + '</span></button>'
       );
   }
 
@@ -664,9 +685,39 @@ class MainActivity : ComponentActivity() {
           window.KVideoAndroid.openAppSettings();
         }
       } catch (e) {}
-    } else if (act === 'theme0' || act === 'theme1' || act === 'theme2') {
-      applyTheme(Number(act.slice(5)));
+    } else if (act === 'reload') {
+      try { location.reload(); } catch (e) {}
+    } else if (act === 'themecycle') {
+      // 循环顺序：浅色(0) → 深色(1) → 跟随系统(2) → 浅色
+      var ti = themeIndex();
+      var next = (ti < 0) ? 0 : (ti + 1) % 3;
+      applyTheme(next);
+      showThemeHint(next);
     }
+  }
+
+  // 三档合成一个钮之后，「还有第 3 档」这件事只靠图标传达不出来，
+  // 所以第一次切档时浮一条提示，2.5 秒淡出，之后再点不再打扰。
+  var THEME_NAMES = ['浅色', '深色', '跟随系统'];
+  var themeHintEl = null, themeHintTimer = null;
+  function showThemeHint(next) {
+    if (!themeNodes()[next]) return;            // 页面上没有主题按钮（播放页），不提示
+    try {
+      if (localStorage.getItem('kv-theme-hint') === '1') return;
+      localStorage.setItem('kv-theme-hint', '1');
+    } catch (e) {}
+    if (!themeHintEl) {
+      themeHintEl = document.createElement('div');
+      themeHintEl.setAttribute('data-kvideo-theme-hint', '1');
+      document.body.appendChild(themeHintEl);
+    }
+    themeHintEl.textContent = '已切到「' + THEME_NAMES[next] + '」· 再点依次是 ' +
+      THEME_NAMES[(next + 1) % 3] + ' → ' + THEME_NAMES[(next + 2) % 3];
+    themeHintEl.style.opacity = '1';
+    if (themeHintTimer) clearTimeout(themeHintTimer);
+    themeHintTimer = setTimeout(function () {
+      if (themeHintEl) themeHintEl.style.opacity = '0';
+    }, 2500);
   }
 
   // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
@@ -677,9 +728,7 @@ class MainActivity : ComponentActivity() {
       history: history[0],
       logout: 'button[aria-label="退出登录"]',
       websettings: 'a[aria-label="设置"]',
-      theme0: themeSels[0],
-      theme1: themeSels[1],
-      theme2: themeSels[2]
+      themecycle: themeSels[0] || themeSels[1] || themeSels[2]
     };
     for (var act in checks) {
       if (!Object.prototype.hasOwnProperty.call(checks, act)) continue;
@@ -748,13 +797,25 @@ class MainActivity : ComponentActivity() {
   function syncThemeState() {
     if (!root) return;
     var idx = themeIndex();
-    for (var i = 0; i < 3; i++) {
-      var b = root.querySelector('[data-kvideo-act="theme' + i + '"]');
-      if (!b) continue;
-      var has = b.hasAttribute('data-kvideo-active');
-      if (i === idx && !has) b.setAttribute('data-kvideo-active', '1');
-      else if (i !== idx && has) b.removeAttribute('data-kvideo-active');
+    var b = root.querySelector('[data-kvideo-act="themecycle"]');
+    if (!b) return;
+    // 图标 = 当前档位；蓝色只给「浅色 / 深色」，跟随系统用中性色，
+    // 否则会被读成「已经选定某个主题」。
+    var key = String(idx);
+    if (b.getAttribute('data-kv-idx') !== key) {
+      b.setAttribute('data-kv-idx', key);
+      var ico = b.querySelector('.kvideo-ico');
+      if (ico) ico.innerHTML = (idx === 0) ? ICON.sun : (idx === 1 ? ICON.moon : ICON.autoTheme);
+      var names = THEME_NAMES || ['浅色', '深色', '跟随系统'];
+    var label = (idx === 0 || idx === 1 || idx === 2) ?
+        ('当前' + names[idx] + '主题，点按切换') : '切换主题';
+      b.setAttribute('aria-label', label);
+      b.setAttribute('title', label);
     }
+    var want = (idx === 0 || idx === 1);
+    var has = b.hasAttribute('data-kvideo-active');
+    if (want && !has) b.setAttribute('data-kvideo-active', '1');
+    else if (!want && has) b.removeAttribute('data-kvideo-active');
   }
 
   var failTimer = null;
