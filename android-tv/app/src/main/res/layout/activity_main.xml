@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 顶部加载进度条：加载期间给一条可见反馈，100% 自动收起 -->
+    <ProgressBar
+        android:id="@+id/load_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="top"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="@color/kv_accent"
+        android:visibility="gone" />
+
+    <!-- 主框架加载失败时盖住 WebView 黑屏，给出原因与两个出口。
+         放在 setup_container 之前，设置页显示时会自然盖住本层。 -->
+    <LinearLayout
+        android:id="@+id/error_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/kv_surface"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/load_error_title"
+            android:textColor="@color/kv_text_primary"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/load_error_message"
+            android:textColor="@color/kv_text_secondary"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/error_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="@color/kv_text_tertiary"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/retry_button"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="22dp"
+            android:background="@drawable/bg_button_primary"
+            android:stateListAnimator="@null"
+            android:text="@string/button_retry"
+            android:textAllCaps="false"
+            android:textColor="@color/kv_on_primary"
+            android:textSize="15sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/copy_url_button"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackground"
+                android:stateListAnimator="@null"
+                android:text="@string/button_copy_url"
+                android:textAllCaps="false"
+                android:textColor="@color/kv_text_secondary"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/change_url_button"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackground"
+                android:stateListAnimator="@null"
+                android:text="@string/button_change_url"
+                android:textAllCaps="false"
+                android:textColor="@color/kv_text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 服务端活着但 WebView 打不开（证书、CORS、内核渲染问题）时，
+             用系统浏览器验证一眼就能分清「服务端坏了」还是「壳打不开」。 -->
+        <Button
+            android:id="@+id/open_browser_button"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:stateListAnimator="@null"
+            android:text="@string/button_open_browser"
+            android:textAllCaps="false"
+            android:textColor="@color/kv_text_secondary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/setup_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/kv_surface"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- 卡片提亮并加 12% 白细描边，与播放页提示同一套视觉；
+                 之前卡片底色与全屏遮罩几乎同色，深色下看不出边界。 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_setup_card"
+                android:elevation="12dp"
+                android:maxWidth="480dp"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/setup_title"
+                    android:textColor="@color/kv_text_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/setup_description"
+                    android:textColor="@color/kv_text_secondary"
+                    android:textSize="14sp" />
+
+                <!-- 输入框 + 清空钮：改地址时不必长按全选删除。
+                     背景描边挂在容器上，EditText 自己透明，视觉与原来一致。 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/bg_url_input"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="4dp">
+
+                    <EditText
+                        android:id="@+id/url_input"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@null"
+                        android:hint="@string/setup_hint"
+                        android:importantForAutofill="no"
+                        android:imeOptions="actionDone"
+                        android:inputType="textUri"
+                        android:minHeight="48dp"
+                        android:paddingVertical="12dp"
+                        android:paddingEnd="6dp"
+                        android:singleLine="true"
+                        android:textColor="@color/kv_text_primary"
+                        android:textColorHint="@color/kv_text_hint"
+                        android:textSize="16sp" />
+
+                    <ImageButton
+                        android:id="@+id/clear_url_button"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/clear_url"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_close_24"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/status_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/status_ready"
+                    android:textColor="@color/kv_text_tertiary"
+                    android:textSize="13sp" />
+
+                <!-- 主次分明：保存是唯一主操作（实心强调色、铺满整行）；
+                     「打开已保存地址」降级成文字按钮 —— 输入框已预填当前地址，
+                     它和「保存」的区别只在「是否丢掉刚编辑的内容」，不该同样重。 -->
+                <Button
+                    android:id="@+id/save_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/bg_button_primary"
+                    android:stateListAnimator="@null"
+                    android:text="@string/button_save"
+                    android:textAllCaps="false"
+                    android:textColor="@color/kv_on_primary"
+                    android:textSize="15sp" />
+
+                <Button
+                    android:id="@+id/open_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="4dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:stateListAnimator="@null"
+                    android:text="@string/button_open_saved"
+                    android:textAllCaps="false"
+                    android:textColor="@color/kv_text_secondary"
+                    android:textSize="13sp" />
+
+                <!-- 说明压到两行：首次配置页一屏本来就不高，四行 12sp 会顶掉
+                     输入框的可视位置。剩下的用手势 / 诊断说明折进「使用提示」，
+                     点开才占空间。 -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:lineSpacingExtra="3dp"
+                    android:text="@string/setup_footer"
+                    android:textColor="@color/kv_text_tertiary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/help_toggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="2dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/setup_help_collapsed"
+                    android:textColor="@color/kv_text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/help_body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingExtra="3dp"
+                    android:text="@string/setup_help_body"
+                    android:textColor="@color/kv_text_tertiary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <!-- 版本号：装的是哪一版，App 里必须看得到（以前只有诊断能查到） -->
+                <TextView
+                    android:id="@+id/version_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/kv_text_hint"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <FrameLayout
+        android:id="@+id/fullscreen_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
+
+    <!-- 手势提示浮层：左右半屏上下滑调音量/亮度时由壳层原生显示，绕开网页 CSS 不确定性。
+         单行小胶囊，与锁定/解锁提示共用半透明背景，字号、内边距、圆角一致；
+         松手约 800ms 后自动隐藏。音量与亮度共用此卡片，外观完全一致。
+         注意：这几层（HUD / 锁钮 / 锁定提示）永远压在视频画面上，所以色值**故意**
+         不跟 values-night 走，始终保持深底白字，浅色系统下才看得清。 -->
+    <LinearLayout
+        android:id="@+id/gesture_hud"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_lock_hint"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/gesture_hud_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans"
+            android:text="亮度 100%"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="normal" />
+
+        <ProgressBar
+            android:id="@+id/gesture_hud_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="64dp"
+            android:layout_height="4dp"
+            android:layout_marginStart="10dp"
+            android:max="100"
+            android:progress="100"
+            android:progressTint="@color/kv_hud_accent" />
+    </LinearLayout>
+
+    <!-- 防误触锁：锁定时这层透明全屏 View 吞掉所有触摸。
+         锁按钮必须放在本层之上（FrameLayout 后添加者在上），
+         否则锁定后连解锁按钮也点不到。 -->
+    <FrameLayout
+        android:id="@+id/lock_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#00000000"
+        android:clickable="true"
+        android:focusable="false"
+        android:visibility="gone" />
+
+    <!-- 与网页底栏 .btn-icon 统一：40dp 圆钮、10% 白底、20% 白描边、白色线性图标。
+         放在画面左侧中部，避开顶部画质标签与右上角倍速；滑动快退闪现时
+         注入 CSS 会把快退/快进上移 64px，两个圆钮不会叠在一起。 -->
+    <ImageButton
+        android:id="@+id/lock_toggle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="24dp"
+        android:background="@drawable/bg_lock_button"
+        android:contentDescription="@string/lock_button_lock"
+        android:defaultFocusHighlightEnabled="false"
+        android:padding="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_lock_open_24"
+        android:visibility="gone" />
+
+    <!-- 锁定/解锁提示独立于遮罩：解锁后遮罩收起，仍可显示「已解锁」。
+         专用半透明背景，字号、内边距、圆角与亮度/音量 HUD 一致；
+         图标与文字由代码按状态切换，不用状态色。 -->
+    <TextView
+        android:id="@+id/lock_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_lock_hint"
+        android:drawablePadding="8dp"
+        android:fontFamily="sans"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="7dp"
+        android:text="@string/lock_hint_locked"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:textStyle="normal"
+        android:visibility="gone" />
+</FrameLayout>

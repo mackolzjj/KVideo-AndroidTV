@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- 手机端平时保留状态栏/导航栏；只有全屏播放时由 MainActivity 临时隐藏。
+
+         浅色版：父主题换成 Material.Light，默认控件（Button / EditText）就是浅色系；
+         深色同名主题在 values-night/styles.xml，父主题是 Material，色值全走 @color。
+         这里的 statusBarColor 只是首帧初值，运行时由 MainActivity.applySystemBars()
+         按「网页主题 / 原生覆盖页 + 系统深浅色」重新刷。 -->
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:colorBackground">@color/kv_window_bg</item>
+        <item name="android:statusBarColor">@color/kv_surface</item>
+        <item name="android:navigationBarColor">@color/kv_surface</item>
+        <item name="android:windowLightStatusBar">@bool/kv_light_system_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/kv_light_system_bars</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>
