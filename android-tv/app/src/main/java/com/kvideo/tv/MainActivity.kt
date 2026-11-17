@@ -1245,6 +1245,39 @@ class MainActivity : ComponentActivity() {
       best.style.setProperty('visibility', 'visible', 'important');
     }
   }
+  // 网页的浮层菜单（播放设置、倍速面板等）是 Portal 到 body 的高 z-index 面板，
+  // 没有 role 也没有我们的标记，原来只有 elInOverlay 那几条命中不了 —— 于是
+  // 在菜单上横滑/竖滑会被当成播放手势（右半屏就变成调亮度）。
+  // 这里用两条页面上很稳定的特征来认：z-index 极高，或 backdrop 毛玻璃面板。
+  var PANEL_SEL = '[role="menu"],[data-radix-popper-content-wrapper],[class*="z-[2147483647]"]';
+  function panelAt(el) {
+    var hops = 0;
+    while (el && el !== document.body && hops < 24) {
+      var cs;
+      try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
+      if (cs && (cs.position === 'fixed' || cs.position === 'absolute')) {
+        var z = parseInt(cs.zIndex, 10);
+        if (!isNaN(z) && z >= 1000) return el;
+        if (cs.backdropFilter && cs.backdropFilter !== 'none') return el;
+      }
+      el = el.parentElement;
+      hops++;
+    }
+    return null;
+  }
+  // 菜单开着时，连菜单外面那一片也不该起手势：手指往往从面板边缘外落下。
+  function panelOpen() {
+    var l = document.querySelectorAll(PANEL_SEL);
+    for (var i = 0; i < l.length; i++) {
+      var e = l[i], r = e.getBoundingClientRect();
+      if (r.width < 60 || r.height < 60) continue;
+      var cs;
+      try { cs = window.getComputedStyle(e); } catch (err) { continue; }
+      if (!cs || cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
+      return e;
+    }
+    return null;
+  }
   function elInOverlay(el) {
     var hops = 0;
     while (el && el !== document.body && hops < 24) {
@@ -1309,6 +1342,13 @@ class MainActivity : ComponentActivity() {
     // 三点菜单/倍速菜单里上下滑只滚菜单，不触发音量、亮度、拖进度
     if (elInOverlay(el)) {
       gestureDiag.reject = 'overlay';
+      return false;
+    }
+    // 网页自带的浮层面板（播放设置 / 倍速）：落在面板上或面板开着时都不起手势
+    var pnl = panelAt(el) || panelOpen();
+    if (pnl) {
+      gestureDiag.reject = 'panel';
+      gestureDiag.hitBlock = 'PANEL.' + String(pnl.className || '').slice(0, 40);
       return false;
     }
     return true;
