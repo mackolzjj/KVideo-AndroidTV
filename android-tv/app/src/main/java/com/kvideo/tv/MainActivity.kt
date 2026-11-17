@@ -558,9 +558,9 @@ class MainActivity : ComponentActivity() {
       '{display:inline-block !important;' +
       'font-size:15px !important;font-weight:600 !important;line-height:36px !important;' +
       'letter-spacing:.2px !important;margin-left:8px !important;' +
-      // 112px ≈ 7 个汉字：再长就省略，避免把 6 个图标挤出去
-      'max-width:112px !important;white-space:nowrap !important;overflow:hidden !important;' +
-      'text-overflow:ellipsis !important;vertical-align:middle !important;' +
+      // 不再用省略号：站名就是「KVideo」，截断只会显示不全
+      'max-width:none !important;white-space:nowrap !important;overflow:visible !important;' +
+      'text-overflow:clip !important;vertical-align:middle !important;flex:0 0 auto !important;' +
       'color:inherit !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
       '{vertical-align:middle !important;}' +
@@ -2317,14 +2317,11 @@ class MainActivity : ComponentActivity() {
     return false;
   }
 
-  function ensureBrandText(m, row) {
+  function ensureBrandText(m) {
     if (!m || m.querySelector('.kvideo-brand-text')) return;
-    // 页面自己有可见站名（首页）就不用插；播放页没有文字节点，才补一条
-    var own = row ? row.querySelector('[' + BRAND_NAME_ATTR + ']') : null;
-    if (own) {
-      var or = own.getBoundingClientRect();
-      if (or.width > 4 && or.height > 4) return;
-    }
+    // 只在播放页（页面里有 video）补站名：首页网页自己就有站名，
+    // 再插一条必然重复；播放页一个文字节点都没有。
+    if (!document.querySelector('video')) return;
     var b = document.createElement('span');
     b.className = 'kvideo-brand-text';
     b.textContent = 'KVideo';
@@ -2426,7 +2423,7 @@ class MainActivity : ComponentActivity() {
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
     hideBrandText(row, m);
-    ensureBrandText(m, row);
+    ensureBrandText(m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
