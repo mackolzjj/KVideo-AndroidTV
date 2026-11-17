@@ -2299,8 +2299,25 @@ class MainActivity : ComponentActivity() {
     }
   }
   // 行内形态下网页只留 logo、文字被我们藏了，这里补一条站名，保证「logo 后面有字母」
-  function ensureBrandText(m) {
+  function rowHasText(row, skip) {
+    try {
+      var els = row.querySelectorAll('span,b,a,p,div');
+      for (var i = 0; i < els.length; i++) {
+        var e = els[i];
+        if (e === skip || (skip && skip.contains(e)) || e.children.length) continue;
+        var t = (e.textContent || '').trim();
+        if (!t) continue;
+        var r = e.getBoundingClientRect();
+        if (r.width > 10 && r.height > 6) return true;
+      }
+    } catch (err) {}
+    return false;
+  }
+
+  function ensureBrandText(m, row) {
     if (!m || m.querySelector('.kvideo-brand-text')) return;
+    // 页面自己已经有可见的品牌文字（首页就是这种）时不要再插，否则重复一条
+    if (row && rowHasText(row, m)) return;
     var b = document.createElement('span');
     b.className = 'kvideo-brand-text';
     b.textContent = 'KVideo';
@@ -2402,7 +2419,7 @@ class MainActivity : ComponentActivity() {
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
     hideBrandText(row, m);
-    ensureBrandText(m);
+    ensureBrandText(m, row);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
