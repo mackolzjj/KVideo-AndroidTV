@@ -1249,7 +1249,8 @@ class MainActivity : ComponentActivity() {
   // 没有 role 也没有我们的标记，原来只有 elInOverlay 那几条命中不了 —— 于是
   // 在菜单上横滑/竖滑会被当成播放手势（右半屏就变成调亮度）。
   // 这里用两条页面上很稳定的特征来认：z-index 极高，或 backdrop 毛玻璃面板。
-  var PANEL_SEL = '[role="menu"],[data-radix-popper-content-wrapper],[class*="z-[2147483647]"]';
+  var PANEL_SEL = '[role="menu"],[role="dialog"],[data-radix-popper-content-wrapper]' +
+    ',[class*="z-[2147483647]"]';
   function panelAt(el) {
     var hops = 0;
     while (el && el !== document.body && hops < 24) {
@@ -1271,6 +1272,9 @@ class MainActivity : ComponentActivity() {
     for (var i = 0; i < l.length; i++) {
       var e = l[i], r = e.getBoundingClientRect();
       if (r.width < 60 || r.height < 60) continue;
+      // 整屏遮罩不算面板：它出现时手势本来就该继续工作
+      var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+      if (vw > 0 && vh > 0 && r.width > vw * 0.95 && r.height > vh * 0.95) continue;
       var cs;
       try { cs = window.getComputedStyle(e); } catch (err) { continue; }
       if (!cs || cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
@@ -2194,6 +2198,9 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
+        panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
+        lastReject: gestureDiag.reject,
+        lastHitBlock: gestureDiag.hitBlock,
         menuTrace: menuTrace,
         gestureEnv: (function () {
           var v = document.querySelector('video');
