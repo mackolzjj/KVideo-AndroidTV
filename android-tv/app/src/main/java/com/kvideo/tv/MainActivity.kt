@@ -2399,8 +2399,27 @@ class MainActivity : ComponentActivity() {
     g.addEventListener('touchcancel', cancel);
     g.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
   }
+  // 探针：记录每次收起/展开的现场（何时、滚到哪、菜单当时的计算样式）
+  function kvSnap(src, value) {
+    try {
+      var log = window.__kvHideLog || (window.__kvHideLog = []);
+      var m = root, row = m && m.parentNode;
+      var cs = m && window.getComputedStyle ? window.getComputedStyle(m) : null;
+      log.push({
+        t: Math.round((window.performance && performance.now) ? performance.now() : 0),
+        src: src, v: value ? 1 : 0,
+        y: Math.round(window.scrollY || document.documentElement.scrollTop || 0),
+        op: cs ? cs.opacity : '',
+        tr: cs ? String(cs.transform || '').slice(0, 20) : '',
+        rowH: (row && row.getBoundingClientRect) ? Math.round(row.getBoundingClientRect().height) : -1,
+        rowTag: row ? String(row.tagName || '').slice(0, 8) : ''
+      });
+      while (log.length > 24) log.shift();
+    } catch (e) {}
+  }
   window.KVideoChrome = {
     setHidden: function (v) {
+      kvSnap('set', v);
       hidden = !!v;
       document.documentElement.classList.toggle(CLS, hidden);
       if (hidden) closePopover();
@@ -2418,7 +2437,12 @@ class MainActivity : ComponentActivity() {
       for (var i = 0; i < floats.length; i++) {
         if (window.getComputedStyle(floats[i]).display === 'none') hiddenCount++;
       }
+      var _m = root, _cs = _m && window.getComputedStyle ? window.getComputedStyle(_m) : null;
       return {
+        hideLog: (window.__kvHideLog || []).slice(-8),
+        menuSoft: _cs ? { op: _cs.opacity, tr: String(_cs.transform || '').slice(0, 20), vis: _cs.visibility } : null,
+        rowH: (_m && _m.parentNode && _m.parentNode.getBoundingClientRect) ?
+          Math.round(_m.parentNode.getBoundingClientRect().height) : -1,
         hidden: hidden,
         marked: document.querySelectorAll('[' + ATTR + ']').length,
         matched: document.querySelectorAll(NAV + ',' + HEADER).length,
