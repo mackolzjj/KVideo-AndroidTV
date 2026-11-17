@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
   var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
   var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
   var TOPBAR_ATTR = 'data-kvideo-topbar';
+  var DOCK_ATTR = 'data-kvideo-dock';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -477,6 +478,29 @@ class MainActivity : ComponentActivity() {
       'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
       'opacity:0;transition:opacity .25s ease;}';
 
+  // 播放页没有 sticky 顶栏：注入菜单找不到落脚点，页面上就没有这条栏。
+  // 这里给它挂在 body 上做固定栏；只改定位，内部布局（品牌 + 两组图标）沿用
+  // 首页同一套 CSS，所以看起来完全一致。
+  var DOCK_CSS =
+    '[' + DOCK_ATTR + '="fixed"]{' +
+      'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
+      'width:100% !important;height:36px !important;margin:0 !important;' +
+      // 网页自己的顶栏横向 padding 是 29px；固定栏没有那一层，改成直接给
+      // 37 / 47（29 + 品牌内边距 8、29 + 主题钮留白 18），本地实测两页
+      // 六个图标的中心 x 完全一致。
+      'padding-left:37px !important;padding-right:47px !important;box-sizing:border-box;' +
+      'display:flex !important;align-items:center;' +
+      'z-index:2147483000 !important;flex:0 0 auto !important;' +
+      'background:rgba(13,15,19,.94);' +
+      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
+    'html[data-kv-light="1"] [' + DOCK_ATTR + '="fixed"]{' +
+      'background:rgba(255,255,255,.95);}' +
+    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
+      'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
+      'font-size:15px;font-weight:600;white-space:nowrap;padding-right:12px;}' +
+    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand svg{' +
+      'width:26px !important;height:26px !important;flex:0 0 auto;}';
+
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -543,7 +567,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + HUD_CSS + LOGO_CSS;
+    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -2223,6 +2247,39 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
+  function pageName() {
+    var t = '';
+    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
+    if (!t || t.length > 14) t = 'KVideo';
+    return t;
+  }
+  // 没有顶栏的页面（播放页）：菜单挂 body，固定顶部，自己补 logo + 站名。
+  function dockFixed() {
+    var m = ensureRoot();
+    if (m.parentNode !== document.body) document.body.appendChild(m);
+    if (m.getAttribute(DOCK_ATTR) !== 'fixed') {
+      m.setAttribute(DOCK_ATTR, 'fixed');
+      if (!m.querySelector('.kvideo-float-brand')) {
+        var brand = document.createElement('span');
+        brand.className = 'kvideo-float-brand';
+        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
+        m.insertBefore(brand, m.firstChild);
+      }
+    }
+    document.documentElement.classList.add(READY_CLS);
+    syncAvailability();
+    syncThemeState();
+    bindDiagLongPress();
+    disarmFallback();
+  }
+  // 回到有顶栏的页面：收起固定栏与自建品牌，菜单回到行内。
+  function undock(m) {
+    if (!m || m.getAttribute(DOCK_ATTR) !== 'fixed') return;
+    m.removeAttribute(DOCK_ATTR);
+    var brand = m.querySelector('.kvideo-float-brand');
+    if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
+  }
+
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2238,9 +2295,10 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { armFallback(); return; }
+    if (!bar) { dockFixed(); return; }
     var row = pickRow(bar);
     var m = ensureRoot();
+    undock(m);
     if (m.parentNode !== row) row.appendChild(m);
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
