@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
   var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
   var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
   var TOPBAR_ATTR = 'data-kvideo-topbar';
+  var ROW_HIDDEN_ATTR = 'data-kvideo-row-hidden';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -491,10 +492,12 @@ class MainActivity : ComponentActivity() {
   // 现在没有顶栏时把注入菜单改成 body 上的固定栏：同样的 logo + 站名 + 六个图标，
   // 同样的 36dp 高，只是 position:fixed 贴在屏幕最上方。
   var DOCK_CSS =
+    // 播放页被固定栏替代的那一行原顶栏：藏掉，免得滚回顶部时看到两条
+    '[' + ROW_HIDDEN_ATTR + ']{display:none !important;}' +
     '[data-kvideo-menu][data-kvideo-dock="fixed"]{' +
       'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
       'width:100% !important;height:36px !important;margin:0 !important;' +
-      'padding:0 12px !important;box-sizing:border-box;' +
+      'padding:0 14px !important;box-sizing:border-box;' +
       'display:flex !important;align-items:center;justify-content:center !important;' +
       'z-index:2147483000 !important;flex:0 0 auto !important;' +
       'background:rgba(13,15,19,.94);' +
@@ -504,7 +507,9 @@ class MainActivity : ComponentActivity() {
     '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand{' +
       'position:absolute;left:14px;top:50%;transform:translateY(-50%);' +
       'display:inline-flex;align-items:center;gap:8px;font-size:15px;' +
-      'font-weight:600;white-space:nowrap;}' +
+      // 与首页品牌容器等宽（那边自带 12px 右内边距），这样「品牌右沿 + 8px」
+      // 算出来的左侧留白才和首页完全一样，两页图标才会落在同一批 x 坐标上。
+      'font-weight:600;white-space:nowrap;padding-right:12px;box-sizing:content-box;}' +
     '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand svg{' +
       'width:26px !important;height:26px !important;flex:0 0 auto;}';
 
@@ -564,7 +569,10 @@ class MainActivity : ComponentActivity() {
     // 不然只剩一行时行高仍被 padding 顶住；横 6 个图标 36dp 内垂直居中。
     prefixed('html.' + READY_CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
       '{min-height:36px !important;height:36px !important;' +
-      'padding-top:0 !important;padding-bottom:0 !important;align-items:center !important;}' +
+      'padding-top:0 !important;padding-bottom:0 !important;align-items:center !important;' +
+      // 网页给 29px 横向 padding：385-58-品牌100-16 = 211px，而 6 个图标需要
+      // 232px —— 图标溢出容器，左边压站名、右边贴屏幕边。收到 12px 后是 245px。
+      'padding-left:12px !important;padding-right:12px !important;box-sizing:border-box !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
@@ -748,13 +756,16 @@ class MainActivity : ComponentActivity() {
       togglePopover(); return;
     }
     closePopover();
-    if (act === 'live') clickNative('a[aria-label="直播"]');
-    else if (act === 'favorites') {
+    if (act === 'live') {
+      if (!clickNative('a[aria-label="直播"]')) go('/iptv');
+    } else if (act === 'favorites') {
       if (!clickNative('a[aria-label="我的收藏"]') &&
           !clickNative('button[aria-label*="收藏"]') &&
-          !clickByText('收藏这个视频')) clickByText('收藏');
+          !clickByText('收藏这个视频') && !clickByText('收藏')) go('/favorites');
+    } else if (act === 'history') {
+      // 观看历史在上游是弹层、没有独立路由；播放页没有入口时退到收藏页
+      if (!clickNative(history[0])) go('/favorites');
     }
-    else if (act === 'history') clickNative(history[0]);
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
     else if (act === 'appsettings') {
@@ -799,22 +810,21 @@ class MainActivity : ComponentActivity() {
   }
 
   // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
+  // 顶栏图标恒定显示。以前「页面上找不到对应原生控件就隐藏」——播放页没有
+  // 收藏 / 历史 / 直播的锚点，一下就少三个图标，和首页对不上。缺目标的点击
+  // 走路由兜底（KVideo 的 /favorites、/iptv 都是独立路由）。
   function syncAvailability() {
     if (!root) return;
-    var checks = {
-      live: 'a[aria-label="直播"]',
-      history: history[0],
-      logout: 'button[aria-label="退出登录"]',
-      websettings: 'a[aria-label="设置"]',
-      themecycle: themeSels[0] || themeSels[1] || themeSels[2]
-    };
-    for (var act in checks) {
-      if (!Object.prototype.hasOwnProperty.call(checks, act)) continue;
-      var b = root.querySelector('[data-kvideo-act="' + act + '"]');
-      if (!b) continue;
-      var want = q(checks[act]) ? '' : 'none';
-      if (b.style.display !== want) b.style.display = want;
+    var btns = root.querySelectorAll('[data-kvideo-act]');
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].style.display === 'none') btns[i].style.display = '';
     }
+  }
+  function go(path) {
+    try {
+      if (location.pathname !== path) location.assign(path);
+      return true;
+    } catch (e) { return false; }
   }
   // 当前网页是浅色还是深色：注入的 CSS 里有一批「白 alpha」的层级反馈
   // （logo 内圈、齿轮展开底、按下底色、主题选中蓝），它们默认写给深色顶栏，
@@ -2257,9 +2267,12 @@ class MainActivity : ComponentActivity() {
   }
   // 播放页这类没有 sticky 顶栏的路由：把菜单挂到 body 上做固定栏，
   // 自己补一个 logo + 站名，保证和首页顶栏「完全一致」。
-  function dockFixed() {
+  function dockFixed(row) {
     var m = ensureRoot();
     if (m.parentNode !== document.body) document.body.appendChild(m);
+    if (row && row.setAttribute && !row.hasAttribute(ROW_HIDDEN_ATTR)) {
+      row.setAttribute(ROW_HIDDEN_ATTR, '1');
+    }
     if (m.getAttribute('data-kvideo-dock') !== 'fixed') {
       m.setAttribute('data-kvideo-dock', 'fixed');
       if (!m.querySelector('.kvideo-float-brand')) {
@@ -2269,6 +2282,23 @@ class MainActivity : ComponentActivity() {
         m.insertBefore(brand, m.firstChild);
       }
     }
+    // 首页的图标是在「品牌右侧的剩余空间」里居中的；固定栏里品牌是绝对定位、
+    // 不参与布局，只靠 padding:14px 会让整排往左偏 60px。这里按品牌实测右沿
+    // 补上同样的左侧留白，两页图标才会落在同一批 x 坐标上。
+    (function () {
+      var brandEl = m.querySelector('.kvideo-float-brand');
+      if (!brandEl) return;
+      var apply = function () {
+        var r = brandEl.getBoundingClientRect();
+        if (r.width > 0) {
+          // 首页：品牌右沿 + 8px 组间距 + 14px 菜单内边距 = +22px
+          m.style.setProperty('padding-left', Math.round(r.right + 22) + 'px', 'important');
+        }
+      };
+      apply();
+      if (window.requestAnimationFrame) requestAnimationFrame(apply);
+      setTimeout(apply, 150);
+    })();
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
@@ -2298,8 +2328,15 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { dockFixed(); return; }
+    if (!bar) { dockFixed(null); return; }
     var row = pickRow(bar);
+    // 播放页的顶栏行是普通流内元素（不 sticky / fixed）：页面一滚它就跑出屏幕，
+    // 注入菜单跟着消失 —— 这就是「播放页没有菜单栏」的原因。这种情况改挂固定栏，
+    // 并把原来那一行藏掉（否则滚到顶部时会看到两条）。
+    var rowCs = null;
+    try { rowCs = window.getComputedStyle(row); } catch (eRow) { rowCs = null; }
+    var rowPinned = !!rowCs && (rowCs.position === 'fixed' || rowCs.position === 'sticky');
+    if (!rowPinned && document.querySelector('video')) { dockFixed(row); return; }
     var m = ensureRoot();
     undock(m, row);
     if (m.parentNode !== row) row.appendChild(m);
