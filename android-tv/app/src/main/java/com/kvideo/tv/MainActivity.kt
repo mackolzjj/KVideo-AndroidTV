@@ -1017,7 +1017,16 @@ class MainActivity : ComponentActivity() {
     // 注意：HUD_CSS 里 display:none 带了 !important，必须用内联 important 才能覆盖。
     h.style.setProperty('display', 'block', 'important');
     gestureDiag.hud++;
-    try { gestureDiag.hudDisplay = window.getComputedStyle(h).display; } catch (e) {}
+    try {
+      gestureDiag.hudDisplay = window.getComputedStyle(h).display;
+      var hr = h.getBoundingClientRect();
+      gestureDiag.hudRect = [Math.round(hr.left), Math.round(hr.top),
+        Math.round(hr.width), Math.round(hr.height)];
+      // 浮层中心点「压在最上面的是谁」：不是 HUD 本身，说明有别的东西盖住它
+      var topEl = document.elementFromPoint(
+        hr.left + hr.width / 2, hr.top + hr.height / 2);
+      gestureDiag.hudTop = topEl ? (topEl.id || topEl.tagName) : 'null';
+    } catch (e) {}
   }
   function hideHud(delay) {
     if (hudTimer) clearTimeout(hudTimer);
@@ -1328,7 +1337,24 @@ class MainActivity : ComponentActivity() {
         synthTouch('touchend', document, scrub.baseX, 0);
         synthTouch('touchcancel', document, scrub.baseX, 0);
       }
-      try { if (scrub.v) scrub.v.currentTime = scrub.target; } catch (e) {}
+      var v = scrub.v, target = scrub.target;
+      gestureDiag.seekTarget = Math.round(target);
+      gestureDiag.seekBefore = v ? Math.round((v.currentTime || 0) * 10) / 10 : -1;
+      try {
+        if (v) v.currentTime = target;
+        gestureDiag.seekError = null;
+      } catch (e) {
+        gestureDiag.seekError = String(e).slice(0, 60);
+      }
+      // 500ms 后回读，回答「到底跳没跳」——这是本轮唯一还缺的证据。
+      setTimeout(function () {
+        try {
+          if (!v) return;
+          gestureDiag.seekAfter = Math.round((v.currentTime || 0) * 10) / 10;
+          gestureDiag.seekOK =
+            Math.abs(v.currentTime - gestureDiag.seekTarget) < 3;
+        } catch (e) {}
+      }, 500);
       hideHud(350);
     } else if (scrub.mode === 'vertical') {
       hideHud(500);
@@ -1982,6 +2008,24 @@ class MainActivity : ComponentActivity() {
               return b ? (b.className || b.tagName) : 'none';
             })(),
             hudCount: document.querySelectorAll('[data-kvideo-hud]').length,
+            videoCount: document.querySelectorAll('video').length,
+            videoTail: (function () {
+              var v = document.querySelector('video');
+              return v ? String(v.currentSrc || v.src || '').slice(-42) : 'none';
+            })(),
+            readyState: (function () {
+              var v = document.querySelector('video');
+              return v ? v.readyState : -1;
+            })(),
+            tracks: (function () {
+              var l = document.querySelectorAll('.slider-track'), o = [];
+              for (var i = 0; i < l.length; i++) {
+                var r = l[i].getBoundingClientRect();
+                o.push(Math.round(r.width) + 'x' + Math.round(r.height) +
+                  '@' + Math.round(r.left) + ',' + Math.round(r.top));
+              }
+              return o.join(' | ');
+            })(),
             hudDisplay: (function () {
               var x = document.getElementById('kvideo-gesture-hud');
               return x ? window.getComputedStyle(x).display : 'absent';
