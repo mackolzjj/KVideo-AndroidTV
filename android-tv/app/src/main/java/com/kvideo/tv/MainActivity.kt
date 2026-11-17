@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -288,6 +289,8 @@ class MainActivity : ComponentActivity() {
     '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:12px;margin-left:8px;}' +
       '[data-kvideo-menu] .kvideo-group{gap:6px;}' +
+      // 间距 6px 时横向只能扩 3px（两侧 3+3=6，相接不重叠）
+      '[data-kvideo-menu] .kvideo-group > button::after{left:-3px;right:-3px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
@@ -309,8 +312,10 @@ class MainActivity : ComponentActivity() {
     // 这里只撑「命中区」、不改外观：上下各扩 9px（30+18=48），左右各扩 3px
     // —— 横向不扩到 6px 是因为相邻按钮只隔 4px，扩多了两个按钮的命中区会互压，
     // 点边缘会落到邻居身上。伪元素在按钮内部，不占布局、不挡弹层。
+    // 组内间距已经从 4px 放到 8px，横向命中区跟着从 3px 放到 4px：
+    // 两侧各 4px 正好相接但不重叠（再大就会互压，点击落到 DOM 里靠后的那个）。
     '[data-kvideo-menu] .kvideo-group > button::after{content:"";position:absolute;' +
-      'left:-3px;right:-3px;top:-9px;bottom:-9px;border-radius:999px;}' +
+      'left:-4px;right:-4px;top:-9px;bottom:-9px;border-radius:999px;}' +
     '[data-kvideo-menu] .kvideo-group > button:active::after{' +
       'background:rgba(255,255,255,.06);}' +
     'html[data-kv-light="1"] [data-kvideo-menu] .kvideo-group > button:active::after{' +
@@ -2484,6 +2489,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var retryButton: Button
     private lateinit var changeUrlButton: Button
     private lateinit var copyUrlButton: Button
+    private lateinit var openBrowserButton: Button
+    private lateinit var clearUrlButton: ImageButton
     private lateinit var prefs: android.content.SharedPreferences
     private var currentLoadUrl: String = ""
     private var pageLoadFailed = false
@@ -2553,6 +2560,8 @@ class MainActivity : ComponentActivity() {
         retryButton = findViewById(R.id.retry_button)
         changeUrlButton = findViewById(R.id.change_url_button)
         copyUrlButton = findViewById(R.id.copy_url_button)
+        openBrowserButton = findViewById(R.id.open_browser_button)
+        clearUrlButton = findViewById(R.id.clear_url_button)
         lockOverlay = findViewById(R.id.lock_overlay)
         lockToggle = findViewById(R.id.lock_toggle)
         expandLockTouchTarget()
@@ -2588,6 +2597,20 @@ class MainActivity : ComponentActivity() {
         changeUrlButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
         }
+        // 壳打不开但服务端可能没坏：交给系统浏览器验证，省得来回猜。
+        openBrowserButton.setOnClickListener {
+            val url = currentLoadUrl.ifEmpty { normalizeUrl(urlInput.text.toString()) }
+            if (url.isEmpty()) return@setOnClickListener
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (e: Exception) {
+                Toast.makeText(this, getString(R.string.status_no_browser), Toast.LENGTH_SHORT).show()
+            }
+        }
+        clearUrlButton.setOnClickListener {
+            urlInput.setText("")
+            urlInput.requestFocus()
+        }
         swipeThresholdPx = SWIPE_THRESHOLD_DP * resources.displayMetrics.density
         attachSwipeToHide(webView)
 
@@ -2620,6 +2643,8 @@ class MainActivity : ComponentActivity() {
             val saved = prefs.getString(PREF_SERVER_URL, null)?.trim().orEmpty()
             val typed = editable?.toString()?.trim().orEmpty()
             updateSaveEnabled()
+            val wantClear = if (typed.isEmpty()) View.GONE else View.VISIBLE
+            if (clearUrlButton.visibility != wantClear) clearUrlButton.visibility = wantClear
             if (saved.isNotEmpty() && typed.isNotEmpty() && typed != saved) {
                 setStatus(getString(R.string.status_dirty), StatusTone.WARN)
             }

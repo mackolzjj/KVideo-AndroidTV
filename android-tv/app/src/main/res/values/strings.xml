@@ -24,6 +24,9 @@
     <string name="button_retry">重试</string>
     <string name="button_change_url">修改地址</string>
     <string name="button_copy_url">复制地址</string>
+    <string name="button_open_browser">用浏览器打开</string>
+    <string name="clear_url">清空地址</string>
+    <string name="status_no_browser">没有找到可用的浏览器</string>
     <string name="status_copied">地址已复制</string>
     <string name="diag_copied">诊断信息已复制，粘贴发给我</string>
     <string name="lock_button_lock">锁定播放画面</string>
