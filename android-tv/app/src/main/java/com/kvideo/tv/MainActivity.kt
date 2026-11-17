@@ -229,13 +229,18 @@ class MainActivity : ComponentActivity() {
     '[data-kvideo-menu]{display:flex;align-items:center;gap:14px;flex:1 1 auto;' +
       'position:relative;margin-left:10px;min-width:0;' +
       'justify-content:space-between;}' +
-    '[data-kvideo-menu] .kvideo-group{display:inline-flex;align-items:center;' +
+    // 组内必须永远是「紧凑一组」：网页顶栏自己带 justify-between / 按钮
+    // flex:1 之类的规则，会把组里的图标拉成等距散开（截图里就是这个样子），
+    // 和效果图的「左边一撮、右边一颗」完全不是一回事。这里全部用 !important 钉死。
+    '[data-kvideo-menu] .kvideo-group{display:inline-flex !important;align-items:center;' +
+      'justify-content:flex-start !important;' +
       // 三档主题合成一个循环钮后空出一个位置，间距 4 → 8px：
       // 6×32+5×8=232px，比原来 7×32+6×4=248px 更窄，同时更好按。
-      'gap:8px;padding:0;flex:0 0 auto;position:relative;' +
+      'gap:8px !important;padding:0 !important;flex:0 0 auto !important;position:relative;' +
       'border:0 !important;background:transparent !important;' +
       'border-radius:0 !important;box-shadow:none !important;}' +
-    BTN + '{width:34px;height:34px;min-width:34px;min-height:34px;' +
+    BTN + '{flex:0 0 auto !important;' +
+      'width:34px;height:34px;min-width:34px;min-height:34px;' +
       'display:inline-flex;align-items:center;justify-content:center;position:relative;' +
       'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
       // 圆底交给胶囊：按钮自己不画描边和底色，否则胶囊里会再浮出一串圆点。
@@ -251,6 +256,7 @@ class MainActivity : ComponentActivity() {
     BTN + '[data-kvideo-active="1"]{color:#60A5FA !important;}' +
     // 齿轮弹层展开：用中性「加深底色」，绝不用蓝色——否则会被读成主题被切换。
     BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
+    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:auto !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
@@ -288,9 +294,9 @@ class MainActivity : ComponentActivity() {
     // 加 logo 与边距约 300px，320dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:12px;margin-left:8px;}' +
-      '[data-kvideo-menu] .kvideo-group{gap:6px;}' +
-      // 间距 6px 时横向只能扩 3px（两侧 3+3=6，相接不重叠）
-      '[data-kvideo-menu] .kvideo-group > button::after{left:-3px;right:-3px;}' +
+      // 组内间距不再降到 6px：6 个图标在 320dp 也放得下（6×30+5×8=220），
+      // 统一 8px 才能和效果图逐像素对上，命中区也就能一律扩到 4px。
+      '[data-kvideo-menu] .kvideo-group{gap:8px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
