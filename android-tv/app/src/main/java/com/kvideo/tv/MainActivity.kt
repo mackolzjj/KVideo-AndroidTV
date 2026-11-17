@@ -2271,6 +2271,7 @@ class MainActivity : ComponentActivity() {
         gestureHudValue = findViewById(R.id.gesture_hud_value)
         gestureHudBar = findViewById(R.id.gesture_hud_bar)
         viewsReady = true
+        fsSlopPx = 10 * resources.displayMetrics.density
         attachSafeAreaInsets()
         lockToggle.setOnClickListener { togglePlaybackLock() }
         // 全屏播放时注入层的顶栏是看不见的（网页全屏会把 nav 藏掉，或走原生
@@ -2469,6 +2470,9 @@ class MainActivity : ComponentActivity() {
             scheduleLockToggleHide()
             if (playbackActive) nativeTouchCount++
         }
+        // 原生全屏（customView）下 WebView 收不到触摸，手势在这一层接管；
+        // 页面内播放器返回 false，继续走注入层那套 JS 手势。
+        if (handleFullscreenGesture(event)) return true
         return super.dispatchTouchEvent(event)
     }
 
@@ -2709,6 +2713,186 @@ class MainActivity : ComponentActivity() {
         gestureHud.visibility = View.VISIBLE
         gestureHudHandler.removeCallbacks(hideGestureHud)
         gestureHudHandler.postDelayed(hideGestureHud, 800L)
+    }
+
+    /** 音量一档。原生全屏手势与 JS 桥共用同一份实现，浮层外观因此完全一致。 */
+    private fun stepVolume(direction: Int): Int {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = maxOf(1, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+        val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val step = maxOf(1, max / 15)
+        val next = (cur + direction * step).coerceIn(0, max)
+        if (next != cur) {
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
+        }
+        val pct = ((next.toFloat() / max) * 100).roundToInt()
+        showGestureHud(getString(R.string.volume_hud_value, pct), pct)
+        return pct
+    }
+
+    /** 亮度一档（只改本窗口，不改系统设置）。 */
+    private fun stepBrightness(direction: Int): Int {
+        val lp = window.attributes
+        var value = lp.screenBrightness
+        if (value !in 0f..1f) {
+            value = try {
+                Settings.System.getInt(
+                    contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128
+                ) / 255f
+            } catch (error: Exception) {
+                0.5f
+            }
+            value = value.coerceIn(0.05f, 1f)
+        }
+        value = (value + direction * 0.06f).coerceIn(0.02f, 1f)
+        lp.screenBrightness = value
+        window.attributes = lp
+        val pct = (value * 100).roundToInt()
+        showGestureHud(getString(R.string.brightness_hud_value, pct), pct)
+        return pct
+    }
+
+    // ———————————————————————————————————————————————————————————
+    // 原生全屏下的手势
+    //
+    // 全屏播放走 WebChromeClient.onShowCustomView 时，视频被挪进 fullscreen_container、
+    // WebView 被设为 GONE，注入层的 document 收不到任何触摸（线上实测：进全屏后
+    // moves=0、hud=0，而 nativeTouches 有数）。所以这一段用原生触摸事件接管，
+    // JS 只用来读写 video.currentTime —— 媒体元素的表面换了宿主，元素本身还活着。
+    // 浮层复用壳层的手势卡片，与页面内播放器的手感保持一致。
+    // ———————————————————————————————————————————————————————————
+    private var fsDownX = 0f
+    private var fsDownY = 0f
+    private var fsLastStepY = 0f
+    private var fsMode = 0            // 0 未判定 / 1 拖进度 / 2 音量亮度
+    private var fsSideLeft = true
+    private var fsClockReady = false
+    private var fsStartT = 0.0
+    private var fsDur = 0.0
+    private var fsTarget = -1.0
+    private var fsSlopPx = 0f
+
+    /** 时间码：不足一小时用 mm:ss，超过用 h:mm:ss。 */
+    private fun clockText(seconds: Double): String {
+        val total = seconds.toInt().coerceAtLeast(0)
+        val h = total / 3600
+        val m = (total % 3600) / 60
+        val s = total % 60
+        fun p(n: Int) = if (n < 10) "0$n" else "$n"
+        return if (h > 0) "$h:${p(m)}:${p(s)}" else "${p(m)}:${p(s)}"
+    }
+
+    /** 问网页要当前播放位置与总时长；回来之前不进入拖进度模式。 */
+    private fun queryVideoClock() {
+        if (!::webView.isInitialized) return
+        webView.evaluateJavascript(
+            "(function(){var v=document.querySelector('video');" +
+                "return v?(v.currentTime+'|'+v.duration):''})()"
+        ) { raw ->
+            val parts = raw.trim().trim('"').split('|')
+            val t = parts.getOrNull(0)?.toDoubleOrNull()
+            val d = parts.getOrNull(1)?.toDoubleOrNull()
+            if (t != null && d != null && d.isFinite() && d > 1) {
+                fsStartT = t
+                fsDur = d
+                fsClockReady = true
+            }
+        }
+    }
+
+    private fun applyFullscreenSeek(target: Double) {
+        if (!::webView.isInitialized) return
+        webView.evaluateJavascript(
+            "(function(){var v=document.querySelector('video');" +
+                "if(v){try{v.currentTime=$target}catch(e){}}})()",
+            null
+        )
+    }
+
+    private fun isOnLockToggle(event: MotionEvent): Boolean {
+        if (lockToggle.visibility != View.VISIBLE) return false
+        val pad = 8 * resources.displayMetrics.density
+        return event.x >= lockToggle.left - pad && event.x <= lockToggle.right + pad &&
+            event.y >= lockToggle.top - pad && event.y <= lockToggle.bottom + pad
+    }
+
+    /**
+     * 返回 true 表示这次事件已经被手势接管（吞掉），false 交给正常分发，
+     * 这样锁钮的点击、以及全屏里的其它控件都不受影响。
+     */
+    private fun handleFullscreenGesture(event: MotionEvent): Boolean {
+        if (customView == null || !playbackActive || playbackLocked) {
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                fsMode = 0
+                fsClockReady = false
+            }
+            return false
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (isOnLockToggle(event)) {
+                    fsMode = 0
+                    fsClockReady = false
+                    return false
+                }
+                fsDownX = event.x
+                fsDownY = event.y
+                fsLastStepY = event.y
+                fsMode = 0
+                fsClockReady = false
+                fsTarget = -1.0
+                fsSideLeft = event.x < window.decorView.width / 2f
+                queryVideoClock()
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (fsMode == 0) {
+                    val dx = event.x - fsDownX
+                    val dy = event.y - fsDownY
+                    val ax = abs(dx)
+                    val ay = abs(dy)
+                    if (maxOf(ax, ay) < fsSlopPx) return false
+                    fsMode = when {
+                        ax >= ay * 1.2f -> 1
+                        ay >= ax * 1.2f -> 2
+                        else -> 0
+                    }
+                    if (fsMode == 0) return false
+                }
+                if (fsMode == 1) {
+                    if (!fsClockReady || fsDur <= 1) return true
+                    val width = maxOf(1, window.decorView.width).toFloat()
+                    val target = (fsStartT + (event.x - fsDownX) / width * fsDur)
+                        .coerceIn(0.0, maxOf(0.0, fsDur - 0.25))
+                    fsTarget = target
+                    val pct = (target / fsDur * 100).roundToInt()
+                    showGestureHud(
+                        clockText(target) + " / " + clockText(fsDur) + " · 松手定位",
+                        pct
+                    )
+                    return true
+                }
+                // 纵向：左半屏音量、右半屏亮度，每 24dp 一档
+                val stepPx = 24 * resources.displayMetrics.density
+                val steps = ((event.y - fsLastStepY) / stepPx).toInt()
+                if (steps != 0) {
+                    fsLastStepY += steps * stepPx
+                    val dir = if (steps < 0) 1 else -1
+                    repeat(minOf(abs(steps), 3)) {
+                        if (fsSideLeft) stepVolume(dir) else stepBrightness(dir)
+                    }
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasSeek = fsMode == 1
+                if (wasSeek && fsTarget >= 0) applyFullscreenSeek(fsTarget)
+                fsMode = 0
+                fsClockReady = false
+                fsTarget = -1.0
+                if (wasSeek) gestureHudHandler.postDelayed(hideGestureHud, 350L)
+            }
+        }
+        return false
     }
 
     /** JS 桥在 WebView 线程调用，音量和窗口亮度必须在 UI 线程改；同步回传百分比给提示浮层。 */
@@ -3143,42 +3327,11 @@ class MainActivity : ComponentActivity() {
         /** 左半屏上下滑动：调系统媒体音量，返回 0..100 供提示浮层显示。
          *  不再用系统 FLAG_SHOW_UI 音量条，改走与亮度完全一致的壳层原生卡片。 */
         @JavascriptInterface
-        fun adjustVolume(direction: Int): Int = runOnUiSync {
-            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            val max = maxOf(1, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
-            val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-            val step = maxOf(1, max / 15)
-            val next = (cur + direction * step).coerceIn(0, max)
-            if (next != cur) {
-                am.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
-            }
-            val pct = ((next.toFloat() / max) * 100).roundToInt()
-            showGestureHud(getString(R.string.volume_hud_value, pct), pct)
-            pct
-        }
+        fun adjustVolume(direction: Int): Int = runOnUiSync { stepVolume(direction) }
 
         /** 右半屏上下滑动：调当前窗口亮度，返回 0..100 供提示浮层显示。 */
         @JavascriptInterface
-        fun adjustBrightness(direction: Int): Int = runOnUiSync {
-            val lp = window.attributes
-            var value = lp.screenBrightness
-            if (value !in 0f..1f) {
-                value = try {
-                    Settings.System.getInt(
-                        contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128
-                    ) / 255f
-                } catch (error: Exception) {
-                    0.5f
-                }
-                value = value.coerceIn(0.05f, 1f)
-            }
-            value = (value + direction * 0.06f).coerceIn(0.02f, 1f)
-            lp.screenBrightness = value
-            window.attributes = lp
-            val pct = (value * 100).roundToInt()
-            showGestureHud(getString(R.string.brightness_hud_value, pct), pct)
-            pct
-        }
+        fun adjustBrightness(direction: Int): Int = runOnUiSync { stepBrightness(direction) }
 
         /** 顶部条「应用设置」代理按钮：打开壳层的服务器地址设置页。 */
         @JavascriptInterface
