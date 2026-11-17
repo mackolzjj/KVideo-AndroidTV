@@ -255,7 +255,7 @@
             android:layout_marginStart="10dp"
             android:max="100"
             android:progress="100"
-            android:progressTint="#3B82F6" />
+            android:progressTint="@color/kv_hud_accent" />
     </LinearLayout>
 
     <!-- 防误触锁：锁定时这层透明全屏 View 吞掉所有触摸。

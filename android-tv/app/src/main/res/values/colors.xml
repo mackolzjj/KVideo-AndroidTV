@@ -34,6 +34,11 @@
     <color name="kv_status_error">#FFB91C1C</color>
     <color name="kv_accent">#FF2563EB</color>
 
+    <!-- 视频上方的 HUD 用固定蓝：永远压在画面上，不跟系统深浅色走。
+         #3B82F6 对黑底 5.79:1；换成本页的 kv_accent（浅色 #2563EB）只有 3.43:1，
+         小尺寸进度条上会看不清。两套 values 同名同值。 -->
+    <color name="kv_hud_accent">#FF3B82F6</color>
+
     <!-- 主按钮填充：白字对它 5.17:1，过 AA。深色也用它，别用更亮的 #3B82F6
          ——那个配白字只有 3.68:1，正文级别不合格。 -->
     <color name="kv_button_primary">#FF2563EB</color>
