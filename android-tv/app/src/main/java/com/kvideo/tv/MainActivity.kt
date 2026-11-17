@@ -2418,8 +2418,8 @@ class MainActivity : ComponentActivity() {
     if (m.parentNode !== row) row.appendChild(m);
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
-    hideBrandText(row, m);
-    ensureBrandText(m, row);
+    // 品牌文字交给网页自己：以前我们藏掉它、再插一条 KVideo，
+    // 结果首页出现两条（网页那条没被藏住）。现在一律不碰、不插。
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
