@@ -104,19 +104,6 @@
                 android:textColor="@color/kv_text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>
-
-        <!-- 服务端活着但 WebView 打不开（证书、CORS、内核渲染问题）时，
-             用系统浏览器验证一眼就能分清「服务端坏了」还是「壳打不开」。 -->
-        <Button
-            android:id="@+id/open_browser_button"
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:background="?android:attr/selectableItemBackground"
-            android:stateListAnimator="@null"
-            android:text="@string/button_open_browser"
-            android:textAllCaps="false"
-            android:textColor="@color/kv_text_secondary"
-            android:textSize="13sp" />
     </LinearLayout>
 
     <ScrollView
@@ -160,46 +147,23 @@
                     android:textColor="@color/kv_text_secondary"
                     android:textSize="14sp" />
 
-                <!-- 输入框 + 清空钮：改地址时不必长按全选删除。
-                     背景描边挂在容器上，EditText 自己透明，视觉与原来一致。 -->
-                <LinearLayout
+                <EditText
+                    android:id="@+id/url_input"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
                     android:background="@drawable/bg_url_input"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="14dp"
-                    android:paddingEnd="4dp">
-
-                    <EditText
-                        android:id="@+id/url_input"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:background="@null"
-                        android:hint="@string/setup_hint"
-                        android:importantForAutofill="no"
-                        android:imeOptions="actionDone"
-                        android:inputType="textUri"
-                        android:minHeight="48dp"
-                        android:paddingVertical="12dp"
-                        android:paddingEnd="6dp"
-                        android:singleLine="true"
-                        android:textColor="@color/kv_text_primary"
-                        android:textColorHint="@color/kv_text_hint"
-                        android:textSize="16sp" />
-
-                    <ImageButton
-                        android:id="@+id/clear_url_button"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:background="?android:attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/clear_url"
-                        android:padding="10dp"
-                        android:src="@drawable/ic_close_24"
-                        android:visibility="gone" />
-                </LinearLayout>
+                    android:hint="@string/setup_hint"
+                    android:importantForAutofill="no"
+                    android:imeOptions="actionDone"
+                    android:inputType="textUri"
+                    android:minHeight="48dp"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:singleLine="true"
+                    android:textColor="@color/kv_text_primary"
+                    android:textColorHint="@color/kv_text_hint"
+                    android:textSize="16sp" />
 
                 <TextView
                     android:id="@+id/status_text"
@@ -237,48 +201,14 @@
                     android:textColor="@color/kv_text_secondary"
                     android:textSize="13sp" />
 
-                <!-- 说明压到两行：首次配置页一屏本来就不高，四行 12sp 会顶掉
-                     输入框的可视位置。剩下的用手势 / 诊断说明折进「使用提示」，
-                     点开才占空间。 -->
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:lineSpacingExtra="3dp"
                     android:text="@string/setup_footer"
                     android:textColor="@color/kv_text_tertiary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/help_toggle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="2dp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="2dp"
-                    android:text="@string/setup_help_collapsed"
-                    android:textColor="@color/kv_text_secondary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/help_body"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:lineSpacingExtra="3dp"
-                    android:text="@string/setup_help_body"
-                    android:textColor="@color/kv_text_tertiary"
                     android:textSize="12sp"
-                    android:visibility="gone" />
-
-                <!-- 版本号：装的是哪一版，App 里必须看得到（以前只有诊断能查到） -->
-                <TextView
-                    android:id="@+id/version_text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:textColor="@color/kv_text_hint"
-                    android:textSize="11sp" />
+                    android:lineSpacingExtra="3dp" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
@@ -325,7 +255,7 @@
             android:layout_marginStart="10dp"
             android:max="100"
             android:progress="100"
-            android:progressTint="@color/kv_hud_accent" />
+            android:progressTint="#3B82F6" />
     </LinearLayout>
 
     <!-- 防误触锁：锁定时这层透明全屏 View 吞掉所有触摸。

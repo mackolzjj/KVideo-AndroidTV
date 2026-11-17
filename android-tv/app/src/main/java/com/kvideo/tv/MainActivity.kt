@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -21,7 +20,6 @@ import android.util.Rational
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.TouchDelegate
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -105,10 +103,6 @@ class MainActivity : ComponentActivity() {
   var NATIVE_ATTR = 'data-kvideo-native';
   var BRAND_ATTR = 'data-kvideo-brand';
   var BRAND_TEXT_ATTR = 'data-kvideo-brand-text';
-  var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
-  var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
-  var TOPBAR_ATTR = 'data-kvideo-topbar';
-  var ROW_HIDDEN_ATTR = 'data-kvideo-row-hidden';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -193,12 +187,6 @@ class MainActivity : ComponentActivity() {
     moon: svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
     monitor: svg('<rect x="2" y="3" width="20" height="14" rx="2"/>' +
                  '<path d="M8 21h8M12 17v4"/>'),
-    // 三档合成一个循环钮：图标永远等于「当前档位」。
-    // 「跟随系统」用半黑半白的圆，和太阳、月亮都分得开。
-    autoTheme: svg('<circle cx="12" cy="12" r="9"/>' +
-                   '<path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>'),
-    refresh: svg('<path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/>' +
-                 '<polyline points="20.5 3.5 20.5 8.5 15.5 8.5"/>'),
     logout: svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
                 '<polyline points="16 17 21 12 16 7"/>' +
                 '<line x1="21" y1="12" x2="9" y2="12"/>'),
@@ -230,28 +218,14 @@ class MainActivity : ComponentActivity() {
     // 重量，顶栏显得比播放控制还重。裸图标把「导航」降为背景层，播放控制
     // 才是主角。两个分组容器仍保留（.kvideo-group），只为定位弹层和分组
     // 间距服务，本身完全透明。
-    // 图标整组在「站名右侧的剩余空间」里水平居中：既不会被 space-between
-    // 顶到右边缘，也不会紧贴齿轮。logo + 站名仍然贴左。
-    // 六个图标**等距**排成一条，整条居中，并且左右各留 14px 内边距：
-    //   - 站名（KVideo）与第一个图标之间不再贴住
-    //   - 月亮与胶囊右缘之间也有空，不再是「贴边」
-    // 之前两段分组（导航/外观）各自有间距，加上 justify 变化就会一边挤一边空。
-    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px !important;flex:1 1 auto;' +
-      'position:relative;margin-left:0 !important;min-width:0;box-sizing:border-box;' +
-      'padding-left:14px !important;padding-right:14px !important;' +
-      'justify-content:center !important;}' +
-    // 组内必须永远是「紧凑一组」：网页顶栏自己带 justify-between / 按钮
-    // flex:1 之类的规则，会把组里的图标拉成等距散开（截图里就是这个样子），
-    // 和效果图的「左边一撮、右边一颗」完全不是一回事。这里全部用 !important 钉死。
-    '[data-kvideo-menu] .kvideo-group{display:inline-flex !important;align-items:center;' +
-      'justify-content:flex-start !important;' +
-      // 三档主题合成一个循环钮后空出一个位置，间距 4 → 8px：
-      // 6×32+5×8=232px，比原来 7×32+6×4=248px 更窄，同时更好按。
-      'gap:8px !important;padding:0 !important;flex:0 0 auto !important;position:relative;' +
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:12px;flex:1 1 auto;' +
+      'position:relative;margin-left:10px;min-width:0;' +
+      'justify-content:space-between;}' +
+    '[data-kvideo-menu] .kvideo-group{display:inline-flex;align-items:center;' +
+      'gap:4px;padding:0;flex:0 0 auto;position:relative;' +
       'border:0 !important;background:transparent !important;' +
       'border-radius:0 !important;box-shadow:none !important;}' +
-    BTN + '{flex:0 0 auto !important;' +
-      'width:34px;height:34px;min-width:34px;min-height:34px;' +
+    BTN + '{width:34px;height:34px;min-width:34px;min-height:34px;' +
       'display:inline-flex;align-items:center;justify-content:center;position:relative;' +
       'border-radius:999px !important;padding:0;margin:0;cursor:pointer;' +
       // 圆底交给胶囊：按钮自己不画描边和底色，否则胶囊里会再浮出一串圆点。
@@ -261,20 +235,11 @@ class MainActivity : ComponentActivity() {
       'transition:background-color .16s ease,color .16s ease,transform .16s ease;}' +
     BTN + ':active{transform:scale(.92);}' +
     BTN + ' svg{width:20px;height:20px;flex:0 0 auto;}' +
-    BTN + ' .kvideo-ico{display:inline-flex;align-items:center;justify-content:center;}' +
     // 当前主题档位：只把图标染蓝，不画底——壳都去掉了，再冒一个蓝色圆点
     // 反而比原来更像「多出来一个控件」。蓝色只表示「当前是哪一档」。
     BTN + '[data-kvideo-active="1"]{color:#60A5FA !important;}' +
     // 齿轮弹层展开：用中性「加深底色」，绝不用蓝色——否则会被读成主题被切换。
     BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
-    // 主题钮不再被 space-between 推到最右：首页与播放页的顶栏必须长得一样，
-    // 而播放页的那一行比首页窄，剩下的空白会把月亮拉出一个很长的空档。
-    // 现在整排靠 logo 排，两组之间固定 14px。
-    // 主题钮与导航组之间再留一点：贴太紧会像是导航组里的第 6 个图标，
-    // 贴太远（space-between）又会在窄行里拉出长空档。这里固定多给 10px，
-    // 加上容器 gap 14px = 24px，比组内的 8px 明显一档，但远不到右边缘。
-    // 主题钮与导航组之间不再单独加宽：既然要等距，就一律 8px
-    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:0 !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
@@ -307,20 +272,15 @@ class MainActivity : ComponentActivity() {
       // 宽屏：不再用 space-between 把两组推到屏幕两端。700dp 上 7 个图标只占
       // 304px，中间会空出 300+px，顶栏看着像「左边一小撮、右边一小撮」两个孤岛。
       // 整组靠 logo 排、组间固定 16px，右侧留白由 flex 自然吃掉。
-      '[data-kvideo-menu]{justify-content:center !important;gap:16px !important;}}' +
+      '[data-kvideo-menu]{justify-content:flex-start;gap:16px;}}' +
     // 窄屏：按钮 32px、图标间距 4px。7 个图标合计 7×32+6×4 = 248px，
     // 加 logo 与边距约 300px，320dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
       '[data-kvideo-menu]{gap:12px;margin-left:8px;}' +
-      // 组内间距不再降到 6px：6 个图标在 320dp 也放得下（6×30+5×8=220），
-      // 统一 8px 才能和效果图逐像素对上，命中区也就能一律扩到 4px。
-      '[data-kvideo-menu] .kvideo-group{gap:8px;}' +
+      '[data-kvideo-menu] .kvideo-group{gap:4px;}' +
       BTN + '{width:32px;height:32px;min-width:32px;min-height:32px;}' +
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
-      // 320dp 上「圆标 + 站名 + 6 个图标」会挤到重叠，这一档藏回文字
-      prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
-        '{display:none !important;}' +
       BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}' +
       BTN + ' svg{width:18px;height:18px;}}' +
     // 浅色主题：网页顶栏是白底，上面所有「白色 alpha」的层级反馈都会失效
@@ -339,10 +299,8 @@ class MainActivity : ComponentActivity() {
     // 这里只撑「命中区」、不改外观：上下各扩 9px（30+18=48），左右各扩 3px
     // —— 横向不扩到 6px 是因为相邻按钮只隔 4px，扩多了两个按钮的命中区会互压，
     // 点边缘会落到邻居身上。伪元素在按钮内部，不占布局、不挡弹层。
-    // 组内间距已经从 4px 放到 8px，横向命中区跟着从 3px 放到 4px：
-    // 两侧各 4px 正好相接但不重叠（再大就会互压，点击落到 DOM 里靠后的那个）。
     '[data-kvideo-menu] .kvideo-group > button::after{content:"";position:absolute;' +
-      'left:-4px;right:-4px;top:-9px;bottom:-9px;border-radius:999px;}' +
+      'left:-3px;right:-3px;top:-9px;bottom:-9px;border-radius:999px;}' +
     '[data-kvideo-menu] .kvideo-group > button:active::after{' +
       'background:rgba(255,255,255,.06);}' +
     'html[data-kv-light="1"] [data-kvideo-menu] .kvideo-group > button:active::after{' +
@@ -478,41 +436,6 @@ class MainActivity : ComponentActivity() {
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
   // 1.1.33 起与原生音量/亮度/锁定提示统一：45% 半透底、12% 白细描边、10px 圆角、蓝色进度条，
   // 主字收到 18px；去掉实心深底与投影，避免同一播放页交替弹出「大黑框」和「小胶囊」。
-  // 三档合成一个钮后，第一次切档浮一条提示说明循环顺序；2.5 秒淡出，只出现一次。
-  var THEME_HINT_CSS =
-    '[data-kvideo-theme-hint]{position:fixed;left:50%;transform:translateX(-50%);' +
-      'top:calc(env(safe-area-inset-top, 0px) + 62px);z-index:2147483646;' +
-      'padding:8px 14px;border-radius:999px;background:rgba(20,22,28,.94);' +
-      'color:#F2F3F5;font-size:12px;line-height:1.3;white-space:nowrap;' +
-      'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
-      'opacity:0;transition:opacity .25s ease;}';
-
-  // 播放页那一路没有顶栏（页面自己把 sticky 头卸掉了），原来直接 armFallback
-  // 回落到网页原生按钮 —— 于是「首页有注入顶栏、播放页没有」，两页永远不一致。
-  // 现在没有顶栏时把注入菜单改成 body 上的固定栏：同样的 logo + 站名 + 六个图标，
-  // 同样的 36dp 高，只是 position:fixed 贴在屏幕最上方。
-  var DOCK_CSS =
-    // 播放页被固定栏替代的那一行原顶栏：藏掉，免得滚回顶部时看到两条
-    '[' + ROW_HIDDEN_ATTR + ']{display:none !important;}' +
-    '[data-kvideo-menu][data-kvideo-dock="fixed"]{' +
-      'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
-      'width:100% !important;height:36px !important;margin:0 !important;' +
-      'padding:0 14px !important;box-sizing:border-box;' +
-      'display:flex !important;align-items:center;justify-content:center !important;' +
-      'z-index:2147483000 !important;flex:0 0 auto !important;' +
-      'background:rgba(13,15,19,.94);' +
-      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
-    'html[data-kv-light="1"] [data-kvideo-menu][data-kvideo-dock="fixed"]{' +
-      'background:rgba(255,255,255,.95);}' +
-    '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand{' +
-      'position:absolute;left:14px;top:50%;transform:translateY(-50%);' +
-      'display:inline-flex;align-items:center;gap:8px;font-size:15px;' +
-      // 与首页品牌容器等宽（那边自带 12px 右内边距），这样「品牌右沿 + 8px」
-      // 算出来的左侧留白才和首页完全一样，两页图标才会落在同一批 x 坐标上。
-      'font-weight:600;white-space:nowrap;padding-right:12px;box-sizing:content-box;}' +
-    '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand svg{' +
-      'width:26px !important;height:26px !important;flex:0 0 auto;}';
-
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -541,42 +464,14 @@ class MainActivity : ComponentActivity() {
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
       '{display:none !important;}' +
-    // 站名文字：以前整段藏掉（只留 logo 圆标），现在按效果图放出来。
-    // 只给文字元素定排版，容器不再 font-size:0（否则裸文本节点一起被清空）；
-    // img/svg 仍然藏，避免和圆标重复。
-    // 站名压成一行：只留「KVideo」这一个文字叶子，副标题（视频聚合平台）整段隐藏。
-    // 顶栏因此从约 44dp 回到 36dp，图标与文字在垂直方向同一条中线。
-    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_SUB_ATTR + ']']) +
-      '{display:none !important;}' +
-    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_NAME_ATTR + ']']) +
-      '{display:inline-block !important;' +
-      'font-size:15px !important;font-weight:600 !important;line-height:36px !important;' +
-      'letter-spacing:.2px !important;margin-left:8px !important;' +
-      // 112px ≈ 7 个汉字：再长就省略，避免把 6 个图标挤出去
-      'max-width:112px !important;white-space:nowrap !important;overflow:hidden !important;' +
-      'text-overflow:ellipsis !important;vertical-align:middle !important;' +
-      'color:inherit !important;}' +
+    // 站名文字：只藏文字元素，不碰 img/svg；font-size:0 处理容器里的裸文本节点
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
-      '{vertical-align:middle !important;}' +
-    // 关键：品牌容器不许被压缩。网页的 flex 布局会把它挤到只剩 logo 的宽度，
-    // 文字就成了「视频聚…」——不是 max-width 的锅，是父容器宽度不够。
+      '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
-      '{font-size:inherit !important;flex:0 0 auto !important;flex-shrink:0 !important;' +
-      'max-width:none !important;overflow:visible !important;white-space:nowrap !important;' +
-      'height:36px !important;min-height:0 !important;align-items:center !important;' +
-      'margin-right:8px !important;}' +
-    // 行高回到 36dp：原来两行文字把它撑到约 44dp。纵向 padding 一起收掉，
-    // 不然只剩一行时行高仍被 padding 顶住；横 6 个图标 36dp 内垂直居中。
-    prefixed('html.' + READY_CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
-      '{min-height:36px !important;height:36px !important;' +
-      'padding-top:0 !important;padding-bottom:0 !important;align-items:center !important;' +
-      // 网页给 29px 横向 padding：385-58-品牌100-16 = 211px，而 6 个图标需要
-      // 232px —— 图标溢出容器，左边压站名、右边贴屏幕边。收到 12px 后是 245px。
-      'padding-left:12px !important;padding-right:12px !important;box-sizing:border-box !important;}' +
+      '{font-size:0 !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
-    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
+    MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -595,13 +490,10 @@ class MainActivity : ComponentActivity() {
     return '<div class="kvideo-group">' + inner + '</div>';
   }
   function menuHtml() {
-    // 图标 7 → 6：三档主题合成一个循环钮，空出来的位置给「重新加载」，
-    // 组内间距同时从 4px 放到 8px。7×32+6×4=248 → 6×32+5×8=232，反而更宽。
     return grp(
         btn('favorites', '我的收藏', ICON.heart) +
         btn('history', '观看历史', ICON.history) +
         btn('live', '直播', ICON.tv) +
-        btn('reload', '重新加载页面', ICON.refresh) +
         btn('more', '设置', ICON.gear) +
         '<div class="kvideo-menu-popover" data-kvideo-popover hidden>' +
           item('websettings', '网站设置', ICON.globe) +
@@ -611,8 +503,9 @@ class MainActivity : ComponentActivity() {
         '</div>'
       ) +
       grp(
-        '<button type="button" data-kvideo-act="themecycle" aria-label="切换主题"' +
-          ' title="切换主题"><span class="kvideo-ico">' + ICON.monitor + '</span></button>'
+        btn('theme0', '浅色主题', ICON.sun) +
+        btn('theme1', '深色主题', ICON.moon) +
+        btn('theme2', '跟随系统', ICON.monitor)
       );
   }
 
@@ -756,16 +649,13 @@ class MainActivity : ComponentActivity() {
       togglePopover(); return;
     }
     closePopover();
-    if (act === 'live') {
-      if (!clickNative('a[aria-label="直播"]')) go('/iptv');
-    } else if (act === 'favorites') {
+    if (act === 'live') clickNative('a[aria-label="直播"]');
+    else if (act === 'favorites') {
       if (!clickNative('a[aria-label="我的收藏"]') &&
           !clickNative('button[aria-label*="收藏"]') &&
-          !clickByText('收藏这个视频') && !clickByText('收藏')) go('/favorites');
-    } else if (act === 'history') {
-      // 观看历史在上游是弹层、没有独立路由；播放页没有入口时退到收藏页
-      if (!clickNative(history[0])) go('/favorites');
+          !clickByText('收藏这个视频')) clickByText('收藏');
     }
+    else if (act === 'history') clickNative(history[0]);
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
     else if (act === 'appsettings') {
@@ -774,57 +664,30 @@ class MainActivity : ComponentActivity() {
           window.KVideoAndroid.openAppSettings();
         }
       } catch (e) {}
-    } else if (act === 'reload') {
-      try { location.reload(); } catch (e) {}
-    } else if (act === 'themecycle') {
-      // 循环顺序：浅色(0) → 深色(1) → 跟随系统(2) → 浅色
-      var ti = themeIndex();
-      var next = (ti < 0) ? 0 : (ti + 1) % 3;
-      applyTheme(next);
-      showThemeHint(next);
+    } else if (act === 'theme0' || act === 'theme1' || act === 'theme2') {
+      applyTheme(Number(act.slice(5)));
     }
-  }
-
-  // 三档合成一个钮之后，「还有第 3 档」这件事只靠图标传达不出来，
-  // 所以第一次切档时浮一条提示，2.5 秒淡出，之后再点不再打扰。
-  var THEME_NAMES = ['浅色', '深色', '跟随系统'];
-  var themeHintEl = null, themeHintTimer = null;
-  function showThemeHint(next) {
-    if (!themeNodes()[next]) return;            // 页面上没有主题按钮（播放页），不提示
-    try {
-      if (localStorage.getItem('kv-theme-hint') === '1') return;
-      localStorage.setItem('kv-theme-hint', '1');
-    } catch (e) {}
-    if (!themeHintEl) {
-      themeHintEl = document.createElement('div');
-      themeHintEl.setAttribute('data-kvideo-theme-hint', '1');
-      document.body.appendChild(themeHintEl);
-    }
-    themeHintEl.textContent = '已切到「' + THEME_NAMES[next] + '」· 再点依次是 ' +
-      THEME_NAMES[(next + 1) % 3] + ' → ' + THEME_NAMES[(next + 2) % 3];
-    themeHintEl.style.opacity = '1';
-    if (themeHintTimer) clearTimeout(themeHintTimer);
-    themeHintTimer = setTimeout(function () {
-      if (themeHintEl) themeHintEl.style.opacity = '0';
-    }, 2500);
   }
 
   // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
-  // 顶栏图标恒定显示。以前「页面上找不到对应原生控件就隐藏」——播放页没有
-  // 收藏 / 历史 / 直播的锚点，一下就少三个图标，和首页对不上。缺目标的点击
-  // 走路由兜底（KVideo 的 /favorites、/iptv 都是独立路由）。
   function syncAvailability() {
     if (!root) return;
-    var btns = root.querySelectorAll('[data-kvideo-act]');
-    for (var i = 0; i < btns.length; i++) {
-      if (btns[i].style.display === 'none') btns[i].style.display = '';
+    var checks = {
+      live: 'a[aria-label="直播"]',
+      history: history[0],
+      logout: 'button[aria-label="退出登录"]',
+      websettings: 'a[aria-label="设置"]',
+      theme0: themeSels[0],
+      theme1: themeSels[1],
+      theme2: themeSels[2]
+    };
+    for (var act in checks) {
+      if (!Object.prototype.hasOwnProperty.call(checks, act)) continue;
+      var b = root.querySelector('[data-kvideo-act="' + act + '"]');
+      if (!b) continue;
+      var want = q(checks[act]) ? '' : 'none';
+      if (b.style.display !== want) b.style.display = want;
     }
-  }
-  function go(path) {
-    try {
-      if (location.pathname !== path) location.assign(path);
-      return true;
-    } catch (e) { return false; }
   }
   // 当前网页是浅色还是深色：注入的 CSS 里有一批「白 alpha」的层级反馈
   // （logo 内圈、齿轮展开底、按下底色、主题选中蓝），它们默认写给深色顶栏，
@@ -885,25 +748,13 @@ class MainActivity : ComponentActivity() {
   function syncThemeState() {
     if (!root) return;
     var idx = themeIndex();
-    var b = root.querySelector('[data-kvideo-act="themecycle"]');
-    if (!b) return;
-    // 图标 = 当前档位；蓝色只给「浅色 / 深色」，跟随系统用中性色，
-    // 否则会被读成「已经选定某个主题」。
-    var key = String(idx);
-    if (b.getAttribute('data-kv-idx') !== key) {
-      b.setAttribute('data-kv-idx', key);
-      var ico = b.querySelector('.kvideo-ico');
-      if (ico) ico.innerHTML = (idx === 0) ? ICON.sun : (idx === 1 ? ICON.moon : ICON.autoTheme);
-      var names = THEME_NAMES || ['浅色', '深色', '跟随系统'];
-    var label = (idx === 0 || idx === 1 || idx === 2) ?
-        ('当前' + names[idx] + '主题，点按切换') : '切换主题';
-      b.setAttribute('aria-label', label);
-      b.setAttribute('title', label);
+    for (var i = 0; i < 3; i++) {
+      var b = root.querySelector('[data-kvideo-act="theme' + i + '"]');
+      if (!b) continue;
+      var has = b.hasAttribute('data-kvideo-active');
+      if (i === idx && !has) b.setAttribute('data-kvideo-active', '1');
+      else if (i !== idx && has) b.removeAttribute('data-kvideo-active');
     }
-    var want = (idx === 0 || idx === 1);
-    var has = b.hasAttribute('data-kvideo-active');
-    if (want && !has) b.setAttribute('data-kvideo-active', '1');
-    else if (!want && has) b.removeAttribute('data-kvideo-active');
   }
 
   var failTimer = null;
@@ -1012,7 +863,6 @@ class MainActivity : ComponentActivity() {
       }
     }
     var nodes = brand.querySelectorAll('*');
-    var named = brand.querySelector('[' + BRAND_NAME_ATTR + ']') ? true : false;
     for (j = 0; j < nodes.length; j++) {
       n = nodes[j];
       if (n.closest && n.closest('svg')) continue;
@@ -1020,28 +870,6 @@ class MainActivity : ComponentActivity() {
       txt = String(n.textContent || '').trim();
       if (!txt || txt.length > 24) continue;
       if (!n.hasAttribute(BRAND_TEXT_ATTR)) n.setAttribute(BRAND_TEXT_ATTR, '1');
-      // 第一个文字叶子是站名（KVideo），后面的都是副标题（视频聚合平台）。
-      // 压成一行后副标题整个隐藏，只留站名。
-      if (!named) {
-        if (!n.hasAttribute(BRAND_NAME_ATTR)) n.setAttribute(BRAND_NAME_ATTR, '1');
-        named = true;
-      } else if (!n.hasAttribute(BRAND_SUB_ATTR)) {
-        n.setAttribute(BRAND_SUB_ATTR, '1');
-      }
-    }
-    // 顶栏行打标：它自己多半是 flex 容器，行高由内容与 padding 决定，
-    // 压成一行后需要把 min-height 与纵向 padding 一起收掉才能真的回到 36dp。
-    // 从上往下找「同时装着品牌容器和注入菜单」的那一层，它才是真正的顶栏行；
-    // 只按 parentElement 打标有可能打在行内的一个左对齐分组上，把分组压扁。
-    var rowEl = brand.parentElement, hops = 0;
-    while (rowEl && hops < 4) {
-      if (rowEl.querySelector && rowEl.querySelector('[data-kvideo-menu]')) break;
-      rowEl = rowEl.parentElement;
-      hops++;
-    }
-    if (rowEl && rowEl.querySelector && rowEl.querySelector('[data-kvideo-menu]') &&
-        !rowEl.hasAttribute(TOPBAR_ATTR)) {
-      rowEl.setAttribute(TOPBAR_ATTR, '1');
     }
     // 上游也可能把站名放在图片容器的紧邻兄弟里，而不在同一个容器内
     for (i = brandIdx + 1; i < kids.length; i++) {
@@ -2258,61 +2086,6 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
-  // 站名：优先用网页标题的第一段（「xx - KVideo」这种），没有就退回 KVideo。
-  function pageName() {
-    var t = '';
-    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
-    if (!t || t.length > 14) t = 'KVideo';
-    return t;
-  }
-  // 播放页这类没有 sticky 顶栏的路由：把菜单挂到 body 上做固定栏，
-  // 自己补一个 logo + 站名，保证和首页顶栏「完全一致」。
-  function dockFixed(row) {
-    var m = ensureRoot();
-    if (m.parentNode !== document.body) document.body.appendChild(m);
-    if (row && row.setAttribute && !row.hasAttribute(ROW_HIDDEN_ATTR)) {
-      row.setAttribute(ROW_HIDDEN_ATTR, '1');
-    }
-    if (m.getAttribute('data-kvideo-dock') !== 'fixed') {
-      m.setAttribute('data-kvideo-dock', 'fixed');
-      if (!m.querySelector('.kvideo-float-brand')) {
-        var brand = document.createElement('span');
-        brand.className = 'kvideo-float-brand';
-        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
-        m.insertBefore(brand, m.firstChild);
-      }
-    }
-    // 首页的图标是在「品牌右侧的剩余空间」里居中的；固定栏里品牌是绝对定位、
-    // 不参与布局，只靠 padding:14px 会让整排往左偏 60px。这里按品牌实测右沿
-    // 补上同样的左侧留白，两页图标才会落在同一批 x 坐标上。
-    (function () {
-      var brandEl = m.querySelector('.kvideo-float-brand');
-      if (!brandEl) return;
-      var apply = function () {
-        var r = brandEl.getBoundingClientRect();
-        if (r.width > 0) {
-          // 首页：品牌右沿 + 8px 组间距 + 14px 菜单内边距 = +22px
-          m.style.setProperty('padding-left', Math.round(r.right + 22) + 'px', 'important');
-        }
-      };
-      apply();
-      if (window.requestAnimationFrame) requestAnimationFrame(apply);
-      setTimeout(apply, 150);
-    })();
-    document.documentElement.classList.add(READY_CLS);
-    syncAvailability();
-    syncThemeState();
-    bindDiagLongPress();
-    disarmFallback();
-  }
-  // 回到有顶栏的路由时，把固定栏收回行内，并去掉自建的 logo + 站名。
-  function undock(m, row) {
-    if (m.getAttribute('data-kvideo-dock') !== 'fixed') return;
-    m.removeAttribute('data-kvideo-dock');
-    var brand = m.querySelector('.kvideo-float-brand');
-    if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
-  }
-
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2328,17 +2101,9 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { dockFixed(null); return; }
+    if (!bar) { armFallback(); return; }
     var row = pickRow(bar);
-    // 播放页的顶栏行是普通流内元素（不 sticky / fixed）：页面一滚它就跑出屏幕，
-    // 注入菜单跟着消失 —— 这就是「播放页没有菜单栏」的原因。这种情况改挂固定栏，
-    // 并把原来那一行藏掉（否则滚到顶部时会看到两条）。
-    var rowCs = null;
-    try { rowCs = window.getComputedStyle(row); } catch (eRow) { rowCs = null; }
-    var rowPinned = !!rowCs && (rowCs.position === 'fixed' || rowCs.position === 'sticky');
-    if (!rowPinned && document.querySelector('video')) { dockFixed(row); return; }
     var m = ensureRoot();
-    undock(m, row);
     if (m.parentNode !== row) row.appendChild(m);
     hideNativeControls(row, m);
     hideBrandText(row, m);
@@ -2657,8 +2422,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var retryButton: Button
     private lateinit var changeUrlButton: Button
     private lateinit var copyUrlButton: Button
-    private lateinit var openBrowserButton: Button
-    private lateinit var clearUrlButton: ImageButton
     private lateinit var prefs: android.content.SharedPreferences
     private var currentLoadUrl: String = ""
     private var pageLoadFailed = false
@@ -2719,7 +2482,6 @@ class MainActivity : ComponentActivity() {
         fullscreenContainer = findViewById(R.id.fullscreen_container)
         urlInput = findViewById(R.id.url_input)
         statusText = findViewById(R.id.status_text)
-        setupHelpToggle()
         openButton = findViewById(R.id.open_button)
         saveButton = findViewById(R.id.save_button)
         loadProgress = findViewById(R.id.load_progress)
@@ -2728,12 +2490,8 @@ class MainActivity : ComponentActivity() {
         retryButton = findViewById(R.id.retry_button)
         changeUrlButton = findViewById(R.id.change_url_button)
         copyUrlButton = findViewById(R.id.copy_url_button)
-        openBrowserButton = findViewById(R.id.open_browser_button)
-        clearUrlButton = findViewById(R.id.clear_url_button)
         lockOverlay = findViewById(R.id.lock_overlay)
         lockToggle = findViewById(R.id.lock_toggle)
-        expandLockTouchTarget()
-        bindVersionLabel()
         lockHint = findViewById(R.id.lock_hint)
         gestureHud = findViewById(R.id.gesture_hud)
         gestureHudValue = findViewById(R.id.gesture_hud_value)
@@ -2764,20 +2522,6 @@ class MainActivity : ComponentActivity() {
         }
         changeUrlButton.setOnClickListener {
             showSetup(getString(R.string.status_settings_hint))
-        }
-        // 壳打不开但服务端可能没坏：交给系统浏览器验证，省得来回猜。
-        openBrowserButton.setOnClickListener {
-            val url = currentLoadUrl.ifEmpty { normalizeUrl(urlInput.text.toString()) }
-            if (url.isEmpty()) return@setOnClickListener
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-            } catch (e: Exception) {
-                Toast.makeText(this, getString(R.string.status_no_browser), Toast.LENGTH_SHORT).show()
-            }
-        }
-        clearUrlButton.setOnClickListener {
-            urlInput.setText("")
-            urlInput.requestFocus()
         }
         swipeThresholdPx = SWIPE_THRESHOLD_DP * resources.displayMetrics.density
         attachSwipeToHide(webView)
@@ -2810,14 +2554,10 @@ class MainActivity : ComponentActivity() {
             if (!viewsReady) return@doAfterTextChanged
             val saved = prefs.getString(PREF_SERVER_URL, null)?.trim().orEmpty()
             val typed = editable?.toString()?.trim().orEmpty()
-            updateSaveEnabled()
-            val wantClear = if (typed.isEmpty()) View.GONE else View.VISIBLE
-            if (clearUrlButton.visibility != wantClear) clearUrlButton.visibility = wantClear
             if (saved.isNotEmpty() && typed.isNotEmpty() && typed != saved) {
                 setStatus(getString(R.string.status_dirty), StatusTone.WARN)
             }
         }
-        updateSaveEnabled()
 
         webView.apply {
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -2998,69 +2738,6 @@ class MainActivity : ComponentActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    /**
-     * 「保存并重载」只在地址真的变了才可点。
-     * 原来地址一字未改也能点，点下去等于白重载一次，还容易让人以为保存了什么；
-     * 比较用 normalizeUrl，免得 "192.168.1.2:81" 和 "http://192.168.1.2:81/" 被当成两次改动。
-     */
-    private fun updateSaveEnabled() {
-        if (!viewsReady) return
-        val typed = urlInput.text?.toString().orEmpty().trim()
-        val saved = prefs.getString(PREF_SERVER_URL, null)?.trim().orEmpty()
-        val same = try {
-            saved.isNotEmpty() && normalizeUrl(typed) == normalizeUrl(saved)
-        } catch (e: Exception) {
-            false
-        }
-        val enabled = typed.isNotEmpty() && !same
-        saveButton.isEnabled = enabled
-        saveButton.alpha = if (enabled) 1f else 0.45f
-    }
-
-    /**
-     * 设置页底部显示当前版本。
-     * 之前版本号只出现在长按齿轮复制的诊断里 —— 装了什么版本，App 自己都说不清。
-     */
-    private fun bindVersionLabel() {
-        val label = findViewById<TextView>(R.id.version_text) ?: return
-        label.text = getString(
-            R.string.version_label, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE
-        )
-    }
-
-    /**
-     * 锁钮视觉只有 40dp（与网页底栏圆钮同款），低于 48dp 的可点下限；它又正好
-     * 压在视频画面上，横屏单手很容易点空。这里只放大**命中区**：用 TouchDelegate
-     * 在父容器里把 40dp 扩到 56dp，视觉尺寸一个像素都不动。
-     *
-     * 每次布局变化都重装一次 —— 转屏、进出全屏时按钮位置会变，旧矩形会失效。
-     */
-    private fun expandLockTouchTarget() {
-        val parent = lockToggle.parent as? View ?: return
-        val pad = (8 * resources.displayMetrics.density).toInt()
-        lockToggle.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val rect = Rect()
-            lockToggle.getHitRect(rect)
-            if (rect.isEmpty) return@addOnLayoutChangeListener
-            rect.inset(-pad, -pad)
-            parent.touchDelegate = TouchDelegate(rect, lockToggle)
-        }
-    }
-
-    /**
-     * 首次配置页的「使用提示」：默认收起，只留两行要点。
-     * 展开后是手势与诊断说明——这些一年看一次，不该常驻占掉一屏。
-     */
-    private fun setupHelpToggle() {
-        val toggle = findViewById<TextView>(R.id.help_toggle) ?: return
-        val body = findViewById<TextView>(R.id.help_body) ?: return
-        toggle.setOnClickListener {
-            val open = body.visibility == View.VISIBLE
-            body.visibility = if (open) View.GONE else View.VISIBLE
-            toggle.setText(if (open) R.string.setup_help_collapsed else R.string.setup_help_expanded)
-        }
-    }
-
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -3146,8 +2823,6 @@ class MainActivity : ComponentActivity() {
         }
 
         prefs.edit().putString(PREF_SERVER_URL, normalizedUrl).apply()
-        // 保存成功后按钮立刻回到禁用态：地址已经是「已保存」的那一个了。
-        updateSaveEnabled()
         loadConfiguredUrl(normalizedUrl)
     }
 
