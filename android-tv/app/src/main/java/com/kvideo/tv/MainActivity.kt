@@ -2364,6 +2364,13 @@ class MainActivity : ComponentActivity() {
     setHidden: function (v) {
       hidden = !!v;
       document.documentElement.classList.toggle(CLS, hidden);
+      // 只靠 CSS 把行高压 0 仍然会留一条（行外面还有一层带 padding 的容器）。
+      // 收起时直接给这一行 display:none，恢复时摘掉，条带彻底消失。
+      var rows = document.querySelectorAll('[' + TOPBAR_ATTR + ']');
+      for (var ri = 0; ri < rows.length; ri++) {
+        if (hidden) rows[ri].style.setProperty('display', 'none', 'important');
+        else rows[ri].style.removeProperty('display');
+      }
       if (hidden) closePopover();
       mark();
       syncMenu();

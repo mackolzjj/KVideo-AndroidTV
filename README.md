@@ -2,7 +2,7 @@
 
 把 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 的网页包成 Android App 的 **WebView 壳**：顶栏按触屏重排，补上播放手势与防误触锁。APK 内**不含服务端**，需要你自己的 KVideo 地址。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.92`（`versionCode 94`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.93`（`versionCode 95`）
 - 运行要求：Android 8.0（API 26）以上；手机与服务端网络互通
 - 目录 `android-tv/` 与包名 `com.kvideo.tv` 沿用上游，只是标识，**不代表只能跑在 TV 上**
 - 上游 MIT，见 [LICENSE](LICENSE)
