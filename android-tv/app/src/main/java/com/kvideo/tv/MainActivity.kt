@@ -486,6 +486,28 @@ class MainActivity : ComponentActivity() {
       'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
       'opacity:0;transition:opacity .25s ease;}';
 
+  // 播放页那一路没有顶栏（页面自己把 sticky 头卸掉了），原来直接 armFallback
+  // 回落到网页原生按钮 —— 于是「首页有注入顶栏、播放页没有」，两页永远不一致。
+  // 现在没有顶栏时把注入菜单改成 body 上的固定栏：同样的 logo + 站名 + 六个图标，
+  // 同样的 36dp 高，只是 position:fixed 贴在屏幕最上方。
+  var DOCK_CSS =
+    '[data-kvideo-menu][data-kvideo-dock="fixed"]{' +
+      'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
+      'width:100% !important;height:36px !important;margin:0 !important;' +
+      'padding:0 12px !important;box-sizing:border-box;' +
+      'display:flex !important;align-items:center;justify-content:center !important;' +
+      'z-index:2147483000 !important;flex:0 0 auto !important;' +
+      'background:rgba(13,15,19,.94);' +
+      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
+    'html[data-kv-light="1"] [data-kvideo-menu][data-kvideo-dock="fixed"]{' +
+      'background:rgba(255,255,255,.95);}' +
+    '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand{' +
+      'position:absolute;left:14px;top:50%;transform:translateY(-50%);' +
+      'display:inline-flex;align-items:center;gap:8px;font-size:15px;' +
+      'font-weight:600;white-space:nowrap;}' +
+    '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand svg{' +
+      'width:26px !important;height:26px !important;flex:0 0 auto;}';
+
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -546,7 +568,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + HUD_CSS + LOGO_CSS;
+    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -2226,6 +2248,41 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
+  // 站名：优先用网页标题的第一段（「xx - KVideo」这种），没有就退回 KVideo。
+  function pageName() {
+    var t = '';
+    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
+    if (!t || t.length > 14) t = 'KVideo';
+    return t;
+  }
+  // 播放页这类没有 sticky 顶栏的路由：把菜单挂到 body 上做固定栏，
+  // 自己补一个 logo + 站名，保证和首页顶栏「完全一致」。
+  function dockFixed() {
+    var m = ensureRoot();
+    if (m.parentNode !== document.body) document.body.appendChild(m);
+    if (m.getAttribute('data-kvideo-dock') !== 'fixed') {
+      m.setAttribute('data-kvideo-dock', 'fixed');
+      if (!m.querySelector('.kvideo-float-brand')) {
+        var brand = document.createElement('span');
+        brand.className = 'kvideo-float-brand';
+        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
+        m.insertBefore(brand, m.firstChild);
+      }
+    }
+    document.documentElement.classList.add(READY_CLS);
+    syncAvailability();
+    syncThemeState();
+    bindDiagLongPress();
+    disarmFallback();
+  }
+  // 回到有顶栏的路由时，把固定栏收回行内，并去掉自建的 logo + 站名。
+  function undock(m, row) {
+    if (m.getAttribute('data-kvideo-dock') !== 'fixed') return;
+    m.removeAttribute('data-kvideo-dock');
+    var brand = m.querySelector('.kvideo-float-brand');
+    if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
+  }
+
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2241,9 +2298,10 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { armFallback(); return; }
+    if (!bar) { dockFixed(); return; }
     var row = pickRow(bar);
     var m = ensureRoot();
+    undock(m, row);
     if (m.parentNode !== row) row.appendChild(m);
     hideNativeControls(row, m);
     hideBrandText(row, m);
