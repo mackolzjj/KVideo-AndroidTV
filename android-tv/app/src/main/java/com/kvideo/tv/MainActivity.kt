@@ -2308,6 +2308,13 @@ class MainActivity : ComponentActivity() {
   }
 
   function dockFixed() {
+    // 只有播放页才挂固定栏：设置页/列表页滚到某个位置也会「找不到顶栏」，
+    // 一挂就变成一条浮在内容上的菜单。用页面里有没有 video 作为播放页判据。
+    if (!document.querySelector('video')) {
+      // 之前从播放页带过来的固定栏也要收掉，否则设置页顶部会一直挂着一条
+      if (root && root.getAttribute(DOCK_ATTR) === 'fixed') undock(root);
+      return;
+    }
     var m = ensureRoot();
     var rowTxt = m.querySelector('.kvideo-brand-text');
     if (rowTxt && rowTxt.parentNode) rowTxt.parentNode.removeChild(rowTxt);
