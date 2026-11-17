@@ -1149,6 +1149,34 @@ class MainActivity : ComponentActivity() {
   // 菜单展开瞬间的样式快照：确认「两次动画」到底来自网页的 transition、
   // 我们自己的 animation，还是子元素各自动了一套。
   var menuDiag = { speed: null, more: null };
+  // 收起顶栏后顶部那 60px 里究竟是谁在占位：收起瞬间采一次样，供诊断使用。
+  // 长期挂在 debug() 里，即使恢复后再取诊断也能看到上一次收起的现场。
+  var stripProbe = null;
+  function probeTopStrip() {
+    try {
+      var out = [];
+      var vw = window.innerWidth || 0;
+      var pts = [[Math.round(vw / 2), 6], [Math.round(vw / 2), 24], [Math.round(vw / 2), 44]];
+      for (var i = 0; i < pts.length; i++) {
+        var el = document.elementFromPoint(pts[i][0], pts[i][1]);
+        var hops = 0;
+        while (el && hops < 3) {
+          var r0 = el.getBoundingClientRect();
+          out.push({
+            y: pts[i][1],
+            tag: el.tagName,
+            cls: String(el.className || '').slice(0, 46),
+            rect: [Math.round(r0.top), Math.round(r0.height)],
+            pt: (window.getComputedStyle(el).paddingTop || ''),
+            disp: window.getComputedStyle(el).display
+          });
+          el = el.parentElement;
+          hops++;
+        }
+      }
+      stripProbe = out;
+    } catch (e) { stripProbe = 'err'; }
+  }
   var menuTrace = [];
   var menuTraceSeq = 0;
   function startMenuTrace(menu) {
@@ -2372,6 +2400,10 @@ class MainActivity : ComponentActivity() {
         else rows[ri].style.removeProperty('display');
       }
       if (hidden) closePopover();
+      if (hidden) {
+        if (window.requestAnimationFrame) requestAnimationFrame(probeTopStrip);
+        setTimeout(probeTopStrip, 120);
+      }
       mark();
       syncMenu();
     },
@@ -2423,6 +2455,7 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
+        stripProbe: stripProbe,
         panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
         panelSeen: panelSeenCount,
         panelAgoMs: panelSeenAt ? (Date.now() - panelSeenAt) : -1,
