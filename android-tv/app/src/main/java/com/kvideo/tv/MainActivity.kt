@@ -985,7 +985,7 @@ class MainActivity : ComponentActivity() {
   // 每个闸门都往这里记一条原因，长按顶栏齿轮把整份 JSON 复制到剪贴板。
   var gestureDiag = {
     starts: 0, moves: 0, ends: 0, mode: null, reject: null, onVideo: null,
-    hit: '', hitBlock: '', hud: 0, hudDisplay: '', scrub: 0,
+    inPlayer: null, hit: '', hitBlock: '', hud: 0, hudDisplay: '', scrub: 0,
     bar: null, barW: 0, videoDur: null
   };
 
@@ -1056,6 +1056,29 @@ class MainActivity : ComponentActivity() {
     if (b) return b;
     var t = document.querySelector('.slider-thumb');
     return t ? t.parentElement : null;
+  }
+  // 播放器卡片范围：从 video 往上找同时包含进度条的那层容器。
+  // 页面内播放器的 video 只占卡片一小块（线上实测 video 353×199、视口 385 宽，
+  // 92%×26%），手指按到卡片里的黑边或控制区就落空 —— 所以起手判定用「卡片」
+  // 而不是「video 本身」。找不到就退回 video 自身。
+  function playerBox() {
+    var v = document.querySelector('video');
+    if (!v) return null;
+    var bar = findProgressBar();
+    var box = v.parentElement, hops = 0;
+    while (box && box !== document.body && hops < 6) {
+      if (bar && box.contains && box.contains(bar)) break;
+      box = box.parentElement; hops++;
+    }
+    return box || v;
+  }
+  function hitInPlayer(x, y) {
+    var box = playerBox();
+    if (!box) return false;
+    var r = box.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    return x >= r.left - 8 && x <= r.right + 8 &&
+           y >= r.top - 8 && y <= r.bottom + 8;
   }
   function videoInfo() {
     var v = document.querySelector('video');
@@ -1231,8 +1254,11 @@ class MainActivity : ComponentActivity() {
     // 判定「在看视频」用命中的元素比用几何比例更准，也不会误伤浏览页。
     var hitEl = document.elementFromPoint(t0.clientX, t0.clientY);
     var onVideo = !!(hitEl && hitEl.tagName === 'VIDEO');
+    // 卡片内（video + 黑边 + 控制区）都算「在看视频」，卡片外才要求几何全屏
+    var inPlayer = onVideo || hitInPlayer(t0.clientX, t0.clientY);
     gestureDiag.onVideo = onVideo;
-    if (!onVideo && !isFullscreenPlayback()) {
+    gestureDiag.inPlayer = inPlayer;
+    if (!inPlayer && !isFullscreenPlayback()) {
       gestureDiag.reject = 'not-fullscreen';
       scrub = null; return;
     }
@@ -1263,15 +1289,16 @@ class MainActivity : ComponentActivity() {
       rect: rect, bar: bar, usable: usable,
       baseX: usable ? rect.left + (info.t / info.d) * rect.width : 0,
       side: t.clientX < (window.innerWidth || 0) / 2 ? 'left' : 'right',
-      mode: null, target: info.t, synthStarted: false, onVideo: onVideo
+      mode: null, target: info.t, synthStarted: false,
+      onVideo: onVideo, inPlayer: inPlayer
     };
   }
   function onSeekTouchMove(ev) {
     if (synthDispatching || !scrub || ev.touches.length !== 1) return;
     gestureDiag.moves++;
     // 滑动途中退出全屏也要立刻停手，避免继续调音量/亮度；
-    // 但从 <video> 上起手的手势不依赖全屏判定，不能因此中途被砍。
-    if (!scrub.onVideo && !isFullscreenPlayback()) { scrub = null; return; }
+    // 从播放器卡片上起手的手势不依赖全屏判定，不能因此中途被砍。
+    if (!scrub.onVideo && !scrub.inPlayer && !isFullscreenPlayback()) { scrub = null; return; }
     var t = ev.touches[0];
     // 手指滑进网页弹层时立刻收手：这里的上下滑本意是滚菜单，
     // 不能继续调音量/亮度，也不能 preventDefault / stopPropagation 干扰网页。
@@ -2025,6 +2052,13 @@ class MainActivity : ComponentActivity() {
                   '@' + Math.round(r.left) + ',' + Math.round(r.top));
               }
               return o.join(' | ');
+            })(),
+            boxRect: (function () {
+              var b = playerBox();
+              if (!b) return null;
+              var r = b.getBoundingClientRect();
+              return [Math.round(r.width), Math.round(r.height),
+                Math.round(r.left), Math.round(r.top)];
             })(),
             hudDisplay: (function () {
               var x = document.getElementById('kvideo-gesture-hud');
