@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
         private const val PREFS_NAME = "kvideo_tv_settings"
         private const val PREF_SERVER_URL = "server_url"
         private const val TAG = "KVideoMainActivity"
-        private const val SWIPE_THRESHOLD_DP = 48f
+        private const val SWIPE_THRESHOLD_DP = 32f
         /** 锁按钮空闲多久后自动隐藏；触屏或按任意键重新计时并显示。 */
         private const val LOCK_TOGGLE_IDLE_MS = 3_000L
 
@@ -2631,6 +2631,11 @@ class MainActivity : ComponentActivity() {
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
+    // 上滑收起顶栏的诊断：DOWN 次数、最大纵向位移、收起/恢复次数
+    private var swipeDownCount = 0
+    private var swipeMaxDy = 0f
+    private var swipeHideCount = 0
+    private var swipeShowCount = 0
     private lateinit var lockOverlay: View
     private lateinit var lockToggle: ImageButton
     private lateinit var lockHint: TextView
@@ -3538,6 +3543,8 @@ class MainActivity : ComponentActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     swipeStartX = event.x
                     swipeStartY = event.y
+                    swipeDownCount++
+                    swipeMaxDy = 0f
                 }
                 MotionEvent.ACTION_MOVE -> {
                     // 播放页也要能上滑收起顶栏：以前这里有 !playbackActive，
@@ -3546,12 +3553,15 @@ class MainActivity : ComponentActivity() {
                         webView.visibility == View.VISIBLE) {
                         val dx = event.x - swipeStartX
                         val dy = event.y - swipeStartY
+                        if (abs(dy) > abs(swipeMaxDy)) swipeMaxDy = dy
                         // 只认明显垂直、且超过 48dp 的滑动；横滑切换/拖进度条不误触发
                         if (abs(dx) < abs(dy) * 0.8f) {
                             if (dy <= -swipeThresholdPx) {
                                 setChromeHidden(true)
+                                swipeHideCount++
                             } else if (dy >= swipeThresholdPx) {
                                 setChromeHidden(false)
+                                swipeShowCount++
                             }
                         }
                     }
@@ -3792,6 +3802,12 @@ class MainActivity : ComponentActivity() {
             append('(').append(BuildConfig.VERSION_CODE).append(")\n")
             append("playbackActive=").append(playbackActive)
             append(" webPanelOpen=").append(webPanelOpen)
+            append(" chromeHidden=").append(chromeHiddenByGesture)
+            append(" swipeDown=").append(swipeDownCount)
+            append(" swipeMaxDy=").append(swipeMaxDy.toInt())
+            append(" swipeHide=").append(swipeHideCount)
+            append(" swipeShow=").append(swipeShowCount)
+            append(" viewsReady=").append(viewsReady)
             append(" customView=").append(customView != null)
             append(" fullscreenContainer=").append(fullscreenContainer.visibility == View.VISIBLE)
             append(" webViewVisible=").append(webView.visibility == View.VISIBLE)
