@@ -234,6 +234,15 @@
                     android:textColor="@color/kv_text_tertiary"
                     android:textSize="12sp"
                     android:visibility="gone" />
+
+                <!-- 版本号：装的是哪一版，App 里必须看得到（以前只有诊断能查到） -->
+                <TextView
+                    android:id="@+id/version_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/kv_text_hint"
+                    android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>

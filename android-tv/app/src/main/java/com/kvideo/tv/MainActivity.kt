@@ -20,6 +20,7 @@ import android.util.Rational
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.TouchDelegate
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -2554,6 +2555,8 @@ class MainActivity : ComponentActivity() {
         copyUrlButton = findViewById(R.id.copy_url_button)
         lockOverlay = findViewById(R.id.lock_overlay)
         lockToggle = findViewById(R.id.lock_toggle)
+        expandLockTouchTarget()
+        bindVersionLabel()
         lockHint = findViewById(R.id.lock_hint)
         gestureHud = findViewById(R.id.gesture_hud)
         gestureHudValue = findViewById(R.id.gesture_hud_value)
@@ -2798,6 +2801,36 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    /**
+     * 设置页底部显示当前版本。
+     * 之前版本号只出现在长按齿轮复制的诊断里 —— 装了什么版本，App 自己都说不清。
+     */
+    private fun bindVersionLabel() {
+        val label = findViewById<TextView>(R.id.version_text) ?: return
+        label.text = getString(
+            R.string.version_label, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE
+        )
+    }
+
+    /**
+     * 锁钮视觉只有 40dp（与网页底栏圆钮同款），低于 48dp 的可点下限；它又正好
+     * 压在视频画面上，横屏单手很容易点空。这里只放大**命中区**：用 TouchDelegate
+     * 在父容器里把 40dp 扩到 56dp，视觉尺寸一个像素都不动。
+     *
+     * 每次布局变化都重装一次 —— 转屏、进出全屏时按钮位置会变，旧矩形会失效。
+     */
+    private fun expandLockTouchTarget() {
+        val parent = lockToggle.parent as? View ?: return
+        val pad = (8 * resources.displayMetrics.density).toInt()
+        lockToggle.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val rect = Rect()
+            lockToggle.getHitRect(rect)
+            if (rect.isEmpty) return@addOnLayoutChangeListener
+            rect.inset(-pad, -pad)
+            parent.touchDelegate = TouchDelegate(rect, lockToggle)
+        }
     }
 
     /**
