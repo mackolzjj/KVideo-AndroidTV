@@ -2356,6 +2356,9 @@ class MainActivity : ComponentActivity() {
         if (ur.width > 100 && ur.height > 20) { usable = true; break; }
       }
       if (!usable) { dockFixed(); return; }
+      // 要显示、但宿主行已经滚出视口：挂固定栏，让栏当场出现在屏幕顶部。
+      // 否则状态变成「已显示」，眼睛看到的是「没回来」。
+      if (!hidden) { dockFixed(); return; }
       if (root && root.getAttribute(DOCK_ATTR) === 'fixed') {
         var sm = window.scrollY || document.documentElement.scrollTop || 0;
         if (sm > 8) return;                     // 滚动中保持固定栏，不搬回行内
