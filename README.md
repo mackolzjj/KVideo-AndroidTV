@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.48`（`versionCode 50`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.49`（`versionCode 51`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,18 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.49 变更（相对 1.1.48）
+
+**浅色主题下的顶栏修复**：三处「白 alpha」的层级反馈在白底上等于不存在，换成黑系 alpha + 深蓝。
+
+- `html[data-kv-light="1"]` 前缀新增三条覆盖：主题选中档 `#60A5FA` → `#2563EB`（对白底 2.54:1 → 5.17:1，越过 AA 的 4.5:1）；齿轮展开底 `rgba(255,255,255,.20)` → `rgba(0,0,0,.14)`；顶栏按钮按下底 `rgba(0,0,0,.08)`。
+- logo 内圈的 `circle` 一并分支：白 `@10%` 底 / `@20%` 描边 → 黑 `@8%` / `@16%`，紫色三角一个字没动。之前浅色下只剩一个三角悬在白顶栏上。
+- 按下态用 `.kvideo-group > button:active` 限定，弹层里那三个按钮不跟：弹层本身是深色，黑 8% 在它上面等于没有反馈。
+- 新增 `applyLightFlag()`：优先读主题按钮选中档（0 浅 / 1 深 / 2 跟随系统），读不到再量 body 底色亮度，都失败就保持上一次的值——播放页没有主题按钮，不能因此翻回深色。结果写到 `<html data-kv-light>`，由 CSS 选择性覆盖。
+- 调用点放在 `syncMenu()` 的**所有早退之前**：播放页会在下面 return，但标记必须照样到位，否则进播放页后浅色规则整体失效。
+- 「跟随系统」档补了 `matchMedia('(prefers-color-scheme: dark)')` 监听：系统切深浅色时立即跟上，不必重载网页（此前这一档实际只在页面加载时生效）。
+- **深色侧规则一条未动**，深色下与 1.1.48 逐像素一致；只改 CSS 与一个纯判定的 JS 函数，未动菜单 DOM、事件绑定与播放路径。
 
 ## 1.1.48 变更（相对 1.1.47）
 
