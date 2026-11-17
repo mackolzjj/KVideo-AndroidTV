@@ -19,7 +19,7 @@
         android:indeterminate="false"
         android:max="100"
         android:progress="0"
-        android:progressTint="#3B82F6"
+        android:progressTint="@color/kv_accent"
         android:visibility="gone" />
 
     <!-- 主框架加载失败时盖住 WebView 黑屏，给出原因与两个出口。
@@ -28,7 +28,7 @@
         android:id="@+id/error_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#E6101115"
+        android:background="@color/kv_surface"
         android:clickable="true"
         android:focusable="true"
         android:gravity="center"
@@ -40,7 +40,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/load_error_title"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/kv_text_primary"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -50,7 +50,7 @@
             android:layout_marginTop="12dp"
             android:gravity="center"
             android:text="@string/load_error_message"
-            android:textColor="#D7DBE5"
+            android:textColor="@color/kv_text_secondary"
             android:textSize="14sp" />
 
         <TextView
@@ -59,7 +59,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:gravity="center"
-            android:textColor="#9EA7BA"
+            android:textColor="@color/kv_text_tertiary"
             android:textSize="12sp" />
 
         <LinearLayout
@@ -115,7 +115,7 @@
         android:id="@+id/setup_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#E6101115"
+        android:background="@color/kv_surface"
         android:fillViewport="true">
 
         <LinearLayout
@@ -140,7 +140,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/setup_title"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/kv_text_primary"
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
@@ -149,7 +149,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="@string/setup_description"
-                    android:textColor="#D7DBE5"
+                    android:textColor="@color/kv_text_secondary"
                     android:textSize="14sp" />
 
                 <EditText
@@ -166,8 +166,8 @@
                     android:paddingHorizontal="14dp"
                     android:paddingVertical="12dp"
                     android:singleLine="true"
-                    android:textColor="#FFFFFF"
-                    android:textColorHint="#7D8597"
+                    android:textColor="@color/kv_text_primary"
+                    android:textColorHint="@color/kv_text_hint"
                     android:textSize="16sp" />
 
                 <TextView
@@ -176,7 +176,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:text="@string/status_ready"
-                    android:textColor="#F5B942"
+                    android:textColor="@color/kv_status_warn"
                     android:textSize="13sp" />
 
                 <LinearLayout
@@ -211,7 +211,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:text="@string/setup_footer"
-                    android:textColor="#9EA7BA"
+                    android:textColor="@color/kv_text_tertiary"
                     android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
@@ -226,7 +226,9 @@
 
     <!-- 手势提示浮层：左右半屏上下滑调音量/亮度时由壳层原生显示，绕开网页 CSS 不确定性。
          单行小胶囊，与锁定/解锁提示共用半透明背景，字号、内边距、圆角一致；
-         松手约 800ms 后自动隐藏。音量与亮度共用此卡片，外观完全一致。 -->
+         松手约 800ms 后自动隐藏。音量与亮度共用此卡片，外观完全一致。
+         注意：这几层（HUD / 锁钮 / 锁定提示）永远压在视频画面上，所以色值**故意**
+         不跟 values-night 走，始终保持深底白字，浅色系统下才看得清。 -->
     <LinearLayout
         android:id="@+id/gesture_hud"
         android:layout_width="wrap_content"

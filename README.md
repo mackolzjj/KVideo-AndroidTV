@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.49`（`versionCode 51`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.50`（`versionCode 52`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,16 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.50 变更（相对 1.1.49）
+
+**原生层开始跟网页/系统的深浅色**，外加顶栏命中区。
+
+- **状态栏与导航栏跟主题走**：新增桥方法 `KVideoAndroid.setWebTheme(light)`，注入层 `applyLightFlag()` 判定出亮暗后回调它；壳层按「最上面那一层是谁」决定系统栏：设置页/失败页盖着就按系统深浅色，否则按网页上报值，没收到就退回系统。原来写死 `setAppearanceLight*Bars(false)` + `statusBarColor #000000`，浅色网页顶上永远横一条黑边。
+- **原生页有了两套配色**：新增 `values/colors.xml` + `values-night/colors.xml`（同名同值域），`activity_main.xml`、`bg_setup_card`、`bg_url_input` 里 12 处硬编码色改成 `@color/kv_*`；`styles.xml` 拆成浅色（`Theme.Material.Light`）/ 深色（`Theme.Material`）两份，状态栏图标明暗走 `@bool/kv_light_system_bars`。深色取值就是 1.1.48 的硬编码值，所以深色观感不变。
+- **HUD / 锁钮 / 锁定提示不参与**：它们永远压在视频画面上，保持深底白字，代码里留了注释说明这是故意的。
+- **顶栏命中区撑到 48dp**：按钮视觉仍是 30–34px，`::after` 上下各扩 9px、左右各扩 3px。横向只扩 3px 是因为相邻按钮间隔 4px，再大两个按钮的命中区会互压、点边缘落到邻居上。
+- 冷启动窗口底色改 `@color/kv_window_bg`，浅色系统下不再黑闪一下。
 
 ## 1.1.49 变更（相对 1.1.48）
 
