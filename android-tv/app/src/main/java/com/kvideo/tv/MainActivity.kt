@@ -504,11 +504,15 @@ class MainActivity : ComponentActivity() {
       '{display:inline-block !important;' +
       'font-size:15px !important;font-weight:600 !important;line-height:1.2 !important;' +
       'letter-spacing:.2px !important;margin-left:8px !important;' +
-      'max-width:96px !important;white-space:nowrap !important;overflow:hidden !important;' +
+      // 112px ≈ 7 个汉字：再长就省略，避免把 6 个图标挤出去
+      'max-width:112px !important;white-space:nowrap !important;overflow:hidden !important;' +
       'text-overflow:ellipsis !important;vertical-align:middle !important;' +
       'color:inherit !important;}' +
+    // 关键：品牌容器不许被压缩。网页的 flex 布局会把它挤到只剩 logo 的宽度，
+    // 文字就成了「视频聚…」——不是 max-width 的锅，是父容器宽度不够。
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
-      '{font-size:inherit !important;}' +
+      '{font-size:inherit !important;flex:0 0 auto !important;flex-shrink:0 !important;' +
+      'max-width:none !important;overflow:visible !important;white-space:nowrap !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
