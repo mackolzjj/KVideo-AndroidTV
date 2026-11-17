@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
         private const val PREFS_NAME = "kvideo_tv_settings"
         private const val PREF_SERVER_URL = "server_url"
         private const val TAG = "KVideoMainActivity"
-        private const val SWIPE_THRESHOLD_DP = 48f
+        private const val SWIPE_THRESHOLD_DP = 32f
         /** 锁按钮空闲多久后自动隐藏；触屏或按任意键重新计时并显示。 */
         private const val LOCK_TOGGLE_IDLE_MS = 3_000L
 
@@ -496,6 +496,13 @@ class MainActivity : ComponentActivity() {
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
+    // 收起的只是菜单本身，页面那一行还占着高度，会留下一条空白。
+    // 这里把标记过的顶栏行（data-kvideo-topbar）压成 0 高。
+    prefixed('html.' + CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
+      '{height:0 !important;min-height:0 !important;max-height:0 !important;' +
+      'padding-top:0 !important;padding-bottom:0 !important;' +
+      'margin-top:0 !important;margin-bottom:0 !important;' +
+      'border:0 !important;overflow:hidden !important;}' +
     prefixed('html.' + READY_CLS + ' ', [NATIVE_NAV, NATIVE_HEADER]) +
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
@@ -2230,6 +2237,7 @@ class MainActivity : ComponentActivity() {
     var row = pickRow(bar);
     var m = ensureRoot();
     if (m.parentNode !== row) row.appendChild(m);
+    if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
     hideBrandText(row, m);
     document.documentElement.classList.add(READY_CLS);
