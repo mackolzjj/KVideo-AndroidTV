@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
   var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
   var TOPBAR_ATTR = 'data-kvideo-topbar';
   var DOCK_ATTR = 'data-kvideo-dock';
+  var STRAY_ATTR = 'data-kvideo-stray';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -499,7 +500,10 @@ class MainActivity : ComponentActivity() {
       'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
       'font-size:15px;font-weight:600;white-space:nowrap;padding-right:12px;}' +
     '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand svg{' +
-      'width:26px !important;height:26px !important;flex:0 0 auto;}';
+      'width:26px !important;height:26px !important;flex:0 0 auto;}' +
+    // 挂固定栏时把网页自己顶部那条（div 形态、nav/header 选择器命不中的）
+    // 藏掉，否则会和我们的栏叠在一起，看起来像「图标少了/不对」。
+    '[' + STRAY_ATTR + ']{display:none !important;}';
 
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
@@ -2254,8 +2258,28 @@ class MainActivity : ComponentActivity() {
     return t;
   }
   // 没有顶栏的页面（播放页）：菜单挂 body，固定顶部，自己补 logo + 站名。
+  // 播放页顶部那条是 div 形态（nav/header 选择器命不中），按几何兜底：
+  // 贴顶、横向接近满宽、高度 18–120 的元素，标记后由 CSS 隐藏。
+  var strayCount = 0;
+  function hideStrayHeaders() {
+    var l = document.querySelectorAll(
+      'nav,header,[class*="navbar"],[class*="topbar"],[class*="top-0"],[class*="sticky"]');
+    var vw = window.innerWidth || 0;
+    var out = 0;
+    for (var i = 0; i < l.length; i++) {
+      var e = l[i];
+      if (!e || !e.getBoundingClientRect) continue;
+      if (root && (e === root || (e.contains && e.contains(root)))) continue;
+      var r = e.getBoundingClientRect();
+      if (r.width < vw * 0.6 || r.height < 18 || r.height > 120) continue;
+      if (r.top > 120 || r.bottom < 0) continue;
+      if (!e.hasAttribute(STRAY_ATTR)) { e.setAttribute(STRAY_ATTR, '1'); out++; }
+    }
+    return out;
+  }
   function dockFixed() {
     var m = ensureRoot();
+    strayCount = hideStrayHeaders();
     if (m.parentNode !== document.body) document.body.appendChild(m);
     if (m.getAttribute(DOCK_ATTR) !== 'fixed') {
       m.setAttribute(DOCK_ATTR, 'fixed');
@@ -2408,6 +2432,11 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
+        dockFixed: (function () {
+          try { return document.querySelectorAll('[' + DOCK_ATTR + '="fixed"]').length; }
+          catch (e) { return -1; }
+        })(),
+        strayHidden: document.querySelectorAll('[' + STRAY_ATTR + ']').length,
         panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
         panelSeen: panelSeenCount,
         panelAgoMs: panelSeenAt ? (Date.now() - panelSeenAt) : -1,
