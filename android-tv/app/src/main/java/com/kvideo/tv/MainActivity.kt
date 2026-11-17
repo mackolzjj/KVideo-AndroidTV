@@ -229,9 +229,11 @@ class MainActivity : ComponentActivity() {
     // 重量，顶栏显得比播放控制还重。裸图标把「导航」降为背景层，播放控制
     // 才是主角。两个分组容器仍保留（.kvideo-group），只为定位弹层和分组
     // 间距服务，本身完全透明。
+    // 图标整组在「站名右侧的剩余空间」里水平居中：既不会被 space-between
+    // 顶到右边缘，也不会紧贴齿轮。logo + 站名仍然贴左。
     '[data-kvideo-menu]{display:flex;align-items:center;gap:14px;flex:1 1 auto;' +
       'position:relative;margin-left:10px;min-width:0;' +
-      'justify-content:flex-start !important;}' +
+      'justify-content:center !important;}' +
     // 组内必须永远是「紧凑一组」：网页顶栏自己带 justify-between / 按钮
     // flex:1 之类的规则，会把组里的图标拉成等距散开（截图里就是这个样子），
     // 和效果图的「左边一撮、右边一颗」完全不是一回事。这里全部用 !important 钉死。
