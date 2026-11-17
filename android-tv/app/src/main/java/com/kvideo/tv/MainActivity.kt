@@ -2273,6 +2273,13 @@ class MainActivity : ComponentActivity() {
         viewsReady = true
         attachSafeAreaInsets()
         lockToggle.setOnClickListener { togglePlaybackLock() }
+        // 全屏播放时注入层的顶栏是看不见的（网页全屏会把 nav 藏掉，或走原生
+        // onShowCustomView 把 WebView 整个抽走），所以诊断入口挂在锁钮上：
+        // 长按 1 秒把「壳层状态 + 注入层 debug JSON」复制到剪贴板。
+        lockToggle.setOnLongClickListener {
+            copyFullDiagnostics()
+            true
+        }
         copyUrlButton.setOnClickListener {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             manager.setPrimaryClip(ClipData.newPlainText("KVideo URL", currentLoadUrl))
@@ -3060,6 +3067,49 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /**
+     * 全屏播放时注入层的顶栏不可见（网页把 nav 藏了，或走原生 onShowCustomView 把
+     * WebView 整个抽走），所以诊断入口挂在锁钮的长按上：向网页要一份 debug JSON，
+     * 拼上壳层状态后复制到剪贴板。
+     */
+    private fun copyFullDiagnostics() {
+        if (!::webView.isInitialized) return
+        val js = "(function(){try{return JSON.stringify(window.KVideoChrome" +
+            "?window.KVideoChrome.debug():{err:'no-chrome'});}catch(e){return 'ERR:'+e;}})()"
+        webView.evaluateJavascript(js) { value ->
+            val text = try {
+                (org.json.JSONTokener(value).nextValue() as? String) ?: value
+            } catch (error: Exception) {
+                value
+            }
+            copyDiagReport(text)
+        }
+    }
+
+    private fun copyDiagReport(js: String) {
+        val report = buildString {
+            append("KVideo 手势诊断 v").append(BuildConfig.VERSION_NAME)
+            append('(').append(BuildConfig.VERSION_CODE).append(")\n")
+            append("playbackActive=").append(playbackActive)
+            append(" customView=").append(customView != null)
+            append(" fullscreenContainer=").append(fullscreenContainer.visibility == View.VISIBLE)
+            append(" webViewVisible=").append(webView.visibility == View.VISIBLE)
+            append(" nativeTouches=").append(nativeTouchCount)
+            append(" orientation=").append(resources.configuration.orientation)
+            append(" density=").append(resources.displayMetrics.density)
+            append(" screen=").append(resources.displayMetrics.widthPixels)
+            append('x').append(resources.displayMetrics.heightPixels)
+            append('\n').append(js)
+        }
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        try {
+            manager.setPrimaryClip(ClipData.newPlainText("KVideo diag", report))
+            Toast.makeText(this, getString(R.string.diag_copied), Toast.LENGTH_LONG).show()
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to copy diagnostics", error)
+        }
+    }
+
     private inner class AndroidPlayerBridge {
         /**
          * 注入层长按齿轮时把诊断 JSON 交过来。真机上没有 console，
@@ -3067,35 +3117,7 @@ class MainActivity : ComponentActivity() {
          */
         @JavascriptInterface
         fun copyDiagnostics(js: String) {
-            val report = buildString {
-                append("KVideo 手势诊断 v")
-                append(BuildConfig.VERSION_NAME)
-                append('(').append(BuildConfig.VERSION_CODE).append(")\n")
-                append("playbackActive=").append(playbackActive)
-                append(" customView=").append(customView != null)
-                append(" fullscreenContainer=").append(fullscreenContainer.visibility == View.VISIBLE)
-                append(" webViewVisible=").append(this@MainActivity.webView.visibility == View.VISIBLE)
-                append(" nativeTouches=").append(nativeTouchCount)
-                append(" orientation=").append(resources.configuration.orientation)
-                append(" density=").append(resources.displayMetrics.density)
-                append(" screen=").append(resources.displayMetrics.widthPixels)
-                append('x').append(resources.displayMetrics.heightPixels)
-                append('\n')
-                append(js)
-            }
-            runOnUiThread {
-                try {
-                    val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    manager.setPrimaryClip(ClipData.newPlainText("KVideo diag", report))
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.diag_copied),
-                        Toast.LENGTH_LONG
-                    ).show()
-                } catch (error: Exception) {
-                    Log.w(TAG, "Failed to copy diagnostics", error)
-                }
-            }
+            runOnUiThread { copyDiagReport(js) }
         }
 
         /**
