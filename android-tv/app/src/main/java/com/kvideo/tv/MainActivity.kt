@@ -2459,7 +2459,15 @@ class MainActivity : ComponentActivity() {
         if (window.getComputedStyle(floats[i]).display === 'none') hiddenCount++;
       }
       var _m = root, _cs = _m && window.getComputedStyle ? window.getComputedStyle(_m) : null;
+      var _host = _m && _m.parentNode;
+      var _bt = document.querySelector('.kvideo-float-brand b');
+      var _btR = _bt ? _bt.getBoundingClientRect() : null;
       return {
+        host: _host ? (String(_host.tagName || '?') + '/' + (_m.getAttribute(DOCK_ATTR) || 'row')) : 'none',
+        hostRect: _host && _host.getBoundingClientRect ? [
+          Math.round(_host.getBoundingClientRect().top),
+          Math.round(_host.getBoundingClientRect().height)] : null,
+        brandTxt: _bt ? (_bt.textContent + '@' + Math.round(_btR.width)) : 'none',
         hideLog: (window.__kvHideLog || []).slice(-8),
         menuSoft: _cs ? { op: _cs.opacity, tr: String(_cs.transform || '').slice(0, 20), vis: _cs.visibility } : null,
         rowH: (_m && _m.parentNode && _m.parentNode.getBoundingClientRect) ?
