@@ -262,7 +262,10 @@ class MainActivity : ComponentActivity() {
     // 主题钮不再被 space-between 推到最右：首页与播放页的顶栏必须长得一样，
     // 而播放页的那一行比首页窄，剩下的空白会把月亮拉出一个很长的空档。
     // 现在整排靠 logo 排，两组之间固定 14px。
-    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:0 !important;}' +
+    // 主题钮与导航组之间再留一点：贴太紧会像是导航组里的第 6 个图标，
+    // 贴太远（space-between）又会在窄行里拉出长空档。这里固定多给 10px，
+    // 加上容器 gap 14px = 24px，比组内的 8px 明显一档，但远不到右边缘。
+    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:10px !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
