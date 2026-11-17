@@ -2681,6 +2681,8 @@ class MainActivity : ComponentActivity() {
     // 一次手势只判定一次：否则同一次滑动里每个 MOVE 都会重复触发收起/展开，
     // 来回抖就是看到的「顶栏闪一下」。
     private var swipeHandled = false
+    // 按住的时长：长按之后手指再滑，多半是在选字/调出长按菜单，不该收起顶栏
+    private var swipeDownAt = 0L
     private lateinit var lockOverlay: View
     private lateinit var lockToggle: ImageButton
     private lateinit var lockHint: TextView
@@ -3589,6 +3591,7 @@ class MainActivity : ComponentActivity() {
                     swipeStartX = event.x
                     swipeStartY = event.y
                     swipeHandled = false
+                    swipeDownAt = event.eventTime
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (viewsReady && !playbackActive && !isSetupVisible() && customView == null &&
@@ -3596,6 +3599,11 @@ class MainActivity : ComponentActivity() {
                         val dx = event.x - swipeStartX
                         val dy = event.y - swipeStartY
                         // 只认明显垂直、且超过 48dp 的滑动；横滑切换/拖进度条不误触发
+                        // 长按超过 500ms 才开始滑动：本次手势不参与收起/展开
+                        val heldMs = event.eventTime - swipeDownAt
+                        if (!swipeHandled && heldMs > 500L) {
+                            swipeHandled = true
+                        }
                         if (!swipeHandled && abs(dx) < abs(dy) * 0.8f) {
                             if (dy <= -swipeThresholdPx) {
                                 swipeHandled = true
