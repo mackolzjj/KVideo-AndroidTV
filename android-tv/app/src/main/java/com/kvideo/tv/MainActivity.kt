@@ -2342,7 +2342,27 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { dockFixed(); return; }
+    // 关键：`bar` 只是「当前可见的顶栏」。页面一滚动它就会滚出视口（top > 200 就
+    // 查询不到），以前这里直接 dockFixed() —— 于是滚动中在「行内」和「固定栏」之间
+    // 来回搬家，看到的就是整条栏闪一下。
+    // 现在只有**页面里根本没有 nav/header**（播放页）才挂固定栏；
+    // 有顶栏、只是暂时滚出视口时保持原状，不重建。
+    if (!bar) {
+      // 判断「这个页面到底有没有顶栏」：有 nav/header 且尺寸正常（只是滚出视口）
+      // 就当有，保持原状；一个像样的都没有（播放页）才挂固定栏。
+      var usable = false;
+      for (var ui = 0; ui < navs.length; ui++) {
+        var ur = navs[ui].getBoundingClientRect();
+        if (ur.width > 100 && ur.height > 20) { usable = true; break; }
+      }
+      if (!usable) { dockFixed(); return; }
+      if (root && root.getAttribute(DOCK_ATTR) === 'fixed') {
+        var sm = window.scrollY || document.documentElement.scrollTop || 0;
+        if (sm > 8) return;                     // 滚动中保持固定栏，不搬回行内
+      }
+      armFallback();
+      return;
+    }
     var row = pickRow(bar);
     var m = ensureRoot();
     undock(m);
