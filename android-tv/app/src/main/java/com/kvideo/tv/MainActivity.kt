@@ -520,6 +520,12 @@ class MainActivity : ComponentActivity() {
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
+    // 只把菜单自己 translateY 上去，页面那一行还占着 36dp，会留下一条空白带
+    // （截图里圈出来的「多出来的一条」）。收起时把行高、内边距一起压成 0。
+    prefixed('html.' + CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
+      '{height:0 !important;min-height:0 !important;max-height:0 !important;' +
+      'padding-top:0 !important;padding-bottom:0 !important;border:0 !important;' +
+      'overflow:hidden !important;}' +
     prefixed('html.' + READY_CLS + ' ', [NATIVE_NAV, NATIVE_HEADER]) +
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
@@ -2301,6 +2307,8 @@ class MainActivity : ComponentActivity() {
     var m = ensureRoot();
     undock(m);
     if (m.parentNode !== row) row.appendChild(m);
+    // 收起顶栏时要靠这个标记把行高压成 0，所以每次 sync 都确保标上
+    if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
     hideBrandText(row, m);
     document.documentElement.classList.add(READY_CLS);
