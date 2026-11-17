@@ -642,7 +642,10 @@ class MainActivity : ComponentActivity() {
     ev.preventDefault();
     ev.stopPropagation();
     var act = b.getAttribute('data-kvideo-act');
-    if (act === 'more') { togglePopover(); return; }
+    if (act === 'more') {
+      if (diagFired) { diagFired = false; return; }
+      togglePopover(); return;
+    }
     closePopover();
     if (act === 'live') clickNative('a[aria-label="直播"]');
     else if (act === 'favorites') {
@@ -978,6 +981,13 @@ class MainActivity : ComponentActivity() {
   var scrub = null;
   var synthDispatching = false;
   var hudTimer = null;
+  // 手势诊断：真机上「手势没反应」时，唯一能拿到证据的渠道。
+  // 每个闸门都往这里记一条原因，长按顶栏齿轮把整份 JSON 复制到剪贴板。
+  var gestureDiag = {
+    starts: 0, moves: 0, ends: 0, mode: null, reject: null,
+    hit: '', hitBlock: '', hud: 0, hudDisplay: '', scrub: 0,
+    bar: null, barW: 0, videoDur: null
+  };
 
   function kvClamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function kvTime(s) {
@@ -1006,6 +1016,8 @@ class MainActivity : ComponentActivity() {
       Math.round(kvClamp(ratio, 0, 1) * 100) + '%';
     // 注意：HUD_CSS 里 display:none 带了 !important，必须用内联 important 才能覆盖。
     h.style.setProperty('display', 'block', 'important');
+    gestureDiag.hud++;
+    try { gestureDiag.hudDisplay = window.getComputedStyle(h).display; } catch (e) {}
   }
   function hideHud(delay) {
     if (hudTimer) clearTimeout(hudTimer);
@@ -1150,8 +1162,12 @@ class MainActivity : ComponentActivity() {
   }
   function seekGestureAllowed(x, y) {
     var h = window.innerHeight || 0;
-    if (h > 0 && (y < h * 0.12 || y > h * 0.78)) return false;
+    if (h > 0 && (y < h * 0.12 || y > h * 0.78)) {
+      gestureDiag.reject = 'edge:y=' + Math.round(y) + '/' + h;
+      return false;
+    }
     var el = document.elementFromPoint(x, y);
+    gestureDiag.hit = el ? (el.tagName + '.' + String(el.className || '').slice(0, 40)) : 'null';
     if (el && el.closest && (
         el.closest('[data-kvideo-menu]') ||
         el.closest('input,select,textarea') ||
@@ -1159,9 +1175,21 @@ class MainActivity : ComponentActivity() {
         el.closest('[data-kvideo-popover]') ||
         el.closest('[data-kvideo-hud]') ||
         el.closest('.slider-track') ||
-        el.closest('button,a'))) return false;
+        el.closest('button,a'))) {
+      gestureDiag.reject = 'widget';
+      gestureDiag.hitBlock = (function () {
+        var n = el.closest(
+          '[data-kvideo-menu],input,select,textarea,[role="dialog"],' +
+          '[data-kvideo-popover],[data-kvideo-hud],.slider-track,button,a');
+        return n ? n.tagName + (n.getAttribute('aria-label') ? '[' + n.getAttribute('aria-label') + ']' : '') : '?';
+      })();
+      return false;
+    }
     // 三点菜单/倍速菜单里上下滑只滚菜单，不触发音量、亮度、拖进度
-    if (elInOverlay(el)) return false;
+    if (elInOverlay(el)) {
+      gestureDiag.reject = 'overlay';
+      return false;
+    }
     return true;
   }
   // 手势只在「全屏播放页」生效：首页/详情页/内嵌预览的滑动不应改音量、
@@ -1185,17 +1213,29 @@ class MainActivity : ComponentActivity() {
   }
   function onSeekTouchStart(ev) {
     if (synthDispatching) return;
-    if (!isFullscreenPlayback()) { scrub = null; return; }
-    if (ev.touches.length !== 1) { scrub = null; return; }
+    gestureDiag.starts++;
+    if (!isFullscreenPlayback()) { gestureDiag.reject = 'not-fullscreen'; scrub = null; return; }
+    if (ev.touches.length !== 1) { gestureDiag.reject = 'multitouch'; scrub = null; return; }
     markOverlayMenus();
-    if (overlayMenuVisible()) { scrub = null; return; }
+    if (overlayMenuVisible()) { gestureDiag.reject = 'overlay-menu'; scrub = null; return; }
     var t = ev.touches[0];
     if (!seekGestureAllowed(t.clientX, t.clientY)) { scrub = null; return; }
     var info = videoInfo();
-    if (!info) { scrub = null; return; }
+    if (!info) {
+      var vv = document.querySelector('video');
+      gestureDiag.reject = 'no-video-info';
+      gestureDiag.videoDur = vv ? String(vv.duration) : 'no-video';
+      scrub = null; return;
+    }
     var bar = findProgressBar();
     var rect = bar ? bar.getBoundingClientRect() : null;
     var usable = !!(rect && rect.width > 120);
+    gestureDiag.reject = null;
+    gestureDiag.mode = null;
+    gestureDiag.hitBlock = '';
+    gestureDiag.bar = bar ? (bar.className || bar.tagName) : 'none';
+    gestureDiag.barW = rect ? Math.round(rect.width) : 0;
+    gestureDiag.videoDur = info.d;
     scrub = {
       x: t.clientX, y: t.clientY, lastY: t.clientY,
       t0: info.t, d: info.d, v: info.v,
@@ -1208,6 +1248,7 @@ class MainActivity : ComponentActivity() {
   }
   function onSeekTouchMove(ev) {
     if (synthDispatching || !scrub || ev.touches.length !== 1) return;
+    gestureDiag.moves++;
     // 滑动途中退出全屏也要立刻停手，避免继续调音量/亮度
     if (!isFullscreenPlayback()) { scrub = null; return; }
     var t = ev.touches[0];
@@ -1221,6 +1262,8 @@ class MainActivity : ComponentActivity() {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_MIN_PX) return;
       if (Math.abs(dx) >= Math.abs(dy) * AXIS_RATIO) {
         scrub.mode = 'scrub';
+        gestureDiag.mode = 'scrub';
+        gestureDiag.scrub++;
         if (scrub.usable) {
           scrub.synthStarted = synthTouch('touchstart', scrub.bar,
             kvClamp(scrub.baseX, scrub.rect.left, scrub.rect.right),
@@ -1228,6 +1271,7 @@ class MainActivity : ComponentActivity() {
         }
       } else if (Math.abs(dy) >= Math.abs(dx) * AXIS_RATIO) {
         scrub.mode = 'vertical';
+        gestureDiag.mode = 'vertical';
       } else return;
     }
     if (scrub.mode === 'scrub') {
@@ -1807,6 +1851,7 @@ class MainActivity : ComponentActivity() {
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
+    bindDiagLongPress();
     disarmFallback();
   }
 
@@ -1822,6 +1867,36 @@ class MainActivity : ComponentActivity() {
   }
 
   var hidden = false;
+  // 长按顶栏齿轮（600ms）→ 把整份诊断 JSON 交给壳层复制到剪贴板。
+  // 真机上拿不到 console，这是唯一可靠的取证通道。
+  var diagFired = false;
+  function bindDiagLongPress() {
+    if (!root) return;
+    var g = root.querySelector('[data-kvideo-act="more"]');
+    if (!g || g.getAttribute('data-kvideo-diag') === '1') return;
+    g.setAttribute('data-kvideo-diag', '1');
+    var timer = null;
+    function cancel() {
+      if (timer) { clearTimeout(timer); timer = null; }
+    }
+    g.addEventListener('touchstart', function () {
+      cancel();
+      timer = setTimeout(function () {
+        timer = null;
+        diagFired = true;
+        try {
+          if (window.KVideoAndroid && window.KVideoAndroid.copyDiagnostics) {
+            window.KVideoAndroid.copyDiagnostics(
+              JSON.stringify(window.KVideoChrome.debug()));
+          }
+        } catch (e) {}
+      }, 600);
+    }, { passive: true });
+    g.addEventListener('touchmove', cancel, { passive: true });
+    g.addEventListener('touchend', cancel);
+    g.addEventListener('touchcancel', cancel);
+    g.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+  }
   window.KVideoChrome = {
     setHidden: function (v) {
       hidden = !!v;
@@ -1875,6 +1950,32 @@ class MainActivity : ComponentActivity() {
         seekFlash: document.querySelectorAll('[data-kvideo-seek-show]').length,
         progressBar: document.querySelectorAll('.slider-track').length,
         gestureHud: document.querySelectorAll('[data-kvideo-hud]').length,
+        // —— 手势诊断（长按齿轮复制这份）——
+        gesture: gestureDiag,
+        gestureEnv: (function () {
+          var v = document.querySelector('video');
+          var r = v ? v.getBoundingClientRect() : null;
+          var w = window.innerWidth || 0, h = window.innerHeight || 0;
+          return {
+            fullscreenApi: !!(document.fullscreenElement || document.webkitFullscreenElement),
+            isFullscreenPlayback: isFullscreenPlayback(),
+            vw: w, vh: h,
+            videoRect: r ? [Math.round(r.width), Math.round(r.height), Math.round(r.left), Math.round(r.top)] : null,
+            videoRatio: r && w > 0 && h > 0 ?
+              (Math.round(r.width / w * 100) + '%x' + Math.round(r.height / h * 100) + '%') : null,
+            paused: v ? v.paused : null,
+            duration: v ? String(v.duration) : null,
+            barSel: (function () {
+              var b = findProgressBar();
+              return b ? (b.className || b.tagName) : 'none';
+            })(),
+            hudCount: document.querySelectorAll('[data-kvideo-hud]').length,
+            hudDisplay: (function () {
+              var x = document.getElementById('kvideo-gesture-hud');
+              return x ? window.getComputedStyle(x).display : 'absent';
+            })()
+          };
+        })(),
         videoDuration: (function () {
           var v = document.querySelector('video');
           return v && isFinite(v.duration) ? Math.round(v.duration) : -1;
@@ -2038,6 +2139,8 @@ class MainActivity : ComponentActivity() {
     private var lastSafeRightCss = -1
     /** 手势百分比最近一次到达的边界值（0 / 100），用于只在刚碰到边界时震一下。 */
     private var lastGestureBoundary = -1
+    /** 播放状态下的触摸次数（诊断用）：JS 计到的 starts 为 0 而这里有数，说明触摸没进网页。 */
+    private var nativeTouchCount = 0
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val hideLockHint = Runnable {
         lockHint.visibility = View.GONE
@@ -2265,7 +2368,10 @@ class MainActivity : ComponentActivity() {
      * Activity 层仍会先收到这里，所以触屏一定能把锁钮唤回来。
      */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) scheduleLockToggleHide()
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            scheduleLockToggleHide()
+            if (playbackActive) nativeTouchCount++
+        }
         return super.dispatchTouchEvent(event)
     }
 
@@ -2865,6 +2971,43 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class AndroidPlayerBridge {
+        /**
+         * 注入层长按齿轮时把诊断 JSON 交过来。真机上没有 console，
+         * 这是拿「手势为什么没反应」证据的唯一通道：附上壳层状态再复制到剪贴板。
+         */
+        @JavascriptInterface
+        fun copyDiagnostics(js: String) {
+            val report = buildString {
+                append("KVideo 手势诊断 v")
+                append(BuildConfig.VERSION_NAME)
+                append('(').append(BuildConfig.VERSION_CODE).append(")\n")
+                append("playbackActive=").append(playbackActive)
+                append(" customView=").append(customView != null)
+                append(" fullscreenContainer=").append(fullscreenContainer.visibility == View.VISIBLE)
+                append(" webViewVisible=").append(this@MainActivity.webView.visibility == View.VISIBLE)
+                append(" nativeTouches=").append(nativeTouchCount)
+                append(" orientation=").append(resources.configuration.orientation)
+                append(" density=").append(resources.displayMetrics.density)
+                append(" screen=").append(resources.displayMetrics.widthPixels)
+                append('x').append(resources.displayMetrics.heightPixels)
+                append('\n')
+                append(js)
+            }
+            runOnUiThread {
+                try {
+                    val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    manager.setPrimaryClip(ClipData.newPlainText("KVideo diag", report))
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.diag_copied),
+                        Toast.LENGTH_LONG
+                    ).show()
+                } catch (error: Exception) {
+                    Log.w(TAG, "Failed to copy diagnostics", error)
+                }
+            }
+        }
+
         /**
          * 网页上报自己是浅色还是深色底（注入层 applyLightFlag 已经把这件事判出来了）。
          * 系统栏据此换底色与图标明暗：浅色网页配白状态栏 + 深图标，深色网页反之。

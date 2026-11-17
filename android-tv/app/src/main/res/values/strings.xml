@@ -21,6 +21,7 @@
     <string name="button_change_url">修改地址</string>
     <string name="button_copy_url">复制地址</string>
     <string name="status_copied">地址已复制</string>
+    <string name="diag_copied">诊断信息已复制，粘贴发给我</string>
     <string name="lock_button_lock">锁定播放画面</string>
     <string name="lock_button_unlock">解除锁定</string>
     <string name="lock_hint_locked">已锁定</string>

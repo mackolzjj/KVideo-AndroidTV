@@ -2,7 +2,7 @@
 
 把 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 的网页包成 Android App 的 **WebView 壳**：顶栏按触屏重排，补上播放手势与防误触锁。APK 内**不含服务端**，需要你自己的 KVideo 地址。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.52`（`versionCode 54`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.53`（`versionCode 55`）
 - 运行要求：Android 8.0（API 26）以上；手机与服务端网络互通
 - 目录 `android-tv/` 与包名 `com.kvideo.tv` 沿用上游，只是标识，**不代表只能跑在 TV 上**
 - 上游 MIT，见 [LICENSE](LICENSE)
@@ -114,7 +114,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - **只改样式，不搬 DOM**：React 重渲染会在原父节点 `removeChild`，`appendChild` 必抛 `NotFoundError`。
 - 挂 `MutationObserver`（`class` / `aria-label`）+ 1 秒补扫 + `pageshow` / `resize` / `orientationchange`；只挂一次 `syncMenu()` 在播放页会提前返回而失效。
 - 菜单插不上时 1.5 秒后撤 `kvideo-menu-ready`、加 `kvideo-dock-failed`，原生入口自动回落。
-- 排查：页面里执行 `window.KVideoChrome.debug()`，`window.KVideoChrome.sync()` 可手动重扫。
+- 排查：**长按顶栏齿轮 0.6 秒** → 整份诊断 JSON（壳层状态、触摸计数、各闸门拒绝原因）复制到剪贴板；也可在页面里执行 `window.KVideoChrome.debug()`，`window.KVideoChrome.sync()` 可手动重扫。
 
 ## 已知限制
 
