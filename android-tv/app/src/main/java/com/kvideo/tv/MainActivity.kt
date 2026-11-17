@@ -239,7 +239,7 @@ class MainActivity : ComponentActivity() {
       'justify-content:flex-start !important;' +
       // 三档主题合成一个循环钮后空出一个位置，间距 4 → 8px：
       // 6×32+5×8=232px，比原来 7×32+6×4=248px 更窄，同时更好按。
-      'gap:8px !important;padding:0 !important;flex:0 0 auto !important;position:relative;' +
+      'gap:6px !important;padding:0 !important;flex:0 0 auto !important;position:relative;' +
       'border:0 !important;background:transparent !important;' +
       'border-radius:0 !important;box-shadow:none !important;}' +
     BTN + '{flex:0 0 auto !important;' +
@@ -261,7 +261,10 @@ class MainActivity : ComponentActivity() {
     BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
     '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:auto !important;}' +
     // 主题钮不要贴到胶囊右缘：再让出 10px（加上容器自身 padding 约 22px）
-    '[data-kvideo-menu] .kvideo-group:last-child{margin-right:10px !important;}' +
+    // 主题钮右侧留白：用容器 padding-right（在 group 上加 margin 会被
+    // justify-content + margin-left:auto 吃掉，实测改成 42px 也没变化）。
+    // 配合组内间距 8 → 6px，内容不再溢出，18px 才真正生效（本地实测 gap=18px）。
+    '[data-kvideo-menu]{padding-right:18px !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
