@@ -2619,10 +2619,12 @@ class MainActivity : ComponentActivity() {
             if (!viewsReady) return@doAfterTextChanged
             val saved = prefs.getString(PREF_SERVER_URL, null)?.trim().orEmpty()
             val typed = editable?.toString()?.trim().orEmpty()
+            updateSaveEnabled()
             if (saved.isNotEmpty() && typed.isNotEmpty() && typed != saved) {
                 setStatus(getString(R.string.status_dirty), StatusTone.WARN)
             }
         }
+        updateSaveEnabled()
 
         webView.apply {
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -2804,6 +2806,25 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * 「保存并重载」只在地址真的变了才可点。
+     * 原来地址一字未改也能点，点下去等于白重载一次，还容易让人以为保存了什么；
+     * 比较用 normalizeUrl，免得 "192.168.1.2:81" 和 "http://192.168.1.2:81/" 被当成两次改动。
+     */
+    private fun updateSaveEnabled() {
+        if (!viewsReady) return
+        val typed = urlInput.text?.toString().orEmpty().trim()
+        val saved = prefs.getString(PREF_SERVER_URL, null)?.trim().orEmpty()
+        val same = try {
+            saved.isNotEmpty() && normalizeUrl(typed) == normalizeUrl(saved)
+        } catch (e: Exception) {
+            false
+        }
+        val enabled = typed.isNotEmpty() && !same
+        saveButton.isEnabled = enabled
+        saveButton.alpha = if (enabled) 1f else 0.45f
+    }
+
+    /**
      * 设置页底部显示当前版本。
      * 之前版本号只出现在长按齿轮复制的诊断里 —— 装了什么版本，App 自己都说不清。
      */
@@ -2932,6 +2953,8 @@ class MainActivity : ComponentActivity() {
         }
 
         prefs.edit().putString(PREF_SERVER_URL, normalizedUrl).apply()
+        // 保存成功后按钮立刻回到禁用态：地址已经是「已保存」的那一个了。
+        updateSaveEnabled()
         loadConfiguredUrl(normalizedUrl)
     }
 
