@@ -125,7 +125,16 @@ class MainActivity : ComponentActivity() {
     '@media (max-width:430px){' +
       '[' + LOGO_ATTR + ']{width:32px;height:32px;min-width:32px;min-height:32px;}}' +
     '@media (max-width:360px){' +
-      '[' + LOGO_ATTR + ']{width:30px;height:30px;min-width:30px;min-height:30px;}}';
+      '[' + LOGO_ATTR + ']{width:30px;height:30px;min-width:30px;min-height:30px;}}' +
+    // logo 的内圈同样是白 10% 底 + 白 20% 描边，浅色顶栏上会整圈融掉，只剩
+    // 中间那个紫色三角孤零零悬着。只换 circle 的两个 alpha，三角的描边与
+    // 颜色一个字不动——紫色是唯一彩色，深浅两种主题下都保持。
+    // SVG 的 fill-opacity / stroke-opacity 是表现属性，优先级低于任何 CSS
+    // 声明，所以这里不加 !important 也压得住；加上只是为了跟同文件其他规则
+    // 保持一致的写法。
+    'html[data-kv-light="1"] [' + LOGO_ATTR + '] circle{' +
+      'fill:#000000 !important;fill-opacity:.08 !important;' +
+      'stroke:#000000 !important;stroke-opacity:.16 !important;}';
 
   // 两个可拖动的全局悬浮圆钮：收藏是重复入口，历史由顶部菜单代理
   var favorites = [
@@ -262,7 +271,19 @@ class MainActivity : ComponentActivity() {
       BTN + ' svg{width:19px;height:19px;}}' +
     '@media (max-width:360px){' +
       BTN + '{width:30px;height:30px;min-width:30px;min-height:30px;}' +
-      BTN + ' svg{width:18px;height:18px;}}';
+      BTN + ' svg{width:18px;height:18px;}}' +
+    // 浅色主题：网页顶栏是白底，上面所有「白色 alpha」的层级反馈都会失效
+    // —— 白底铺白底等于没铺。这里只补三条，把白系 alpha 换成黑系 alpha，
+    // 并把强调色换到对白底 5.17:1 的深蓝（#60A5FA 对白底只有 2.54:1，
+    // 低于 3:1 的 UI 元素下限）。深色主题一条不动。
+    // 按下态用 .kvideo-group > button 限定，避免把弹层里那三个深色底按钮
+    // 也刷成黑色铺底：弹层本身是深色，黑 8% 在它上面等于没有反馈。
+    'html[data-kv-light="1"] ' + BTN + '[data-kvideo-active="1"]{' +
+      'color:#2563EB !important;}' +
+    'html[data-kv-light="1"] ' + BTN + '[data-kvideo-open="1"]{' +
+      'background:rgba(0,0,0,.14) !important;}' +
+    'html[data-kv-light="1"] [data-kvideo-menu] .kvideo-group > button:active{' +
+      'background:rgba(0,0,0,.08) !important;}';
 
   // 播放页左右快退/快进圆钮：网页原生按钮 aria-label 是「后退 N 秒」/「前进 N 秒」。
   // 1.1.15 用 @media(min-width:768px) 分档，WebView 宽度不到 768px 时窄屏档
@@ -632,6 +653,56 @@ class MainActivity : ComponentActivity() {
       var want = ok ? '' : 'none';
       if (s.style.display !== want) s.style.display = want;
     }
+  }
+
+  // 当前网页是浅色还是深色：注入的 CSS 里有一批「白 alpha」的层级反馈
+  // （logo 内圈、齿轮展开底、按下底色、主题选中蓝），它们默认写给深色顶栏，
+  // 落到浅色顶栏上就变成白铺白 / 白底上的淡蓝。这里判定出实际亮暗，写到
+  // html[data-kv-light] 上，由 CSS 选择性覆盖，深色侧规则一条不动。
+  //
+  // 判定优先级：
+  //   1. 主题按钮的选中档（唯一权威，网页自己的状态）
+  //   2. 量 body 底色亮度（播放页没有主题按钮时的兜底）
+  //   3. 都拿不到就保持上一次的值 —— 绝不能因为「读不到」翻回深色，
+  //      否则播放页会在深浅之间来回跳。
+  var lightFlag = null;
+  var darkQuery = (window.matchMedia ?
+    window.matchMedia('(prefers-color-scheme: dark)') : null);
+
+  function bodyIsLight() {
+    try {
+      var cs = window.getComputedStyle(document.body || document.documentElement);
+      var m = String(cs.backgroundColor || '').match(/rgba?\(([^)]+)\)/);
+      if (!m) return null;
+      var p = m[1].split(',');
+      var a = p.length > 3 ? parseFloat(p[3]) : 1;
+      if (!(a > 0)) return null;  // body 透明，读不到实质底色
+      var lum = 0.2126 * (parseFloat(p[0]) || 0) +
+                0.7152 * (parseFloat(p[1]) || 0) +
+                0.0722 * (parseFloat(p[2]) || 0);
+      return lum > 150;
+    } catch (e) { return null; }
+  }
+
+  function applyLightFlag() {
+    // 0 浅色 / 1 深色 / 2 跟随系统 / -1 认不出
+    var idx = themeIndex();
+    var light;
+    if (idx === 0) light = true;
+    else if (idx === 1) light = false;
+    else if (idx === 2) light = darkQuery ? !darkQuery.matches : false;
+    else light = bodyIsLight();
+    if (light === null || light === undefined) return;
+    if (light === lightFlag) return;
+    lightFlag = light;
+    document.documentElement.setAttribute('data-kv-light', light ? '1' : '0');
+  }
+
+  // 「跟随系统」档：系统切深浅色时不重新加载网页也要立刻跟上。
+  // 只在 idx === 2 时有意义，但这里无条件挂一个空转的监听更省心。
+  if (darkQuery) {
+    if (darkQuery.addEventListener) darkQuery.addEventListener('change', applyLightFlag);
+    else if (darkQuery.addListener) darkQuery.addListener(applyLightFlag);
   }
 
   function syncThemeState() {
@@ -1689,6 +1760,9 @@ class MainActivity : ComponentActivity() {
   }
 
   function syncMenu() {
+    // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
+    // 否则从首页进播放页后注入的浅色规则会整体失效。
+    applyLightFlag();
     shrinkSeekButtons();
     syncRateUi();
     var bar = null;
