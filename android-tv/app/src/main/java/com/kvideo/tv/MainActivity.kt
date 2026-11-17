@@ -496,6 +496,9 @@ class MainActivity : ComponentActivity() {
       'color:var(--kv-dock-fg, #F2F4F8) !important;' +
       '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
     // 行内（首页/播放页有网页顶栏时）只补站名文字，logo 用页面自己的
+    // 网页自己的站名：不许压缩、不许省略号截断（首页「显示不完整」就是被挤的）
+    '[' + BRAND_NAME_ATTR + ']{white-space:nowrap !important;overflow:visible !important;' +
+      'text-overflow:clip !important;flex:0 0 auto !important;min-width:0 !important;}' +
     '.kvideo-brand-text{font-size:15px;font-weight:600;white-space:nowrap;' +
       'margin-right:10px;color:inherit !important;font-family:inherit;}' +
     '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
@@ -2316,8 +2319,12 @@ class MainActivity : ComponentActivity() {
 
   function ensureBrandText(m, row) {
     if (!m || m.querySelector('.kvideo-brand-text')) return;
-    // 页面自己已经有可见的品牌文字（首页就是这种）时不要再插，否则重复一条
-    if (row && rowHasText(row, m)) return;
+    // 页面自己有可见站名（首页）就不用插；播放页没有文字节点，才补一条
+    var own = row ? row.querySelector('[' + BRAND_NAME_ATTR + ']') : null;
+    if (own) {
+      var or = own.getBoundingClientRect();
+      if (or.width > 4 && or.height > 4) return;
+    }
     var b = document.createElement('span');
     b.className = 'kvideo-brand-text';
     b.textContent = 'KVideo';
@@ -2418,8 +2425,8 @@ class MainActivity : ComponentActivity() {
     if (m.parentNode !== row) row.appendChild(m);
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
-    // 品牌文字交给网页自己：以前我们藏掉它、再插一条 KVideo，
-    // 结果首页出现两条（网页那条没被藏住）。现在一律不碰、不插。
+    hideBrandText(row, m);
+    ensureBrandText(m, row);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
