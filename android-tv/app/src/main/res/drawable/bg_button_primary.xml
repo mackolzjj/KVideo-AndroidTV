@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主按钮（设置页「保存并重载」）：实心强调色 + 大圆角，按下时压暗一档。
+     用 selector 而不是 MaterialButton，是为了不引 material 依赖（本项目只有
+     core-ktx / activity-ktx / webkit）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#CC2563EB" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item android:state_enabled="false">
+        <shape android:shape="rectangle">
+            <solid android:color="#662563EB" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/kv_button_primary" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</selector>

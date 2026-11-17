@@ -41,6 +41,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.widget.doAfterTextChanged
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -262,7 +263,11 @@ class MainActivity : ComponentActivity() {
       'height:1px;margin:6px 8px;background:rgba(255,255,255,.10);}' +
     '@media (min-width:640px){' +
       BTN + '{width:40px;height:40px;min-width:40px;min-height:40px;}' +
-      BTN + ' svg{width:22px;height:22px;}}' +
+      BTN + ' svg{width:22px;height:22px;}' +
+      // 宽屏：不再用 space-between 把两组推到屏幕两端。700dp 上 7 个图标只占
+      // 304px，中间会空出 300+px，顶栏看着像「左边一小撮、右边一小撮」两个孤岛。
+      // 整组靠 logo 排、组间固定 16px，右侧留白由 flex 自然吃掉。
+      '[data-kvideo-menu]{justify-content:flex-start;gap:16px;}}' +
     // 窄屏：按钮 32px、图标间距 4px。7 个图标合计 7×32+6×4 = 248px，
     // 加 logo 与边距约 300px，320dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
@@ -592,6 +597,29 @@ class MainActivity : ComponentActivity() {
       if (open) m.setAttribute('data-kvideo-open', '1');
       else m.removeAttribute('data-kvideo-open');
     }
+    // 先取消 hidden 再量宽度，否则 offsetWidth 是 0。
+    if (open) positionPopover();
+  }
+
+  // 弹层水平居中到齿轮。CSS 里那句 right:-72px 是按 34px 按钮算出来的常数
+  // （17 − 88 = −71，约等于 −72），而按钮在 ≥640dp 变 40px、≤360dp 变 30px 时
+  // 居中会偏 1–4px。展开时用实测几何算一次，并夹住左右屏幕边缘。
+  // 注意 `right` 的语义：元素右沿 = 包含块右沿 − right，所以负值才代表伸出组外。
+  function positionPopover() {
+    var p = popEl(), m = moreEl();
+    if (!p || !m || !p.getBoundingClientRect) return;
+    var g = p.parentNode;                // 所在的 .kvideo-group，只负责定位
+    if (!g || !g.getBoundingClientRect) return;
+    var gr = g.getBoundingClientRect(), mr = m.getBoundingClientRect();
+    var pw = p.offsetWidth || 176;
+    if (!gr.width || !mr.width) return;
+    var right = gr.right - (mr.left + mr.width / 2 + pw / 2);
+    var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    if (vw > 0) {
+      right = Math.max(right, gr.right - (vw - 8));   // 右沿不越出屏幕
+      right = Math.min(right, gr.right - 8 - pw);     // 左沿不越出屏幕
+    }
+    p.style.setProperty('right', Math.round(right) + 'px', 'important');
   }
   function closePopover() { setPopover(false); }
   function togglePopover() {
@@ -2118,6 +2146,17 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 输入框改过但没保存时给一条提示：以前两个按钮等宽，点「打开已保存地址」
+        // 会静默丢掉刚编辑的内容。这里只提示，不改按钮语义。
+        urlInput.doAfterTextChanged { editable ->
+            if (!viewsReady) return@doAfterTextChanged
+            val saved = prefs.getString(PREF_SERVER_URL, null)?.trim().orEmpty()
+            val typed = editable?.toString()?.trim().orEmpty()
+            if (saved.isNotEmpty() && typed.isNotEmpty() && typed != saved) {
+                setStatus(getString(R.string.status_dirty), StatusTone.WARN)
+            }
+        }
+
         webView.apply {
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
@@ -2243,7 +2282,7 @@ class MainActivity : ComponentActivity() {
             urlInput.setText(configuredUrl)
             loadConfiguredUrl(configuredUrl)
         } else {
-            showSetup(getString(R.string.status_first_launch))
+            showSetup(getString(R.string.status_first_launch), StatusTone.WARN)
         }
     }
 
@@ -2349,10 +2388,30 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /**
+     * 状态文字的三档语义。之前不分档、一律琥珀色，导致「已准备就绪」看着像警告，
+     * 真正的错误（地址无效）又和普通提示同色。
+     */
+    private enum class StatusTone { INFO, WARN, ERROR }
+
+    private fun setStatus(message: String, tone: StatusTone) {
+        if (!viewsReady) return
+        statusText.text = message
+        statusText.setTextColor(
+            getColor(
+                when (tone) {
+                    StatusTone.INFO -> R.color.kv_text_tertiary
+                    StatusTone.WARN -> R.color.kv_status_warn
+                    StatusTone.ERROR -> R.color.kv_status_error
+                }
+            )
+        )
+    }
+
     private fun openConfiguredUrl() {
         val normalizedUrl = normalizeUrl(urlInput.text.toString())
         if (!isValidUrl(normalizedUrl)) {
-            statusText.text = getString(R.string.status_invalid_url)
+            setStatus(getString(R.string.status_invalid_url), StatusTone.ERROR)
             urlInput.requestFocus()
             return
         }
@@ -2374,7 +2433,7 @@ class MainActivity : ComponentActivity() {
         updateSettingsButton()
         // 覆盖页收起，系统栏切回跟网页走（此时还不知道新页面深浅，先用上一次的值）
         applySystemBars(false)
-        statusText.text = getString(R.string.status_ready)
+        setStatus(getString(R.string.status_ready), StatusTone.INFO)
         webView.loadUrl(url)
     }
 
@@ -2392,7 +2451,7 @@ class MainActivity : ComponentActivity() {
         applySystemBars(false)
     }
 
-    private fun showSetup(message: String) {
+    private fun showSetup(message: String, tone: StatusTone = StatusTone.INFO) {
         // 设置页盖住 WebView，进度条和错误层一并收起，避免叠在表单上
         loadProgress.visibility = View.GONE
         errorContainer.visibility = View.GONE
@@ -2417,7 +2476,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        statusText.text = message
+        setStatus(message, tone)
         setupContainer.visibility = View.VISIBLE
         updateSettingsButton()
         // 设置页是原生层画的，系统栏跟着系统深浅色走

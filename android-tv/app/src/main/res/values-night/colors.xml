@@ -22,4 +22,8 @@
     <color name="kv_status_warn">#FFF5B942</color>
     <color name="kv_status_error">#FFF87171</color>
     <color name="kv_accent">#FF3B82F6</color>
+
+    <!-- 主按钮填充跟浅色同一档：深色下更亮的 #3B82F6 配白字只有 3.68:1 -->
+    <color name="kv_button_primary">#FF2563EB</color>
+    <color name="kv_on_primary">#FFFFFFFF</color>
 </resources>
