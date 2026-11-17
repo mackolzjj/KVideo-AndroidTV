@@ -495,6 +495,9 @@ class MainActivity : ComponentActivity() {
       'background:var(--kv-dock-bg, rgba(13,15,19,.94)) !important;' +
       'color:var(--kv-dock-fg, #F2F4F8) !important;' +
       '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
+    // 行内（首页/播放页有网页顶栏时）只补站名文字，logo 用页面自己的
+    '.kvideo-brand-text{font-size:15px;font-weight:600;white-space:nowrap;' +
+      'margin-right:10px;color:inherit !important;font-family:inherit;}' +
     '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
       'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
       'font-size:15px;font-weight:600;white-space:nowrap;padding-right:12px;' +
@@ -2295,8 +2298,19 @@ class MainActivity : ComponentActivity() {
       }
     }
   }
+  // 行内形态下网页只留 logo、文字被我们藏了，这里补一条站名，保证「logo 后面有字母」
+  function ensureBrandText(m) {
+    if (!m || m.querySelector('.kvideo-brand-text')) return;
+    var b = document.createElement('span');
+    b.className = 'kvideo-brand-text';
+    b.textContent = 'KVideo';
+    m.insertBefore(b, m.firstChild);
+  }
+
   function dockFixed() {
     var m = ensureRoot();
+    var rowTxt = m.querySelector('.kvideo-brand-text');
+    if (rowTxt && rowTxt.parentNode) rowTxt.parentNode.removeChild(rowTxt);
     // 用页面实际底色决定深浅，而不是 data-kv-light 标记
     try {
       var bg = window.getComputedStyle(document.body).backgroundColor || '';
@@ -2381,6 +2395,7 @@ class MainActivity : ComponentActivity() {
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
     hideBrandText(row, m);
+    ensureBrandText(m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
     syncThemeState();
