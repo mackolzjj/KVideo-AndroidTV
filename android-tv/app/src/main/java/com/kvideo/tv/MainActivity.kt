@@ -502,9 +502,11 @@ class MainActivity : ComponentActivity() {
     'html[data-kv-light="1"] [data-kvideo-menu][data-kvideo-dock="fixed"]{' +
       'background:rgba(255,255,255,.95);}' +
     '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand{' +
-      'position:absolute;left:14px;top:50%;transform:translateY(-50%);' +
+      'position:absolute;left:12px;top:50%;transform:translateY(-50%);' +
       'display:inline-flex;align-items:center;gap:8px;font-size:15px;' +
-      'font-weight:600;white-space:nowrap;}' +
+      // 首页的品牌容器自带 12px 右内边距，这里补上同样的量，
+      // 两页的「品牌右沿」才会是同一个 x，图标居中位置也就完全一致。
+      'font-weight:600;white-space:nowrap;padding-right:12px;box-sizing:content-box;}' +
     '[data-kvideo-menu][data-kvideo-dock="fixed"] .kvideo-float-brand svg{' +
       'width:26px !important;height:26px !important;flex:0 0 auto;}';
 
@@ -566,7 +568,10 @@ class MainActivity : ComponentActivity() {
     // 不然只剩一行时行高仍被 padding 顶住；横 6 个图标 36dp 内垂直居中。
     prefixed('html.' + READY_CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
       '{min-height:36px !important;height:36px !important;' +
-      'padding-top:0 !important;padding-bottom:0 !important;align-items:center !important;}' +
+      'padding-top:0 !important;padding-bottom:0 !important;align-items:center !important;' +
+      // 网页给的是 29px 横向 padding：385 - 58 - 品牌 100 - 16 只剩 211px，
+      // 而 6×32 + 5×8 = 232px，图标必然溢出容器（左压站名、右贴屏幕边）。
+      'padding-left:12px !important;padding-right:12px !important;box-sizing:border-box !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
@@ -750,13 +755,17 @@ class MainActivity : ComponentActivity() {
       togglePopover(); return;
     }
     closePopover();
-    if (act === 'live') clickNative('a[aria-label="直播"]');
-    else if (act === 'favorites') {
+    if (act === 'live') {
+      if (!clickNative('a[aria-label="直播"]')) go('/iptv');
+    } else if (act === 'favorites') {
       if (!clickNative('a[aria-label="我的收藏"]') &&
           !clickNative('button[aria-label*="收藏"]') &&
-          !clickByText('收藏这个视频')) clickByText('收藏');
+          !clickByText('收藏这个视频') && !clickByText('收藏')) go('/favorites');
+    } else if (act === 'history') {
+      // 观看历史在上游是弹层，没有独立路由；播放页没有入口时退到收藏页，
+      // 至少不是点了没反应。
+      if (!clickNative(history[0])) go('/favorites');
     }
-    else if (act === 'history') clickNative(history[0]);
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
     else if (act === 'appsettings') {
@@ -801,22 +810,23 @@ class MainActivity : ComponentActivity() {
   }
 
   // 稳态不产生 DOM 变更：只在值真的变化时才写，避免观察器自激循环
+  // 六个图标恒定显示：以前「页面上找不到对应原生控件就隐藏」，播放页没有
+  // 收藏/历史/直播的锚点，一下就少两三个图标 —— 这正是「首页和播放页顶栏不
+  // 一样」的真正原因（不是间距问题）。缺目标的点击走路由兜底。
   function syncAvailability() {
     if (!root) return;
-    var checks = {
-      live: 'a[aria-label="直播"]',
-      history: history[0],
-      logout: 'button[aria-label="退出登录"]',
-      websettings: 'a[aria-label="设置"]',
-      themecycle: themeSels[0] || themeSels[1] || themeSels[2]
-    };
-    for (var act in checks) {
-      if (!Object.prototype.hasOwnProperty.call(checks, act)) continue;
-      var b = root.querySelector('[data-kvideo-act="' + act + '"]');
-      if (!b) continue;
-      var want = q(checks[act]) ? '' : 'none';
-      if (b.style.display !== want) b.style.display = want;
+    var btns = root.querySelectorAll('[data-kvideo-act]');
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].style.display === 'none') btns[i].style.display = '';
     }
+  }
+  // 路由兜底：上游页面结构（KVideo）里这些都是独立路由，播放页没有导航入口时
+  // 直接用它们，点击仍然有效，图标也就不用隐藏。
+  function go(path) {
+    try {
+      if (location.pathname !== path) location.assign(path);
+      return true;
+    } catch (e) { return false; }
   }
   // 当前网页是浅色还是深色：注入的 CSS 里有一批「白 alpha」的层级反馈
   // （logo 内圈、齿轮展开底、按下底色、主题选中蓝），它们默认写给深色顶栏，
@@ -2270,6 +2280,23 @@ class MainActivity : ComponentActivity() {
         brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
         m.insertBefore(brand, m.firstChild);
       }
+      // 关键：首页的图标是在「品牌容器右侧的剩余空间」里居中的。固定栏没有品牌
+      // 容器参与布局，若只靠 padding:12px，图标会整体偏左约 50px，看起来就和
+      // 首页不是一条线。这里按自建品牌的实际右沿补上同样的左侧留白。
+      (function () {
+        var brandEl = m.querySelector('.kvideo-float-brand');
+        if (!brandEl) return;
+        var apply = function () {
+          var r = brandEl.getBoundingClientRect();
+          if (r.width > 0) {
+            m.style.setProperty('padding-left',
+              Math.round(r.right + 8) + 'px', 'important');
+          }
+        };
+        apply();
+        if (window.requestAnimationFrame) requestAnimationFrame(apply);
+        setTimeout(apply, 120);
+      })();
     }
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
