@@ -1080,6 +1080,31 @@ class MainActivity : ComponentActivity() {
     return x >= r.left - 8 && x <= r.right + 8 &&
            y >= r.top - 8 && y <= r.bottom + 8;
   }
+  // 播放器在竖屏与全屏各挂一套控制栏时，querySelector('.player-controls-right')
+  // 命中的可能是当前不可见的那一套 —— 我们会对着看不见的按钮摆位置、写样式，
+  // 屏幕上那套被另一条路径重复处理，表现就是「点一次、动两次」。
+  // 所有抓取统一走「可见优先」。
+  function visibleRect(el) {
+    if (!el || !el.getBoundingClientRect) return null;
+    var r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return null;
+    var cs;
+    try { cs = window.getComputedStyle(el); } catch (e) { return null; }
+    if (!cs || cs.display === 'none' || cs.visibility === 'hidden') return null;
+    if (cs.opacity === '0') return null;
+    return r;
+  }
+  function firstVisible(sel, minW, minH) {
+    var l = document.querySelectorAll(sel);
+    for (var i = 0; i < l.length; i++) {
+      var r = visibleRect(l[i]);
+      if (r && r.width >= (minW || 20) && r.height >= (minH || 10)) return l[i];
+    }
+    return l[0] || null;
+  }
+  function controlsBar() {
+    return firstVisible('.player-controls-right', 20, 10);
+  }
   function videoInfo() {
     var v = document.querySelector('video');
     if (!v) return null;
@@ -1415,8 +1440,8 @@ class MainActivity : ComponentActivity() {
   // 播放页原生「更多」按钮 aria-label 是「更多选项」，里面是 lucide
   // MoreHorizontal。首页自建 dock 的「更多」带 data-kvideo-act，显式排除。
   function findMoreButton() {
-    var exact = document.querySelector(
-      'button[aria-label="更多选项"]:not([data-kvideo-act])');
+    var exact = firstVisible(
+      'button[aria-label="更多选项"]:not([data-kvideo-act])', 16, 16);
     if (exact) return exact;
     var names = ['更多', '更多设置', 'more options', 'more'];
     var l = document.querySelectorAll(
@@ -1462,7 +1487,7 @@ class MainActivity : ComponentActivity() {
   }
 
   function findRateButton() {
-    var b = document.querySelector('button[aria-label="播放速度"]');
+    var b = firstVisible('button[aria-label="播放速度"]', 20, 20);
     if (b) return b;
     var l = document.querySelectorAll('button');
     for (var i = 0; i < l.length; i++) {
@@ -1488,7 +1513,7 @@ class MainActivity : ComponentActivity() {
     if (wrap.getAttribute(RATE_WRAP_ATTR) !== '1') {
       wrap.setAttribute(RATE_WRAP_ATTR, '1');
     }
-    var anchor = document.querySelector('.player-controls-right');
+    var anchor = controlsBar();
     if (!anchor) return;
     var ar = anchor.getBoundingClientRect();
     if (ar.width < 4 || ar.height < 4) return;
@@ -1655,7 +1680,7 @@ class MainActivity : ComponentActivity() {
   var fadeSame = 0;        // 连续多少帧「控制条没再变」
 
   function fadeTick() {
-    var anchor = document.querySelector('.player-controls-right');
+    var anchor = controlsBar();
     var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
     if (!anchor || !wrap) { fadeRunning = false; return; }
 
@@ -2077,6 +2102,9 @@ class MainActivity : ComponentActivity() {
           return v && isFinite(v.duration) ? Math.round(v.duration) : -1;
         })(),
         moreButton: document.querySelectorAll('[' + MORE_ATTR + '="1"]').length,
+        bars: document.querySelectorAll('.player-controls-right').length,
+        rateMusic: document.querySelectorAll('button[aria-label="播放速度"]').length,
+        wrappers: document.querySelectorAll('[data-kvideo-rate-wrap="1"],[data-kvideo-more-wrap="1"]').length,
         moreWrap: document.querySelectorAll('[' + MORE_WRAP_ATTR + '="1"]').length,
         morePos: (function () {
           var w = document.querySelector('[' + MORE_WRAP_ATTR + '="1"]');
@@ -2130,7 +2158,7 @@ class MainActivity : ComponentActivity() {
   // 一有「动」的迹象就起逐帧跟随。
   var lastVisSync = 0;
   function syncRateVisibilityNow() {
-    var anchor = document.querySelector('.player-controls-right');
+    var anchor = controlsBar();
     if (!anchor) return;
     var wrap = document.querySelector('[' + RATE_WRAP_ATTR + '="1"]');
     if (!wrap) return;
