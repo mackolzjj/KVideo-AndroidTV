@@ -33,4 +33,9 @@
     <color name="kv_status_warn">#FFB45309</color>
     <color name="kv_status_error">#FFB91C1C</color>
     <color name="kv_accent">#FF2563EB</color>
+
+    <!-- 主按钮填充：白字对它 5.17:1，过 AA。深色也用它，别用更亮的 #3B82F6
+         ——那个配白字只有 3.68:1，正文级别不合格。 -->
+    <color name="kv_button_primary">#FF2563EB</color>
+    <color name="kv_on_primary">#FFFFFFFF</color>
 </resources>

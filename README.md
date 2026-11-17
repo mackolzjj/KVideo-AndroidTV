@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.50`（`versionCode 52`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.51`（`versionCode 53`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,17 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.51 变更（相对 1.1.50）
+
+**宽屏顶栏归位 + 设置页主次 + 状态文字分档。**
+
+- **宽屏不再两端拉满**：≥640dp 时 `justify-content` 从 `space-between` 改 `flex-start`、组间 16px。原来 700dp 上 7 个图标只占 304px，中间空 300+px，看着像「左边一小撮、右边一小撮」两个孤岛。
+- **弹层居中改成实测**：`right:-72px` 是按 34px 按钮算的常数，按钮在 ≥640dp 变 40px、≤360dp 变 30px 时会偏 1–4px。展开时用 `getBoundingClientRect()` 算一次 `right`，并夹住屏幕右沿。
+- **设置页主次分明**：「保存并重载」变成铺满整行的实心强调色主按钮（50dp，圆角 12dp，白字对 `#2563EB` 5.17:1）；「打开已保存地址 / 退出」降级成文字按钮（44dp、次要色）。两者原本等宽，输入框已预填时点左边会静默丢掉编辑。
+- **状态文字三档**：新增 `setStatus(message, tone)`，INFO 用 `kv_text_tertiary`、WARN 用 `kv_status_warn`、ERROR 用 `kv_status_error`。之前一律琥珀色，「已准备就绪」看着像警告、真错误又和普通提示同色。
+- **输入框改过没保存**时状态行提示「有未保存的修改，点「保存并重载」生效」(WARN)，不再静默丢弃。
+- 弹层 `aria-expanded` 原本就在；这次未动菜单 DOM 结构与事件绑定。
 
 ## 1.1.50 变更（相对 1.1.49）
 
