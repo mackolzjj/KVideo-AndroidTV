@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
     // 间距服务，本身完全透明。
     '[data-kvideo-menu]{display:flex;align-items:center;gap:14px;flex:1 1 auto;' +
       'position:relative;margin-left:10px;min-width:0;' +
-      'justify-content:space-between;}' +
+      'justify-content:flex-start !important;}' +
     // 组内必须永远是「紧凑一组」：网页顶栏自己带 justify-between / 按钮
     // flex:1 之类的规则，会把组里的图标拉成等距散开（截图里就是这个样子），
     // 和效果图的「左边一撮、右边一颗」完全不是一回事。这里全部用 !important 钉死。
@@ -259,7 +259,10 @@ class MainActivity : ComponentActivity() {
     BTN + '[data-kvideo-active="1"]{color:#60A5FA !important;}' +
     // 齿轮弹层展开：用中性「加深底色」，绝不用蓝色——否则会被读成主题被切换。
     BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
-    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:auto !important;}' +
+    // 主题钮不再被 space-between 推到最右：首页与播放页的顶栏必须长得一样，
+    // 而播放页的那一行比首页窄，剩下的空白会把月亮拉出一个很长的空档。
+    // 现在整排靠 logo 排，两组之间固定 14px。
+    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:0 !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
