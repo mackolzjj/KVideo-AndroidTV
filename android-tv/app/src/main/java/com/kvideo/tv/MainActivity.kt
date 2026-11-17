@@ -2543,6 +2543,7 @@ class MainActivity : ComponentActivity() {
         fullscreenContainer = findViewById(R.id.fullscreen_container)
         urlInput = findViewById(R.id.url_input)
         statusText = findViewById(R.id.status_text)
+        setupHelpToggle()
         openButton = findViewById(R.id.open_button)
         saveButton = findViewById(R.id.save_button)
         loadProgress = findViewById(R.id.load_progress)
@@ -2797,6 +2798,20 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    /**
+     * 首次配置页的「使用提示」：默认收起，只留两行要点。
+     * 展开后是手势与诊断说明——这些一年看一次，不该常驻占掉一屏。
+     */
+    private fun setupHelpToggle() {
+        val toggle = findViewById<TextView>(R.id.help_toggle) ?: return
+        val body = findViewById<TextView>(R.id.help_body) ?: return
+        toggle.setOnClickListener {
+            val open = body.visibility == View.VISIBLE
+            body.visibility = if (open) View.GONE else View.VISIBLE
+            toggle.setText(if (open) R.string.setup_help_collapsed else R.string.setup_help_expanded)
+        }
     }
 
     private fun setupBackNavigation() {

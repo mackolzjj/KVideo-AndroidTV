@@ -201,14 +201,39 @@
                     android:textColor="@color/kv_text_secondary"
                     android:textSize="13sp" />
 
+                <!-- 说明压到两行：首次配置页一屏本来就不高，四行 12sp 会顶掉
+                     输入框的可视位置。剩下的用手势 / 诊断说明折进「使用提示」，
+                     点开才占空间。 -->
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
+                    android:lineSpacingExtra="3dp"
                     android:text="@string/setup_footer"
                     android:textColor="@color/kv_text_tertiary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/help_toggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="2dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/setup_help_collapsed"
+                    android:textColor="@color/kv_text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/help_body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingExtra="3dp"
+                    android:text="@string/setup_help_body"
+                    android:textColor="@color/kv_text_tertiary"
                     android:textSize="12sp"
-                    android:lineSpacingExtra="3dp" />
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
