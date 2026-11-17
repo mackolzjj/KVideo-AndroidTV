@@ -548,7 +548,7 @@ class MainActivity : ComponentActivity() {
       'font-size:15px !important;font-weight:600 !important;line-height:36px !important;' +
       'letter-spacing:.2px !important;margin-left:8px !important;' +
       // 112px ≈ 7 个汉字：再长就省略，避免把 6 个图标挤出去
-      'max-width:96px !important;white-space:nowrap !important;overflow:hidden !important;' +
+      'max-width:112px !important;white-space:nowrap !important;overflow:hidden !important;' +
       'text-overflow:ellipsis !important;vertical-align:middle !important;' +
       'color:inherit !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
@@ -557,9 +557,7 @@ class MainActivity : ComponentActivity() {
     // 文字就成了「视频聚…」——不是 max-width 的锅，是父容器宽度不够。
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
       '{font-size:inherit !important;flex:0 0 auto !important;flex-shrink:0 !important;' +
-      // overflow 必须是 hidden：容器宽度由网页决定，若比文字窄，visible 会让
-      // 文字直接盖到第一个图标上（截图里就是「KVideo」压着爱心）。
-      'max-width:none !important;overflow:hidden !important;white-space:nowrap !important;' +
+      'max-width:none !important;overflow:visible !important;white-space:nowrap !important;' +
       'height:36px !important;min-height:0 !important;align-items:center !important;' +
       'margin-right:8px !important;}' +
     // 行高回到 36dp：原来两行文字把它撑到约 44dp。纵向 padding 一起收掉，
@@ -2412,35 +2410,6 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
-        bar: (function () {
-          try {
-            function rc(e) {
-              if (!e || !e.getBoundingClientRect) return null;
-              var r = e.getBoundingClientRect();
-              return [Math.round(r.left), Math.round(r.right), Math.round(r.width)];
-            }
-            var m = document.querySelector('[data-kvideo-menu]');
-            var brand = document.querySelector('[data-kvideo-brand]');
-            var text = document.querySelector('[data-kvideo-brand-text]');
-            var btns = m ? m.querySelectorAll('[data-kvideo-act]') : [];
-            var xs = [], i, r;
-            for (i = 0; i < btns.length; i++) {
-              r = btns[i].getBoundingClientRect();
-              xs.push(Math.round(r.left + r.width / 2));
-            }
-            var cs = m ? window.getComputedStyle(m) : null;
-            return {
-              brand: rc(brand), text: rc(text), menu: rc(m),
-              dock: m ? String(m.getAttribute('data-kvideo-dock') || '') : '',
-              icons: xs,
-              pitch: xs.length > 1 ? xs[1] - xs[0] : 0,
-              pad: cs ? (cs.paddingLeft + '/' + cs.paddingRight) : '',
-              justify: cs ? cs.justifyContent : '',
-              gap: cs ? cs.gap : '',
-              vw: window.innerWidth || 0
-            };
-          } catch (e) { return 'err'; }
-        })(),
         panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
         panelSeen: panelSeenCount,
         panelAgoMs: panelSeenAt ? (Date.now() - panelSeenAt) : -1,
