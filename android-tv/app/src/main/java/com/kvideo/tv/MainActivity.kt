@@ -2302,6 +2302,17 @@ class MainActivity : ComponentActivity() {
     }
   }
   // 行内形态下网页只留 logo、文字被我们藏了，这里补一条站名，保证「logo 后面有字母」
+  // 播放页判据：路由 /player 优先（播放器没挂载、加载失败也成立），
+  // 有 <video> 兜底（别处也可能直接内嵌播放器）。
+  function isPlayerPage() {
+    try {
+      var p = String(location.pathname || '').toLowerCase();
+      if (p.indexOf('/player') >= 0) return true;
+      if (/[?&](s|source|id)=/.test(location.search || '') && document.querySelector('video')) return true;
+    } catch (e) {}
+    return !!document.querySelector('video');
+  }
+
   function rowHasText(row, skip) {
     try {
       var els = row.querySelectorAll('span,b,a,p,div');
@@ -2319,9 +2330,9 @@ class MainActivity : ComponentActivity() {
 
   function ensureBrandText(m) {
     if (!m || m.querySelector('.kvideo-brand-text')) return;
-    // 只在播放页（页面里有 video）补站名：首页网页自己就有站名，
-    // 再插一条必然重复；播放页一个文字节点都没有。
-    if (!document.querySelector('video')) return;
+    // 只在播放页补站名：首页网页自己就有站名，再插一条必然重复。
+    // 判据用路由 /player，所以「没点播放/加载失败」时也会有字母。
+    if (!isPlayerPage()) return;
     var b = document.createElement('span');
     b.className = 'kvideo-brand-text';
     b.textContent = 'KVideo';
@@ -2330,9 +2341,8 @@ class MainActivity : ComponentActivity() {
 
   function dockFixed() {
     // 只有播放页才挂固定栏：设置页/列表页滚到某个位置也会「找不到顶栏」，
-    // 一挂就变成一条浮在内容上的菜单。用页面里有没有 video 作为播放页判据。
-    if (!document.querySelector('video')) {
-      // 之前从播放页带过来的固定栏也要收掉，否则设置页顶部会一直挂着一条
+    // 一挂就变成一条浮在内容上的菜单。判据走路由 /player（与播放器是否就绪无关）。
+    if (!isPlayerPage()) {
       if (root && root.getAttribute(DOCK_ATTR) === 'fixed') undock(root);
       return;
     }
