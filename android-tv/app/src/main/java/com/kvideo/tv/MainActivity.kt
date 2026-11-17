@@ -2260,9 +2260,9 @@ class MainActivity : ComponentActivity() {
   // 没有顶栏的页面（播放页）顶部那条是 div 形态，nav/header 选择器命不中，
   // 会和我们的固定栏叠在一起。按几何兜底：贴顶、横向 ≥60%、高 18–120px。
   function hideStrayHeaders() {
-    // 不再依赖 class/tag 选择器：播放页那条是任意 div，选择器命不中。
-    // 改成在顶部横向取 3 个点，把命中元素及其 3 层祖先里「贴顶 + 宽 ≥60% +
-    // 高 18–120px」的都标掉 —— 只在我们自己挂固定栏时执行。
+    // 只在「页面没有可用顶栏」时调用（播放页）：那条是任意 div，选择器命不中，
+    // 所以在顶部横向取 3 个点，把命中元素及其 3 层祖先里「贴顶 + 宽 ≥60% +
+    // 高 18–120px」的都标掉。
     var vw = window.innerWidth || 0;
     if (!vw) return;
     var xs = [Math.round(vw * 0.2), Math.round(vw * 0.5), Math.round(vw * 0.8)];
@@ -2280,8 +2280,6 @@ class MainActivity : ComponentActivity() {
     }
     for (var yi = 0; yi < ys.length; yi++) {
       for (var xi = 0; xi < xs.length; xi++) {
-        // 我们的固定栏就压在页面头上面，elementFromPoint 只会拿到自己；
-        // 用 elementsFromPoint 取整摞，逐个往上找页面的那条。
         var stack = document.elementsFromPoint ?
           document.elementsFromPoint(xs[xi], ys[yi]) : [document.elementFromPoint(xs[xi], ys[yi])];
         for (var si = 0; si < stack.length; si++) {
@@ -2352,7 +2350,13 @@ class MainActivity : ComponentActivity() {
       if (!usable) { dockFixed(); return; }
       // 要显示、但宿主行已经滚出视口：挂固定栏，让栏当场出现在屏幕顶部。
       // 否则状态变成「已显示」，眼睛看到的是「没回来」。
-      if (!hidden) { dockFixed(); return; }
+      // 要显示、但宿主行已经滚出视口：直接把页面滚回顶部，让栏真的出现。
+      // 不换宿主（换宿主会改变栏的形态和位置，看起来就是「闪一下」）。
+      if (!hidden) {
+        try { window.scrollTo(0, 0); } catch (e) {}
+        armFallback();
+        return;
+      }
       if (root && root.getAttribute(DOCK_ATTR) === 'fixed') {
         var sm = window.scrollY || document.documentElement.scrollTop || 0;
         if (sm > 8) return;                     // 滚动中保持固定栏，不搬回行内
