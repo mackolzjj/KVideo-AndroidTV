@@ -231,8 +231,13 @@ class MainActivity : ComponentActivity() {
     // 间距服务，本身完全透明。
     // 图标整组在「站名右侧的剩余空间」里水平居中：既不会被 space-between
     // 顶到右边缘，也不会紧贴齿轮。logo + 站名仍然贴左。
-    '[data-kvideo-menu]{display:flex;align-items:center;gap:14px;flex:1 1 auto;' +
-      'position:relative;margin-left:10px;min-width:0;' +
+    // 六个图标**等距**排成一条，整条居中，并且左右各留 14px 内边距：
+    //   - 站名（KVideo）与第一个图标之间不再贴住
+    //   - 月亮与胶囊右缘之间也有空，不再是「贴边」
+    // 之前两段分组（导航/外观）各自有间距，加上 justify 变化就会一边挤一边空。
+    '[data-kvideo-menu]{display:flex;align-items:center;gap:8px !important;flex:1 1 auto;' +
+      'position:relative;margin-left:0 !important;min-width:0;box-sizing:border-box;' +
+      'padding-left:14px !important;padding-right:14px !important;' +
       'justify-content:center !important;}' +
     // 组内必须永远是「紧凑一组」：网页顶栏自己带 justify-between / 按钮
     // flex:1 之类的规则，会把组里的图标拉成等距散开（截图里就是这个样子），
@@ -267,7 +272,8 @@ class MainActivity : ComponentActivity() {
     // 主题钮与导航组之间再留一点：贴太紧会像是导航组里的第 6 个图标，
     // 贴太远（space-between）又会在窄行里拉出长空档。这里固定多给 10px，
     // 加上容器 gap 14px = 24px，比组内的 8px 明显一档，但远不到右边缘。
-    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:10px !important;}' +
+    // 主题钮与导航组之间不再单独加宽：既然要等距，就一律 8px
+    '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:0 !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
@@ -300,7 +306,7 @@ class MainActivity : ComponentActivity() {
       // 宽屏：不再用 space-between 把两组推到屏幕两端。700dp 上 7 个图标只占
       // 304px，中间会空出 300+px，顶栏看着像「左边一小撮、右边一小撮」两个孤岛。
       // 整组靠 logo 排、组间固定 16px，右侧留白由 flex 自然吃掉。
-      '[data-kvideo-menu]{justify-content:flex-start;gap:16px;}}' +
+      '[data-kvideo-menu]{justify-content:center !important;gap:16px !important;}}' +
     // 窄屏：按钮 32px、图标间距 4px。7 个图标合计 7×32+6×4 = 248px，
     // 加 logo 与边距约 300px，320dp 也放得下，不会反压 logo。
     '@media (max-width:430px){' +
@@ -530,7 +536,8 @@ class MainActivity : ComponentActivity() {
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
       '{font-size:inherit !important;flex:0 0 auto !important;flex-shrink:0 !important;' +
       'max-width:none !important;overflow:visible !important;white-space:nowrap !important;' +
-      'height:36px !important;min-height:0 !important;align-items:center !important;}' +
+      'height:36px !important;min-height:0 !important;align-items:center !important;' +
+      'margin-right:8px !important;}' +
     // 行高回到 36dp：原来两行文字把它撑到约 44dp。纵向 padding 一起收掉，
     // 不然只剩一行时行高仍被 padding 顶住；横 6 个图标 36dp 内垂直居中。
     prefixed('html.' + READY_CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
