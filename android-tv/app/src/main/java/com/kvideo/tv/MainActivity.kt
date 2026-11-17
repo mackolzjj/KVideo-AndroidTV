@@ -260,6 +260,8 @@ class MainActivity : ComponentActivity() {
     // 齿轮弹层展开：用中性「加深底色」，绝不用蓝色——否则会被读成主题被切换。
     BTN + '[data-kvideo-open="1"]{background:rgba(255,255,255,.20) !important;}' +
     '[data-kvideo-menu] .kvideo-group + .kvideo-group{margin-left:auto !important;}' +
+    // 主题钮不要贴到胶囊右缘：再让出 10px（加上容器自身 padding 约 22px）
+    '[data-kvideo-menu] .kvideo-group:last-child{margin-right:10px !important;}' +
     '[data-kvideo-menu] [hidden]{display:none !important;}' +
     // 弹层仍然挂第一段分组里（它只负责定位，本身透明）。组壳去掉后组的右沿
     // 就是齿轮的右沿，所以偏移量取 (176-32)/2 = 72，弹层正好居中在齿轮下方。
