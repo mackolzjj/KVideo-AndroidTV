@@ -108,8 +108,6 @@ class MainActivity : ComponentActivity() {
   var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
   var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
   var TOPBAR_ATTR = 'data-kvideo-topbar';
-  var DOCK_ATTR = 'data-kvideo-dock';
-  var STRAY_ATTR = 'data-kvideo-stray';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -479,32 +477,6 @@ class MainActivity : ComponentActivity() {
       'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
       'opacity:0;transition:opacity .25s ease;}';
 
-  // 播放页没有 sticky 顶栏：注入菜单找不到落脚点，页面上就没有这条栏。
-  // 这里给它挂在 body 上做固定栏；只改定位，内部布局（品牌 + 两组图标）沿用
-  // 首页同一套 CSS，所以看起来完全一致。
-  var DOCK_CSS =
-    '[' + DOCK_ATTR + '="fixed"]{' +
-      'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
-      'width:100% !important;height:36px !important;margin:0 !important;' +
-      // 网页自己的顶栏横向 padding 是 29px；固定栏没有那一层，改成直接给
-      // 37 / 47（29 + 品牌内边距 8、29 + 主题钮留白 18），本地实测两页
-      // 六个图标的中心 x 完全一致。
-      'padding-left:37px !important;padding-right:47px !important;box-sizing:border-box;' +
-      'display:flex !important;align-items:center;' +
-      'z-index:2147483000 !important;flex:0 0 auto !important;' +
-      'background:rgba(13,15,19,.94);' +
-      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
-    'html[data-kv-light="1"] [' + DOCK_ATTR + '="fixed"]{' +
-      'background:rgba(255,255,255,.95);}' +
-    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
-      'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
-      'font-size:15px;font-weight:600;white-space:nowrap;padding-right:12px;}' +
-    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand svg{' +
-      'width:26px !important;height:26px !important;flex:0 0 auto;}' +
-    // 挂固定栏时把网页自己顶部那条（div 形态、nav/header 选择器命不中的）
-    // 藏掉，否则会和我们的栏叠在一起，看起来像「图标少了/不对」。
-    '[' + STRAY_ATTR + ']{display:none !important;}';
-
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -525,9 +497,7 @@ class MainActivity : ComponentActivity() {
     '.kv-hud-track i{display:block !important;height:100% !important;width:0 !important;' +
       'background:#3b82f6 !important;border-radius:2px !important;}';
 
-  // 隐藏时既要收顶栏行，也要收**注入菜单自己**：ATTR 是行属性
-  // (data-kvideo-topbar)，只藏行的话菜单还浮在那儿（只剩图标）。
-  var sels = ['[data-kvideo-menu]', '[' + ATTR + ']', NAV, HEADER];
+  var sels = ['[' + ATTR + ']', NAV, HEADER];
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
@@ -573,7 +543,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
+    THEME_HINT_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -2253,59 +2223,6 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
-  function pageName() {
-    var t = '';
-    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
-    if (!t || t.length > 14) t = 'KVideo';
-    return t;
-  }
-  // 没有顶栏的页面（播放页）：菜单挂 body，固定顶部，自己补 logo + 站名。
-  // 播放页顶部那条是 div 形态（nav/header 选择器命不中），按几何兜底：
-  // 贴顶、横向接近满宽、高度 18–120 的元素，标记后由 CSS 隐藏。
-  var strayCount = 0;
-  function hideStrayHeaders() {
-    var l = document.querySelectorAll(
-      'nav,header,[class*="navbar"],[class*="topbar"],[class*="top-0"],[class*="sticky"]');
-    var vw = window.innerWidth || 0;
-    var out = 0;
-    for (var i = 0; i < l.length; i++) {
-      var e = l[i];
-      if (!e || !e.getBoundingClientRect) continue;
-      if (root && (e === root || (e.contains && e.contains(root)))) continue;
-      var r = e.getBoundingClientRect();
-      if (r.width < vw * 0.6 || r.height < 18 || r.height > 120) continue;
-      if (r.top > 120 || r.bottom < 0) continue;
-      if (!e.hasAttribute(STRAY_ATTR)) { e.setAttribute(STRAY_ATTR, '1'); out++; }
-    }
-    return out;
-  }
-  function dockFixed() {
-    var m = ensureRoot();
-    strayCount = hideStrayHeaders();
-    if (m.parentNode !== document.body) document.body.appendChild(m);
-    if (m.getAttribute(DOCK_ATTR) !== 'fixed') {
-      m.setAttribute(DOCK_ATTR, 'fixed');
-      if (!m.querySelector('.kvideo-float-brand')) {
-        var brand = document.createElement('span');
-        brand.className = 'kvideo-float-brand';
-        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
-        m.insertBefore(brand, m.firstChild);
-      }
-    }
-    document.documentElement.classList.add(READY_CLS);
-    syncAvailability();
-    syncThemeState();
-    bindDiagLongPress();
-    disarmFallback();
-  }
-  // 回到有顶栏的页面：收起固定栏与自建品牌，菜单回到行内。
-  function undock(m) {
-    if (!m || m.getAttribute(DOCK_ATTR) !== 'fixed') return;
-    m.removeAttribute(DOCK_ATTR);
-    var brand = m.querySelector('.kvideo-float-brand');
-    if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
-  }
-
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2321,10 +2238,9 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { dockFixed(); return; }
+    if (!bar) { armFallback(); return; }
     var row = pickRow(bar);
     var m = ensureRoot();
-    undock(m);
     if (m.parentNode !== row) row.appendChild(m);
     if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
@@ -2434,11 +2350,6 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
-        dockFixed: (function () {
-          try { return document.querySelectorAll('[' + DOCK_ATTR + '="fixed"]').length; }
-          catch (e) { return -1; }
-        })(),
-        strayHidden: document.querySelectorAll('[' + STRAY_ATTR + ']').length,
         panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
         panelSeen: panelSeenCount,
         panelAgoMs: panelSeenAt ? (Date.now() - panelSeenAt) : -1,
