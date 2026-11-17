@@ -984,7 +984,7 @@ class MainActivity : ComponentActivity() {
   // 手势诊断：真机上「手势没反应」时，唯一能拿到证据的渠道。
   // 每个闸门都往这里记一条原因，长按顶栏齿轮把整份 JSON 复制到剪贴板。
   var gestureDiag = {
-    starts: 0, moves: 0, ends: 0, mode: null, reject: null,
+    starts: 0, moves: 0, ends: 0, mode: null, reject: null, onVideo: null,
     hit: '', hitBlock: '', hud: 0, hudDisplay: '', scrub: 0,
     bar: null, barW: 0, videoDur: null
   };
@@ -1214,11 +1214,22 @@ class MainActivity : ComponentActivity() {
   function onSeekTouchStart(ev) {
     if (synthDispatching) return;
     gestureDiag.starts++;
-    if (!isFullscreenPlayback()) { gestureDiag.reject = 'not-fullscreen'; scrub = null; return; }
     if (ev.touches.length !== 1) { gestureDiag.reject = 'multitouch'; scrub = null; return; }
+    var t0 = ev.touches[0];
+    // 手指直接落在 <video> 上也放行：1.1.53 的线上数据里，页面内播放器的
+    // video 只有视口的 92%×26%（竖屏 353×199），isFullscreenPlayback() 的
+    // 90%×60% 阈值永远过不去，于是横滑被判 not-fullscreen 直接丢弃。
+    // 判定「在看视频」用命中的元素比用几何比例更准，也不会误伤浏览页。
+    var hitEl = document.elementFromPoint(t0.clientX, t0.clientY);
+    var onVideo = !!(hitEl && hitEl.tagName === 'VIDEO');
+    gestureDiag.onVideo = onVideo;
+    if (!onVideo && !isFullscreenPlayback()) {
+      gestureDiag.reject = 'not-fullscreen';
+      scrub = null; return;
+    }
     markOverlayMenus();
     if (overlayMenuVisible()) { gestureDiag.reject = 'overlay-menu'; scrub = null; return; }
-    var t = ev.touches[0];
+    var t = t0;
     if (!seekGestureAllowed(t.clientX, t.clientY)) { scrub = null; return; }
     var info = videoInfo();
     if (!info) {
@@ -1243,14 +1254,15 @@ class MainActivity : ComponentActivity() {
       rect: rect, bar: bar, usable: usable,
       baseX: usable ? rect.left + (info.t / info.d) * rect.width : 0,
       side: t.clientX < (window.innerWidth || 0) / 2 ? 'left' : 'right',
-      mode: null, target: info.t, synthStarted: false
+      mode: null, target: info.t, synthStarted: false, onVideo: onVideo
     };
   }
   function onSeekTouchMove(ev) {
     if (synthDispatching || !scrub || ev.touches.length !== 1) return;
     gestureDiag.moves++;
-    // 滑动途中退出全屏也要立刻停手，避免继续调音量/亮度
-    if (!isFullscreenPlayback()) { scrub = null; return; }
+    // 滑动途中退出全屏也要立刻停手，避免继续调音量/亮度；
+    // 但从 <video> 上起手的手势不依赖全屏判定，不能因此中途被砍。
+    if (!scrub.onVideo && !isFullscreenPlayback()) { scrub = null; return; }
     var t = ev.touches[0];
     // 手指滑进网页弹层时立刻收手：这里的上下滑本意是滚菜单，
     // 不能继续调音量/亮度，也不能 preventDefault / stopPropagation 干扰网页。
