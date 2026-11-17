@@ -62,54 +62,49 @@
             android:textColor="@color/kv_text_tertiary"
             android:textSize="12sp" />
 
+        <Button
+            android:id="@+id/retry_button"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="22dp"
+            android:background="@drawable/bg_button_primary"
+            android:stateListAnimator="@null"
+            android:text="@string/button_retry"
+            android:textAllCaps="false"
+            android:textColor="@color/kv_on_primary"
+            android:textSize="15sp" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:gravity="center_vertical"
+            android:layout_marginTop="4dp"
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/retry_button"
+                android:id="@+id/copy_url_button"
                 android:layout_width="0dp"
-                android:layout_height="48dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="@string/button_retry"
+                android:background="?android:attr/selectableItemBackground"
+                android:stateListAnimator="@null"
+                android:text="@string/button_copy_url"
                 android:textAllCaps="false"
-                android:textSize="14sp" />
+                android:textColor="@color/kv_text_secondary"
+                android:textSize="13sp" />
 
             <Button
                 android:id="@+id/change_url_button"
                 android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="10dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackground"
+                android:stateListAnimator="@null"
                 android:text="@string/button_change_url"
                 android:textAllCaps="false"
-                android:textSize="14sp" />
+                android:textColor="@color/kv_text_secondary"
+                android:textSize="13sp" />
         </LinearLayout>
     </LinearLayout>
-
-    <!-- 手机端：右下角悬浮操作按钮（FAB 习惯）。
-         放在 bottom|end 而非 top|end，避免压住 KVideo 网页自带的顶部图标工具条。
-         显隐由 MainActivity 的上滑/下滑手势统一控制（同时收起网页顶部工具条），
-         不再跟随横竖屏；全屏播放与设置页仍强制隐藏。
-         48dp 触摸目标 + 点击水波纹 + contentDescription。 -->
-    <ImageButton
-        android:id="@+id/settings_button"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="16dp"
-        android:alpha="0.72"
-        android:background="@drawable/bg_settings_button"
-        android:contentDescription="@string/settings_button"
-        android:foreground="?android:attr/selectableItemBackgroundBorderless"
-        android:padding="12dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_settings_24"
-        android:visibility="gone" />
 
     <ScrollView
         android:id="@+id/setup_container"
@@ -212,7 +207,8 @@
                     android:layout_marginTop="16dp"
                     android:text="@string/setup_footer"
                     android:textColor="@color/kv_text_tertiary"
-                    android:textSize="12sp" />
+                    android:textSize="12sp"
+                    android:lineSpacingExtra="3dp" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
@@ -237,8 +233,8 @@
         android:background="@drawable/bg_lock_hint"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="7dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
         android:visibility="gone">
 
         <TextView
@@ -248,15 +244,15 @@
             android:fontFamily="sans"
             android:text="亮度 100%"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
+            android:textSize="16sp"
             android:textStyle="normal" />
 
         <ProgressBar
             android:id="@+id/gesture_hud_bar"
             style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="48dp"
-            android:layout_height="3dp"
-            android:layout_marginStart="8dp"
+            android:layout_width="64dp"
+            android:layout_height="4dp"
+            android:layout_marginStart="10dp"
             android:max="100"
             android:progress="100"
             android:progressTint="#3B82F6" />

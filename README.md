@@ -2,7 +2,7 @@
 
 从 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 拆出的 **Android WebView 壳应用**：把 KVideo 网页包装成手机 App，并针对触屏重排顶栏、加入播放手势与防误触锁。APK 内**不含服务端代码**，需要你自己的 KVideo 地址（例如 `http://192.168.1.250:81`）。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.51`（`versionCode 53`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `1.1.52`（`versionCode 54`）
 - 运行要求：Android 8.0（API 26）及以上；手机与服务器网络互通
 - 上游许可证：MIT，见 [LICENSE](LICENSE)，Copyright (c) 2025 Kuek Hao Yang
 
@@ -134,6 +134,18 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - 当前 APK 是 **debug 签名**（`debuggable`、未启用 release 混淆）：功能与 release 构建相同，但**不能用于应用商店分发**。
 - 锁钮 3 秒空闲是代码常量 `LOCK_TOGGLE_IDLE_MS`，暂未在设置页开放调整；系统状态栏平时显示，只在系统全屏时隐藏。
 - 顶部黑色区域是系统状态栏 + 网页自身留白，不是原生按钮造成的。
+
+## 1.1.52 变更（相对 1.1.51）
+
+**收尾：安全区、触感、HUD 尺寸、失败页出口、文案与死代码。**
+
+- **刘海安全区**：新增 `attachSafeAreaInsets()`，取 `displayCutout` 的左右内边距——原生锁钮直接 `translationX` 平移，注入层拿到 `--kv-safe-right` 变量，`MORE_CSS` 改成 `right: calc(24px + var(--kv-safe-right, 0px))`。横屏挖孔时「更多」三点不再被切掉一角。只取 cutout 不叠加 systemBars：非全屏时内容已经被系统 inset 过一次，再叠会重复让位。
+- **触感反馈**：锁钮切换用 `LONG_PRESS`，音量/亮度滑到 0% 或 100% 时用 `VIRTUAL_KEY`（只在「刚碰到」那次触发，按住不放不会连续震）。
+- **两个 HUD 尺寸对齐**：原生手势卡片 14sp/3dp 条/48dp 宽 → 16sp/4dp/64dp，内边距 14/7 → 16/8，与注入层拖进度那张卡片同一档体量。
+- **失败页**：「重试」升为铺满的实心主按钮，下面一行两个文字按钮「复制地址 / 修改地址」——失败时最想知道的是「这个地址拿去浏览器打得开吗」，原来没有这出口。
+- **设置页说明改成分条**：原来 400+ 字一整段，现在是 4 条带「·」的短句 + 3dp 行距。
+- **首帧不再闪**：注入脚本开头就把 `data-kv-light` 与 `--kv-safe-right` 写好，CSS 一到即按正确主题渲染，不会再先画一帧深色规则。
+- **清掉死代码**：`settings_button` 及其 drawable / 图标 / 字符串（显隐函数恒返回 false，1.1.48 起入口已由顶栏齿轮接管）、`setAppSettingsDocked` 桥与 `appSettingsDocked` 字段、`syncSeparators()` 与 `kvideo-menu-sep`（1.1.46 起菜单不再生成分隔节点）。
 
 ## 1.1.51 变更（相对 1.1.50）
 
