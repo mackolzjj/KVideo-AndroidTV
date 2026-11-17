@@ -105,6 +105,9 @@ class MainActivity : ComponentActivity() {
   var NATIVE_ATTR = 'data-kvideo-native';
   var BRAND_ATTR = 'data-kvideo-brand';
   var BRAND_TEXT_ATTR = 'data-kvideo-brand-text';
+  var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
+  var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
+  var TOPBAR_ATTR = 'data-kvideo-topbar';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -500,19 +503,31 @@ class MainActivity : ComponentActivity() {
     // 站名文字：以前整段藏掉（只留 logo 圆标），现在按效果图放出来。
     // 只给文字元素定排版，容器不再 font-size:0（否则裸文本节点一起被清空）；
     // img/svg 仍然藏，避免和圆标重复。
-    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
+    // 站名压成一行：只留「KVideo」这一个文字叶子，副标题（视频聚合平台）整段隐藏。
+    // 顶栏因此从约 44dp 回到 36dp，图标与文字在垂直方向同一条中线。
+    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_SUB_ATTR + ']']) +
+      '{display:none !important;}' +
+    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_NAME_ATTR + ']']) +
       '{display:inline-block !important;' +
-      'font-size:15px !important;font-weight:600 !important;line-height:1.2 !important;' +
+      'font-size:15px !important;font-weight:600 !important;line-height:36px !important;' +
       'letter-spacing:.2px !important;margin-left:8px !important;' +
       // 112px ≈ 7 个汉字：再长就省略，避免把 6 个图标挤出去
       'max-width:112px !important;white-space:nowrap !important;overflow:hidden !important;' +
       'text-overflow:ellipsis !important;vertical-align:middle !important;' +
       'color:inherit !important;}' +
+    prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_TEXT_ATTR + ']']) +
+      '{vertical-align:middle !important;}' +
     // 关键：品牌容器不许被压缩。网页的 flex 布局会把它挤到只剩 logo 的宽度，
     // 文字就成了「视频聚…」——不是 max-width 的锅，是父容器宽度不够。
     prefixed('html.' + READY_CLS + ' ', ['[' + BRAND_ATTR + ']']) +
       '{font-size:inherit !important;flex:0 0 auto !important;flex-shrink:0 !important;' +
-      'max-width:none !important;overflow:visible !important;white-space:nowrap !important;}' +
+      'max-width:none !important;overflow:visible !important;white-space:nowrap !important;' +
+      'height:36px !important;min-height:0 !important;align-items:center !important;}' +
+    // 行高回到 36dp：原来两行文字把它撑到约 44dp。纵向 padding 一起收掉，
+    // 不然只剩一行时行高仍被 padding 顶住；横 6 个图标 36dp 内垂直居中。
+    prefixed('html.' + READY_CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
+      '{min-height:36px !important;height:36px !important;' +
+      'padding-top:0 !important;padding-bottom:0 !important;align-items:center !important;}' +
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
@@ -950,6 +965,7 @@ class MainActivity : ComponentActivity() {
       }
     }
     var nodes = brand.querySelectorAll('*');
+    var named = brand.querySelector('[' + BRAND_NAME_ATTR + ']') ? true : false;
     for (j = 0; j < nodes.length; j++) {
       n = nodes[j];
       if (n.closest && n.closest('svg')) continue;
@@ -957,6 +973,28 @@ class MainActivity : ComponentActivity() {
       txt = String(n.textContent || '').trim();
       if (!txt || txt.length > 24) continue;
       if (!n.hasAttribute(BRAND_TEXT_ATTR)) n.setAttribute(BRAND_TEXT_ATTR, '1');
+      // 第一个文字叶子是站名（KVideo），后面的都是副标题（视频聚合平台）。
+      // 压成一行后副标题整个隐藏，只留站名。
+      if (!named) {
+        if (!n.hasAttribute(BRAND_NAME_ATTR)) n.setAttribute(BRAND_NAME_ATTR, '1');
+        named = true;
+      } else if (!n.hasAttribute(BRAND_SUB_ATTR)) {
+        n.setAttribute(BRAND_SUB_ATTR, '1');
+      }
+    }
+    // 顶栏行打标：它自己多半是 flex 容器，行高由内容与 padding 决定，
+    // 压成一行后需要把 min-height 与纵向 padding 一起收掉才能真的回到 36dp。
+    // 从上往下找「同时装着品牌容器和注入菜单」的那一层，它才是真正的顶栏行；
+    // 只按 parentElement 打标有可能打在行内的一个左对齐分组上，把分组压扁。
+    var rowEl = brand.parentElement, hops = 0;
+    while (rowEl && hops < 4) {
+      if (rowEl.querySelector && rowEl.querySelector('[data-kvideo-menu]')) break;
+      rowEl = rowEl.parentElement;
+      hops++;
+    }
+    if (rowEl && rowEl.querySelector && rowEl.querySelector('[data-kvideo-menu]') &&
+        !rowEl.hasAttribute(TOPBAR_ATTR)) {
+      rowEl.setAttribute(TOPBAR_ATTR, '1');
     }
     // 上游也可能把站名放在图片容器的紧邻兄弟里，而不在同一个容器内
     for (i = brandIdx + 1; i < kids.length; i++) {
