@@ -108,6 +108,8 @@ class MainActivity : ComponentActivity() {
   var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
   var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
   var TOPBAR_ATTR = 'data-kvideo-topbar';
+  var DOCK_ATTR = 'data-kvideo-dock';
+  var ROW_HIDDEN_ATTR = 'data-kvideo-row-hidden';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -472,6 +474,28 @@ class MainActivity : ComponentActivity() {
       'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
       'opacity:0;transition:opacity .25s ease;}';
 
+  // 播放页没有 sticky 顶栏（那一行是普通流内元素，页面一滚就跑出屏幕），
+  // 注入菜单找不到落脚点，页面上就没有这条栏。这里给它一个等价的家：
+  // 挂到 body、position:fixed 贴在屏幕最上方，高度/背景/间距与首页完全同一套。
+  // 只做定位，不改内部布局 —— 品牌 + 两个分组仍是同一个 flex 容器里的三块。
+  var DOCK_CSS =
+    '[' + DOCK_ATTR + '="fixed"]{' +
+      'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
+      'width:100% !important;height:36px !important;margin:0 !important;' +
+      'padding:0 12px !important;box-sizing:border-box;' +
+      'display:flex !important;align-items:center;' +
+      'z-index:2147483000 !important;flex:0 0 auto !important;' +
+      'background:rgba(13,15,19,.94);' +
+      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
+    'html[data-kv-light="1"] [' + DOCK_ATTR + '="fixed"]{' +
+      'background:rgba(255,255,255,.95);}' +
+    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
+      'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
+      'font-size:15px;font-weight:600;white-space:nowrap;}' +
+    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand svg{' +
+      'width:26px !important;height:26px !important;flex:0 0 auto;}' +
+    '[' + ROW_HIDDEN_ATTR + ']{display:none !important;}';
+
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -531,7 +555,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + HUD_CSS + LOGO_CSS;
+    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -2211,6 +2235,44 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
+  // 站名：优先取网页标题第一段，取不到就用 KVideo。
+  function pageName() {
+    var t = '';
+    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
+    if (!t || t.length > 14) t = 'KVideo';
+    return t;
+  }
+  // 把菜单挂到 body 上做固定栏；row 传进来时把它藏掉，避免滚回顶部看到两条。
+  function dockFixed(row) {
+    var m = ensureRoot();
+    if (m.parentNode !== document.body) document.body.appendChild(m);
+    if (m.getAttribute(DOCK_ATTR) !== 'fixed') {
+      m.setAttribute(DOCK_ATTR, 'fixed');
+      if (!m.querySelector('.kvideo-float-brand')) {
+        var brand = document.createElement('span');
+        brand.className = 'kvideo-float-brand';
+        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
+        m.insertBefore(brand, m.firstChild);
+      }
+    }
+    if (row && row.setAttribute && !row.hasAttribute(ROW_HIDDEN_ATTR)) {
+      row.setAttribute(ROW_HIDDEN_ATTR, '1');
+    }
+    document.documentElement.classList.add(READY_CLS);
+    syncAvailability();
+    syncThemeState();
+    bindDiagLongPress();
+    disarmFallback();
+  }
+  // 回到有 sticky 顶栏的页面：收起固定栏与自建品牌，菜单回到行内。
+  function undock(m) {
+    if (!m || m.getAttribute(DOCK_ATTR) !== 'fixed') return;
+    m.removeAttribute(DOCK_ATTR);
+    m.style.removeProperty('padding-left');
+    var brand = m.querySelector('.kvideo-float-brand');
+    if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
+  }
+
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2226,9 +2288,18 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { armFallback(); return; }
+    if (!bar) { dockFixed(null); return; }
     var row = pickRow(bar);
+    // 顶栏行不是 sticky/fixed 时它会随页面滚走（播放页就是这样），
+    // 注入菜单跟着消失；这种情况改挂固定栏，并把那一行藏掉。
+    var rowPinned = false;
+    try {
+      var rcs = window.getComputedStyle(row);
+      rowPinned = (rcs.position === 'fixed' || rcs.position === 'sticky');
+    } catch (eRow) { rowPinned = false; }
+    if (!rowPinned && document.querySelector('video')) { dockFixed(row); return; }
     var m = ensureRoot();
+    undock(m);
     if (m.parentNode !== row) row.appendChild(m);
     hideNativeControls(row, m);
     hideBrandText(row, m);
@@ -3469,7 +3540,9 @@ class MainActivity : ComponentActivity() {
                     swipeStartY = event.y
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (viewsReady && !playbackActive && !isSetupVisible() && customView == null &&
+                    // 播放页也要能上滑收起顶栏：以前这里有 !playbackActive，
+                    // 而播放页（有 video + 横屏）恒为 true，于是同一个手势两页两种结果。
+                    if (viewsReady && !isSetupVisible() && customView == null &&
                         webView.visibility == View.VISIBLE) {
                         val dx = event.x - swipeStartX
                         val dy = event.y - swipeStartY
