@@ -1,6 +1,8 @@
 package com.kvideo.tv
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
@@ -15,6 +17,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Rational
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -36,8 +39,10 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -410,7 +415,10 @@ class MainActivity : ComponentActivity() {
   var MORE_WRAP_ATTR = 'data-kvideo-more-wrap';
   var MORE_CSS =
     '[' + MORE_WRAP_ATTR + '="1"]{' +
-      'left:auto !important;right:24px !important;top:32px !important;}';
+      // 24px 是常规边距，再叠加壳层实测的右侧安全区（横屏挖孔时 >0），
+      // 否则三点会落进挖孔里被切掉一角。
+      'left:auto !important;right:calc(24px + var(--kv-safe-right, 0px)) !important;' +
+      'top:32px !important;}';
 
   // 三点弹出的设置面板原本卡片接近三分之一屏宽，挡画面。1.1.28 起接管尺寸：
   // max-content 让宽度贴合文字内容，zoom 等比缩小字号/间距/图标/内边距——
@@ -676,24 +684,6 @@ class MainActivity : ComponentActivity() {
       if (b.style.display !== want) b.style.display = want;
     }
   }
-  // 功能不可用时按钮会被隐藏，同步收掉它两侧多余的分隔占位，
-  // 避免留下多余的间距或让两个占位连在一起。
-  function syncSeparators() {
-    if (!root) return;
-    var kids = root.children;
-    for (var i = 0; i < kids.length; i++) {
-      var s = kids[i];
-      if (s.className !== 'kvideo-menu-sep') continue;
-      var prev = s.previousElementSibling;
-      var next = s.nextElementSibling;
-      var ok = prev && next &&
-        prev.tagName === 'BUTTON' && next.tagName === 'BUTTON' &&
-        prev.style.display !== 'none' && next.style.display !== 'none';
-      var want = ok ? '' : 'none';
-      if (s.style.display !== want) s.style.display = want;
-    }
-  }
-
   // 当前网页是浅色还是深色：注入的 CSS 里有一批「白 alpha」的层级反馈
   // （logo 内圈、齿轮展开底、按下底色、主题选中蓝），它们默认写给深色顶栏，
   // 落到浅色顶栏上就变成白铺白 / 白底上的淡蓝。这里判定出实际亮暗，写到
@@ -763,15 +753,6 @@ class MainActivity : ComponentActivity() {
   }
 
   var failTimer = null;
-  var lastDockState = null;
-  function notifyAppDock(ok) {
-    if (lastDockState === ok) return;
-    lastDockState = ok;
-    try {
-      var bridge = window.KVideoAndroid;
-      if (bridge && bridge.setAppSettingsDocked) bridge.setAppSettingsDocked(ok);
-    } catch (e) { lastDockState = null; }
-  }
   function armFallback() {
     if (failTimer) return;
     failTimer = setTimeout(function () {
@@ -780,14 +761,12 @@ class MainActivity : ComponentActivity() {
       if (!m || !m.parentNode) {
         document.documentElement.classList.remove(READY_CLS);
         document.documentElement.classList.add(FAIL_CLS);
-        notifyAppDock(false);
       }
     }, 1500);
   }
   function disarmFallback() {
     if (failTimer) { clearTimeout(failTimer); failTimer = null; }
     document.documentElement.classList.remove(FAIL_CLS);
-    notifyAppDock(true);
   }
 
   function mark() {
@@ -1827,7 +1806,6 @@ class MainActivity : ComponentActivity() {
     hideBrandText(row, m);
     document.documentElement.classList.add(READY_CLS);
     syncAvailability();
-    syncSeparators();
     syncThemeState();
     disarmFallback();
   }
@@ -1882,15 +1860,7 @@ class MainActivity : ComponentActivity() {
           var b = document.querySelector('[data-kvideo-act="favorites"]');
           return b ? (b.style.display || 'shown') : 'missing';
         })(),
-        seps: document.querySelectorAll('[data-kvideo-menu] > .kvideo-menu-sep').length,
-        sepsVisible: (function () {
-          var n = 0;
-          var list = document.querySelectorAll('[data-kvideo-menu] > .kvideo-menu-sep');
-          for (var i = 0; i < list.length; i++) {
-            if (list[i].style.display !== 'none') n++;
-          }
-          return n;
-        })(),
+
         themeButtons: document.querySelectorAll('[data-kvideo-act^="theme"]').length,
         appDocked: document.querySelectorAll('[data-kvideo-act="appsettings"]').length,
         seekButtons: document.querySelectorAll('[data-kvideo-seek="1"]').length,
@@ -2029,7 +1999,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var fullscreenContainer: FrameLayout
     private lateinit var urlInput: EditText
     private lateinit var statusText: TextView
-    private lateinit var settingsButton: View
     private lateinit var openButton: Button
     private lateinit var saveButton: Button
     private lateinit var loadProgress: ProgressBar
@@ -2037,6 +2006,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var errorDetail: TextView
     private lateinit var retryButton: Button
     private lateinit var changeUrlButton: Button
+    private lateinit var copyUrlButton: Button
     private lateinit var prefs: android.content.SharedPreferences
     private var currentLoadUrl: String = ""
     private var pageLoadFailed = false
@@ -2045,8 +2015,6 @@ class MainActivity : ComponentActivity() {
     private var wasSetupVisibleBeforeFullscreen = false
     private var viewsReady = false
     private var chromeHiddenByGesture = false
-    // 右下角 FAB 已停用；保留桥接状态供调试与后续恢复使用
-    private var appSettingsDocked = true
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
@@ -2066,6 +2034,10 @@ class MainActivity : ComponentActivity() {
      * 回到网页再切回来 —— 否则深色网页配浅色设置页，状态栏会对着其中一边黑到底。
      */
     private var webLight: Boolean? = null
+    /** 最近一次收到的右侧安全边距（CSS px），注入脚本首帧要用它。 */
+    private var lastSafeRightCss = -1
+    /** 手势百分比最近一次到达的边界值（0 / 100），用于只在刚碰到边界时震一下。 */
+    private var lastGestureBoundary = -1
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val hideLockHint = Runnable {
         lockHint.visibility = View.GONE
@@ -2093,12 +2065,12 @@ class MainActivity : ComponentActivity() {
         statusText = findViewById(R.id.status_text)
         openButton = findViewById(R.id.open_button)
         saveButton = findViewById(R.id.save_button)
-        settingsButton = findViewById(R.id.settings_button)
         loadProgress = findViewById(R.id.load_progress)
         errorContainer = findViewById(R.id.error_container)
         errorDetail = findViewById(R.id.error_detail)
         retryButton = findViewById(R.id.retry_button)
         changeUrlButton = findViewById(R.id.change_url_button)
+        copyUrlButton = findViewById(R.id.copy_url_button)
         lockOverlay = findViewById(R.id.lock_overlay)
         lockToggle = findViewById(R.id.lock_toggle)
         lockHint = findViewById(R.id.lock_hint)
@@ -2106,10 +2078,13 @@ class MainActivity : ComponentActivity() {
         gestureHudValue = findViewById(R.id.gesture_hud_value)
         gestureHudBar = findViewById(R.id.gesture_hud_bar)
         viewsReady = true
-        settingsButton.setOnClickListener {
-            showSetup(getString(R.string.status_settings_hint))
-        }
+        attachSafeAreaInsets()
         lockToggle.setOnClickListener { togglePlaybackLock() }
+        copyUrlButton.setOnClickListener {
+            val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            manager.setPrimaryClip(ClipData.newPlainText("KVideo URL", currentLoadUrl))
+            Toast.makeText(this, getString(R.string.status_copied), Toast.LENGTH_SHORT).show()
+        }
         retryButton.setOnClickListener {
             val url = currentLoadUrl
             if (url.isNotEmpty()) {
@@ -2265,7 +2240,6 @@ class MainActivity : ComponentActivity() {
                     loadProgress.visibility = View.GONE
                     webView.visibility = View.GONE
                     setupContainer.visibility = View.GONE
-                    updateSettingsButton()
                     requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     applySystemBars(true)
                 }
@@ -2351,7 +2325,6 @@ class MainActivity : ComponentActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         if (viewsReady) {
-            updateSettingsButton()
             applyWebChromeState()
             applySystemBars(customView != null)
         }
@@ -2430,7 +2403,6 @@ class MainActivity : ComponentActivity() {
         loadProgress.progress = 0
         loadProgress.visibility = View.VISIBLE
         setupContainer.visibility = View.GONE
-        updateSettingsButton()
         // 覆盖页收起，系统栏切回跟网页走（此时还不知道新页面深浅，先用上一次的值）
         applySystemBars(false)
         setStatus(getString(R.string.status_ready), StatusTone.INFO)
@@ -2478,7 +2450,6 @@ class MainActivity : ComponentActivity() {
 
         setStatus(message, tone)
         setupContainer.visibility = View.VISIBLE
-        updateSettingsButton()
         // 设置页是原生层画的，系统栏跟着系统深浅色走
         applySystemBars(false)
         // 必须在 setupContainer 可见之后刷新，updateLockUi() 才判定得到
@@ -2498,19 +2469,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isSetupVisible(): Boolean = setupContainer.visibility == View.VISIBLE
-
-    /**
-     * 手机习惯：像浏览器地址栏，上滑内容时一起收起「网页顶部工具条」，下滑再展开。
-     * 显隐只由手势决定，不跟随横竖屏或播放画面；全屏播放与设置页仍强制隐藏。
-     * 右下角 FAB 已停用：无顶栏的页面（如网页设置页）会触发菜单回落，
-     * 把它放出来挡住内容；应用设置入口由「更多 → 应用设置」和返回键兜底。
-     */
-    private fun shouldShowSettingsButton(): Boolean = false
-
-    private fun updateSettingsButton() {
-        settingsButton.visibility =
-            if (shouldShowSettingsButton()) View.VISIBLE else View.GONE
-    }
 
     /** 网页只在「横屏 + 存在 video」时上报 true；离开播放页自动解锁并收起按钮。 */
     private fun onPlaybackStateChanged(active: Boolean) {
@@ -2539,6 +2497,12 @@ class MainActivity : ComponentActivity() {
         val p = pct.coerceIn(0, 100)
         gestureHudValue.text = valueText
         gestureHudBar.progress = p
+        // 碰到 0 / 100 时震一下，只在「刚碰到」那一次触发，别按住不放一直震。
+        val boundary = if (p == 0 || p == 100) p else -1
+        if (boundary != -1 && boundary != lastGestureBoundary) {
+            gestureHud.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        }
+        lastGestureBoundary = boundary
         gestureHud.visibility = View.VISIBLE
         gestureHudHandler.removeCallbacks(hideGestureHud)
         gestureHudHandler.postDelayed(hideGestureHud, 800L)
@@ -2661,6 +2625,7 @@ class MainActivity : ComponentActivity() {
 
     private fun togglePlaybackLock() {
         flashLockTogglePress()
+        lockToggle.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         setPlaybackLocked(!playbackLocked, showUnlockHint = true)
     }
 
@@ -2696,13 +2661,18 @@ class MainActivity : ComponentActivity() {
     private fun setChromeHidden(hidden: Boolean) {
         if (chromeHiddenByGesture == hidden) return
         chromeHiddenByGesture = hidden
-        updateSettingsButton()
         applyWebChromeState()
     }
 
     /** 页面（重新）加载完成后注入样式与识别逻辑，并立即同步当前手势状态。 */
     private fun injectChromeScript() {
-        val js = CHROME_INJECT_JS +
+        // 首帧就把「浅色标记」和「安全区宽度」写好：注入层的 CSS 一到就按它们渲染，
+        // 不会先按深色规则画一帧再纠正（浅色页会闪一下）。
+        val initialLight = if (webLight ?: !isNightMode()) "1" else "0"
+        val safeRight = lastSafeRightCss.coerceAtLeast(0)
+        val js = "try{document.documentElement.setAttribute('data-kv-light','" + initialLight + "');" +
+            "document.documentElement.style.setProperty('--kv-safe-right','" + safeRight + "px');}catch(e){}" +
+            CHROME_INJECT_JS +
             "\nif(window.KVideoChrome){window.KVideoChrome.setHidden(" +
             chromeHiddenByGesture + ");}"
         webView.post {
@@ -2710,6 +2680,44 @@ class MainActivity : ComponentActivity() {
                 webView.evaluateJavascript(js, null)
             } catch (error: Throwable) {
                 Log.w(TAG, "Failed to inject toolbar auto-hide script", error)
+            }
+        }
+    }
+
+    /**
+     * 把刘海/挖孔造成的安全边距喂给网页：注入层里「更多」三点是 right:24px 的
+     * 固定像素，横屏时挖孔在侧边会把它切掉一角。原生这边用 --kv-safe-right 变量
+     * 参与 calc()，锁钮则直接平移。
+     *
+     * 只取 displayCutout：非全屏时内容已经被系统栏 inset 过一遍，再叠加 systemBars
+     * 会重复让位。
+     */
+    private fun attachSafeAreaInsets() {
+        val content = findViewById<View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(content) { _, insets ->
+            val cut = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            if (viewsReady) {
+                lockToggle.translationX = cut.left.toFloat()
+            }
+            pushSafeRightToWeb(cut.right)
+            insets
+        }
+    }
+
+    private fun pushSafeRightToWeb(rightPx: Int) {
+        if (!::webView.isInitialized) return
+        val css = (rightPx / resources.displayMetrics.density).roundToInt()
+        if (css == lastSafeRightCss) return
+        lastSafeRightCss = css
+        webView.post {
+            try {
+                webView.evaluateJavascript(
+                    "try{document.documentElement.style.setProperty('--kv-safe-right','" +
+                        css + "px');}catch(e){}",
+                    null
+                )
+            } catch (error: Throwable) {
+                Log.w(TAG, "Failed to push safe area inset", error)
             }
         }
     }
@@ -2811,7 +2819,6 @@ class MainActivity : ComponentActivity() {
         if (restoreSetup) {
             setupContainer.visibility = View.VISIBLE
         }
-        updateSettingsButton()
         applyWebChromeState()
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
@@ -2916,15 +2923,6 @@ class MainActivity : ComponentActivity() {
             val pct = (value * 100).roundToInt()
             showGestureHud(getString(R.string.brightness_hud_value, pct), pct)
             pct
-        }
-
-        /** 记录顶部条是否停靠；右下角 FAB 已停用，此状态仅用于调试。 */
-        @JavascriptInterface
-        fun setAppSettingsDocked(docked: Boolean) {
-            runOnUiThread {
-                appSettingsDocked = docked
-                updateSettingsButton()
-            }
         }
 
         /** 顶部条「应用设置」代理按钮：打开壳层的服务器地址设置页。 */
