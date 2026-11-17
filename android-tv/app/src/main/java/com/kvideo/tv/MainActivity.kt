@@ -490,13 +490,15 @@ class MainActivity : ComponentActivity() {
       'padding-left:37px !important;padding-right:47px !important;box-sizing:border-box;' +
       'display:flex !important;align-items:center;' +
       'z-index:2147483000 !important;flex:0 0 auto !important;' +
-      'background:rgba(13,15,19,.94);' +
+      // 底色按页面实际底色由 JS 写进变量：以前用 data-kv-light 猜，遇到
+      // 「浅色标记但实际深色」的设置页就会画出一条大白条，白字压在白底上还看不见。
+      'background:var(--kv-dock-bg, rgba(13,15,19,.94)) !important;' +
+      'color:var(--kv-dock-fg, #F2F4F8) !important;' +
       '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
-    'html[data-kv-light="1"] [' + DOCK_ATTR + '="fixed"]{' +
-      'background:rgba(255,255,255,.95);}' +
     '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
       'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
-      'font-size:15px;font-weight:600;white-space:nowrap;padding-right:12px;}' +
+      'font-size:15px;font-weight:600;white-space:nowrap;padding-right:12px;' +
+      'color:inherit !important;}' +
     '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand svg{' +
       'width:26px !important;height:26px !important;flex:0 0 auto;}' +
     // 挂固定栏时把网页自己顶部那条（div 形态、选择器命不中的）藏掉
@@ -2295,6 +2297,14 @@ class MainActivity : ComponentActivity() {
   }
   function dockFixed() {
     var m = ensureRoot();
+    // 用页面实际底色决定深浅，而不是 data-kv-light 标记
+    try {
+      var bg = window.getComputedStyle(document.body).backgroundColor || '';
+      var mm = bg.match(/rgba?\(([0-9.]+),\s*([0-9.]+),\s*([0-9.]+)/);
+      var lightBg = mm ? ((0.299 * +mm[1] + 0.587 * +mm[2] + 0.114 * +mm[3]) / 255 > 0.5) : false;
+      m.style.setProperty('--kv-dock-bg', lightBg ? 'rgba(255,255,255,.95)' : 'rgba(13,15,19,.94)');
+      m.style.setProperty('--kv-dock-fg', lightBg ? '#111318' : '#F2F4F8');
+    } catch (e) {}
     if (m.parentNode !== document.body) document.body.appendChild(m);
     if (m.getAttribute(DOCK_ATTR) !== 'fixed') {
       m.setAttribute(DOCK_ATTR, 'fixed');
