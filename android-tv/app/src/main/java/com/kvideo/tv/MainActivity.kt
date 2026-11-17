@@ -1963,8 +1963,30 @@ class MainActivity : ComponentActivity() {
       { attributes: true, attributeFilter: ['style'] });
   }
 
-  function placeSpeedMenu() {
-    var menu = findSpeedMenu();
+  // 在一个新增子树里就地判定倍速菜单：全部子按钮都是「1x / 1.5x」这种文本。
+  // 只扫新增节点，成本可控，可以在 MutationObserver 里同步调用。
+  function speedMenuIn(node) {
+    if (!node || node.nodeType !== 1) return null;
+    // 廉价预筛：子树里连 button 都没有，肯定不是倍速菜单
+    if (!node.querySelector || !node.querySelector('button')) return null;
+    var cands = [node];
+    var l = node.querySelectorAll ? node.querySelectorAll('div') : [];
+    for (var i = 0; i < l.length && i < 300; i++) cands.push(l[i]);
+    for (var c = 0; c < cands.length; c++) {
+      var kids = cands[c].children;
+      if (!kids || kids.length < 2) continue;
+      var total = 0, hit = 0;
+      for (var j = 0; j < kids.length; j++) {
+        if (kids[j].tagName !== 'BUTTON') continue;
+        total++;
+        if (/^[0-9]+([.][0-9]+)?x$/.test(String(kids[j].textContent || '').trim())) hit++;
+      }
+      if (total >= 2 && hit === total) return cands[c];
+    }
+    return null;
+  }
+  function placeSpeedMenu(node) {
+    var menu = node || findSpeedMenu();
     if (!menu) return;
     if (menu.getAttribute(SPEED_MENU_ATTR) !== '1') {
       menu.setAttribute(SPEED_MENU_ATTR, '1');
@@ -2251,6 +2273,22 @@ class MainActivity : ComponentActivity() {
       document.querySelector('[' + RATE_ATTR + '="1"]'));
   }
   new MutationObserver(function (list) {
+    // 弹层是新建出来的节点，必须在这一帧画出去之前摆好。schedule() 有 120ms
+    // 节流 + 200ms 兜底定时器，等它跑的时候网页那版位置早被画出来了 ——
+    // 那就是「出现一次、又挪一次」的第二次。这里对新增子树同步处理。
+    var moreHit = false;
+    for (var i = 0; i < list.length; i++) {
+      var an = list[i].addedNodes;
+      if (!an || !an.length) continue;
+      for (var k = 0; k < an.length; k++) {
+        var nd = an[k];
+        if (!nd || nd.nodeType !== 1) continue;
+        var sm = speedMenuIn(nd);
+        if (sm) { try { placeSpeedMenu(sm); } catch (e) {} }
+        if (String(nd.textContent || '').indexOf(OVERLAY_TEXT_HINT) >= 0) moreHit = true;
+      }
+    }
+    if (moreHit) { try { markMoreMenu(); } catch (e) {} }
     schedule();
     // 显隐先跟：控制条改透明度可能是「换 class」，也可能是直接写内联
     // style.opacity。只监听 class 的话，内联那种写法要等到 1s 扫描才同步，
