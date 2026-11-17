@@ -2678,6 +2678,9 @@ class MainActivity : ComponentActivity() {
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
+    // 一次手势只判定一次：否则同一次滑动里每个 MOVE 都会重复触发收起/展开，
+    // 来回抖就是看到的「顶栏闪一下」。
+    private var swipeHandled = false
     private lateinit var lockOverlay: View
     private lateinit var lockToggle: ImageButton
     private lateinit var lockHint: TextView
@@ -3585,6 +3588,7 @@ class MainActivity : ComponentActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     swipeStartX = event.x
                     swipeStartY = event.y
+                    swipeHandled = false
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (viewsReady && !playbackActive && !isSetupVisible() && customView == null &&
@@ -3592,10 +3596,12 @@ class MainActivity : ComponentActivity() {
                         val dx = event.x - swipeStartX
                         val dy = event.y - swipeStartY
                         // 只认明显垂直、且超过 48dp 的滑动；横滑切换/拖进度条不误触发
-                        if (abs(dx) < abs(dy) * 0.8f) {
+                        if (!swipeHandled && abs(dx) < abs(dy) * 0.8f) {
                             if (dy <= -swipeThresholdPx) {
+                                swipeHandled = true
                                 setChromeHidden(true)
                             } else if (dy >= swipeThresholdPx) {
+                                swipeHandled = true
                                 setChromeHidden(false)
                             }
                         }
