@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  深色。与 values/colors.xml 一一同名，只是取值不同；原生层所有页面只引用名字。
+  这几个值就是 1.1.48 里散在 layout / drawable 中的硬编码色，集中到这里，
+  所以深色下的观感与之前一致。
+-->
+<resources>
+    <color name="kv_surface">#FF101115</color>
+    <color name="kv_window_bg">#FF101115</color>
+
+    <color name="kv_card">#FF23262E</color>
+    <color name="kv_card_stroke">#1FFFFFFF</color>
+
+    <color name="kv_input_bg">#FF14161B</color>
+    <color name="kv_input_stroke">#26FFFFFF</color>
+
+    <color name="kv_text_primary">#FFFFFFFF</color>
+    <color name="kv_text_secondary">#FFD7DBE5</color>
+    <color name="kv_text_tertiary">#FF9EA7BA</color>
+    <color name="kv_text_hint">#FF7D8597</color>
+
+    <color name="kv_status_warn">#FFF5B942</color>
+    <color name="kv_status_error">#FFF87171</color>
+    <color name="kv_accent">#FF3B82F6</color>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      深色版：父主题保持 Material（深色控件系），色值与 1.1.48 的硬编码值一致，
+      所以深色下原生页观感不变；浅色版见 values/styles.xml。
+    -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:colorBackground">@color/kv_window_bg</item>
+        <item name="android:statusBarColor">@color/kv_surface</item>
+        <item name="android:navigationBarColor">@color/kv_surface</item>
+        <item name="android:windowLightStatusBar">@bool/kv_light_system_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/kv_light_system_bars</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>

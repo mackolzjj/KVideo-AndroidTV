@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Rect
 import android.media.AudioManager
 import android.net.Uri
@@ -283,7 +284,17 @@ class MainActivity : ComponentActivity() {
     'html[data-kv-light="1"] ' + BTN + '[data-kvideo-open="1"]{' +
       'background:rgba(0,0,0,.14) !important;}' +
     'html[data-kv-light="1"] [data-kvideo-menu] .kvideo-group > button:active{' +
-      'background:rgba(0,0,0,.08) !important;}';
+      'background:rgba(0,0,0,.08) !important;}' +
+    // 触摸目标：视觉上按钮只有 30–34px（远低于 48dp），但顶栏放不下更大的圆。
+    // 这里只撑「命中区」、不改外观：上下各扩 9px（30+18=48），左右各扩 3px
+    // —— 横向不扩到 6px 是因为相邻按钮只隔 4px，扩多了两个按钮的命中区会互压，
+    // 点边缘会落到邻居身上。伪元素在按钮内部，不占布局、不挡弹层。
+    '[data-kvideo-menu] .kvideo-group > button::after{content:"";position:absolute;' +
+      'left:-3px;right:-3px;top:-9px;bottom:-9px;border-radius:999px;}' +
+    '[data-kvideo-menu] .kvideo-group > button:active::after{' +
+      'background:rgba(255,255,255,.06);}' +
+    'html[data-kv-light="1"] [data-kvideo-menu] .kvideo-group > button:active::after{' +
+      'background:rgba(0,0,0,.04);}';
 
   // 播放页左右快退/快进圆钮：网页原生按钮 aria-label 是「后退 N 秒」/「前进 N 秒」。
   // 1.1.15 用 @media(min-width:768px) 分档，WebView 宽度不到 768px 时窄屏档
@@ -696,6 +707,12 @@ class MainActivity : ComponentActivity() {
     if (light === lightFlag) return;
     lightFlag = light;
     document.documentElement.setAttribute('data-kv-light', light ? '1' : '0');
+    // 顺手告诉壳层，让状态栏/导航栏跟着换底色与图标明暗（浅色网页配白栏 + 深图标）。
+    // 桥没注入或方法不存在就静默跳过 —— 这条只影响观感，绝不能影响顶栏本身。
+    try {
+      var bridge = window.KVideoAndroid;
+      if (bridge && bridge.setWebTheme) bridge.setWebTheme(light);
+    } catch (e) {}
   }
 
   // 「跟随系统」档：系统切深浅色时不重新加载网页也要立刻跟上。
@@ -2015,6 +2032,12 @@ class MainActivity : ComponentActivity() {
     private val hideGestureHud = Runnable { gestureHud.visibility = View.GONE }
     private var playbackLocked = false
     private var playbackActive = false
+    /**
+     * 网页上报的实际亮暗：true = 网页是浅色底，null = 还没收到（按系统深浅色兜底）。
+     * 系统栏（状态栏/导航栏）的颜色与图标明暗跟它走；原生覆盖页盖上来时改按系统深浅色，
+     * 回到网页再切回来 —— 否则深色网页配浅色设置页，状态栏会对着其中一边黑到底。
+     */
+    private var webLight: Boolean? = null
     private val lockHintHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val hideLockHint = Runnable {
         lockHint.visibility = View.GONE
@@ -2349,6 +2372,8 @@ class MainActivity : ComponentActivity() {
         loadProgress.visibility = View.VISIBLE
         setupContainer.visibility = View.GONE
         updateSettingsButton()
+        // 覆盖页收起，系统栏切回跟网页走（此时还不知道新页面深浅，先用上一次的值）
+        applySystemBars(false)
         statusText.text = getString(R.string.status_ready)
         webView.loadUrl(url)
     }
@@ -2363,6 +2388,8 @@ class MainActivity : ComponentActivity() {
         }
         errorDetail.text = text.toString()
         errorContainer.visibility = View.VISIBLE
+        // 失败页是原生层画的，系统栏跟着系统深浅色，别继续用网页那份
+        applySystemBars(false)
     }
 
     private fun showSetup(message: String) {
@@ -2393,6 +2420,8 @@ class MainActivity : ComponentActivity() {
         statusText.text = message
         setupContainer.visibility = View.VISIBLE
         updateSettingsButton()
+        // 设置页是原生层画的，系统栏跟着系统深浅色走
+        applySystemBars(false)
         // 必须在 setupContainer 可见之后刷新，updateLockUi() 才判定得到
         // !isSetupVisible() == false，锁按钮不会盖在设置表单上。
         setPlaybackLocked(false)
@@ -2669,11 +2698,36 @@ class MainActivity : ComponentActivity() {
     /**
      * 手机端：平时显示状态栏与导航栏（可下拉通知、使用手势返回），
      * 只在网页视频进入全屏时隐藏系统栏并保持屏幕常亮。
+     *
+     * 1.1.50 起系统栏的底色与图标明暗跟着「当前看得见的那一层」走：
+     *   - 设置页 / 加载失败页盖在上面 → 跟系统深浅色（原生页已有一整套 token）
+     *   - 否则跟网页上报的亮暗（webLight），没收到就退回系统深浅色
+     * 之前这里写死 setAppearanceLight*Bars(false) + statusBarColor #000000，
+     * 浅色网页配一条黑边，浅色系统下更明显。
      */
+    private fun isNightMode(): Boolean =
+        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+
+    /** 当前露在最上面的那一层是浅色底吗。 */
+    private fun surfaceIsLight(): Boolean {
+        val overlayVisible = viewsReady &&
+            (isSetupVisible() || errorContainer.visibility == View.VISIBLE)
+        if (overlayVisible) return !isNightMode()
+        return webLight ?: !isNightMode()
+    }
+
     private fun applySystemBars(immersive: Boolean) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.setAppearanceLightStatusBars(false)
-        controller.setAppearanceLightNavigationBars(false)
+        val light = surfaceIsLight()
+        controller.setAppearanceLightStatusBars(light)
+        controller.setAppearanceLightNavigationBars(light)
+
+        // 系统栏底色：跟当前那一层的底色对齐，别让状态栏和内容之间横一条异色。
+        // 原生覆盖页用 kv_surface（跟 layout 里同一个 token），网页用纯白/纯黑
+        // ——网页顶栏多数就是这两档，剩下的差异只有一两阶，肉眼不跳。
+        window.statusBarColor = if (light) Color.WHITE else Color.BLACK
+        window.navigationBarColor = if (light) Color.WHITE else Color.BLACK
 
         if (immersive) {
             controller.systemBarsBehavior =
@@ -2745,6 +2799,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class AndroidPlayerBridge {
+        /**
+         * 网页上报自己是浅色还是深色底（注入层 applyLightFlag 已经把这件事判出来了）。
+         * 系统栏据此换底色与图标明暗：浅色网页配白状态栏 + 深图标，深色网页反之。
+         * 视频全屏时系统栏本来就是隐藏的，不在这里抢方向。
+         */
+        @JavascriptInterface
+        fun setWebTheme(light: Boolean) {
+            runOnUiThread {
+                if (webLight == light) return@runOnUiThread
+                webLight = light
+                if (customView == null) applySystemBars(false)
+            }
+        }
+
         /** 网页上报当前是否处于横屏播放，壳层据此显示/隐藏防误触锁按钮。 */
         @JavascriptInterface
         fun onPlaybackState(active: Boolean) {

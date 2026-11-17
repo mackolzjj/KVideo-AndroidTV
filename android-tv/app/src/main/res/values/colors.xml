@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  浅色（默认）。原生覆盖页（设置页、加载失败页）与系统栏只引用这里的名字，
+  不写死色值；深色同名同值域的定义在 values-night/colors.xml。
+  视频上方的 HUD / 锁钮不参与这套 token —— 它们永远压在画面上，必须保持深色，
+  见 drawable/bg_lock_hint.xml、bg_lock_button.xml 与 activity_main.xml 里的注释。
+
+  对比度按 WCAG（正文 4.5:1 / UI 元素 3:1）取的值，改色请重算：
+  正文 #0F172A 17.85:1、次要 #475569 7.58:1、辅助 #52607A 5.76:1、
+  输入提示 #64748B 4.55:1、警告 #B45309 5.02:1、错误 #B91C1C 6.47:1、
+  强调 #2563EB 5.17:1（均对各自所在底色）。
+-->
+<resources>
+    <!-- 页面级底：设置页 / 失败页整屏底色，也用作窗口默认背景，避免冷启动黑闪 -->
+    <color name="kv_surface">#FFF2F4F8</color>
+    <color name="kv_window_bg">#FFF2F4F8</color>
+
+    <!-- 卡片 -->
+    <color name="kv_card">#FFFFFFFF</color>
+    <color name="kv_card_stroke">#1F0F172A</color>
+
+    <!-- 输入框 -->
+    <color name="kv_input_bg">#FFF8FAFC</color>
+    <color name="kv_input_stroke">#260F172A</color>
+
+    <!-- 文字 -->
+    <color name="kv_text_primary">#FF0F172A</color>
+    <color name="kv_text_secondary">#FF475569</color>
+    <color name="kv_text_tertiary">#FF52607A</color>
+    <color name="kv_text_hint">#FF64748B</color>
+
+    <!-- 状态与强调 -->
+    <color name="kv_status_warn">#FFB45309</color>
+    <color name="kv_status_error">#FFB91C1C</color>
+    <color name="kv_accent">#FF2563EB</color>
+</resources>
