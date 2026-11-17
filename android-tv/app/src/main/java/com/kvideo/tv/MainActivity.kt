@@ -2335,14 +2335,9 @@ class MainActivity : ComponentActivity() {
       dockFixed(null);
       return;
     }
-    // 顶栏行不是 sticky/fixed 时它会随页面滚走（播放页就是这样），
-    // 注入菜单跟着消失；这种情况改挂固定栏，并把那一行藏掉。
-    var rowPinned = false;
-    try {
-      var rcs = window.getComputedStyle(row);
-      rowPinned = (rcs.position === 'fixed' || rcs.position === 'sticky');
-    } catch (eRow) { rowPinned = false; }
-    if (!rowPinned && document.querySelector('video')) { dockFixed(row); return; }
+    // 注意：这里**不能**再用「行不是 sticky 且有 video 就改挂固定栏」的判据。
+    // 那条判据是全局的（页面任何位置有 <video> 都算），首页一旦有预览视频就会
+    // 被判成播放页，形态跟着跳。现在只有「彻底找不到行」才挂固定栏。
     var m = ensureRoot();
     undock(m);
     if (m.parentNode !== row) row.appendChild(m);
