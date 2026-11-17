@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
         private const val PREFS_NAME = "kvideo_tv_settings"
         private const val PREF_SERVER_URL = "server_url"
         private const val TAG = "KVideoMainActivity"
-        private const val SWIPE_THRESHOLD_DP = 32f
+        private const val SWIPE_THRESHOLD_DP = 48f
         /** 锁按钮空闲多久后自动隐藏；触屏或按任意键重新计时并显示。 */
         private const val LOCK_TOGGLE_IDLE_MS = 3_000L
 
@@ -108,8 +108,6 @@ class MainActivity : ComponentActivity() {
   var BRAND_NAME_ATTR = 'data-kvideo-brand-name';
   var BRAND_SUB_ATTR = 'data-kvideo-brand-sub';
   var TOPBAR_ATTR = 'data-kvideo-topbar';
-  var DOCK_ATTR = 'data-kvideo-dock';
-  var ROW_HIDDEN_ATTR = 'data-kvideo-row-hidden';
   var LOGO_ATTR = 'data-kvideo-logo';
   var BRAND_IMG_ATTR = 'data-kvideo-brand-img';
   var HIDE = 'transform:translateY(-120%) !important;opacity:0 !important;' +
@@ -474,28 +472,6 @@ class MainActivity : ComponentActivity() {
       'box-shadow:0 8px 24px rgba(0,0,0,.42);pointer-events:none;' +
       'opacity:0;transition:opacity .25s ease;}';
 
-  // 播放页没有 sticky 顶栏（那一行是普通流内元素，页面一滚就跑出屏幕），
-  // 注入菜单找不到落脚点，页面上就没有这条栏。这里给它一个等价的家：
-  // 挂到 body、position:fixed 贴在屏幕最上方，高度/背景/间距与首页完全同一套。
-  // 只做定位，不改内部布局 —— 品牌 + 两个分组仍是同一个 flex 容器里的三块。
-  var DOCK_CSS =
-    '[' + DOCK_ATTR + '="fixed"]{' +
-      'position:fixed !important;top:0 !important;left:0 !important;right:0 !important;' +
-      'width:100% !important;height:36px !important;margin:0 !important;' +
-      'padding:0 12px !important;box-sizing:border-box;' +
-      'display:flex !important;align-items:center;' +
-      'z-index:2147483000 !important;flex:0 0 auto !important;' +
-      'background:rgba(13,15,19,.94);' +
-      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}' +
-    'html[data-kv-light="1"] [' + DOCK_ATTR + '="fixed"]{' +
-      'background:rgba(255,255,255,.95);}' +
-    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand{' +
-      'display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;' +
-      'font-size:15px;font-weight:600;white-space:nowrap;}' +
-    '[' + DOCK_ATTR + '="fixed"] .kvideo-float-brand svg{' +
-      'width:26px !important;height:26px !important;flex:0 0 auto;}' +
-    '[' + ROW_HIDDEN_ATTR + ']{display:none !important;}';
-
   var HUD_CSS =
     '[data-kvideo-hud]{position:fixed !important;left:50% !important;top:30% !important;' +
       'transform:translate(-50%,-50%) !important;min-width:152px !important;' +
@@ -520,12 +496,6 @@ class MainActivity : ComponentActivity() {
   var CSS =
     sels.join(',') + '{transition:transform .22s ease,opacity .22s ease !important;}' +
     prefixed('html.' + CLS + ' ', sels) + '{' + HIDE + '}' +
-    // 只把菜单自己 translateY 上去，页面那一行还占着 36dp，会留下一条空白带
-    // （截图里圈出来的「多出来的一条」）。收起时把行高、内边距一起压成 0。
-    prefixed('html.' + CLS + ' ', ['[' + TOPBAR_ATTR + ']']) +
-      '{height:0 !important;min-height:0 !important;max-height:0 !important;' +
-      'padding-top:0 !important;padding-bottom:0 !important;border:0 !important;' +
-      'overflow:hidden !important;}' +
     prefixed('html.' + READY_CLS + ' ', [NATIVE_NAV, NATIVE_HEADER]) +
       '{display:none !important;}' +
     prefixed('html.' + READY_CLS + ' ', ['[' + NATIVE_ATTR + ']']) +
@@ -561,7 +531,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
+    THEME_HINT_CSS + HUD_CSS + LOGO_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -1149,34 +1119,6 @@ class MainActivity : ComponentActivity() {
   // 菜单展开瞬间的样式快照：确认「两次动画」到底来自网页的 transition、
   // 我们自己的 animation，还是子元素各自动了一套。
   var menuDiag = { speed: null, more: null };
-  // 收起顶栏后顶部那 60px 里究竟是谁在占位：收起瞬间采一次样，供诊断使用。
-  // 长期挂在 debug() 里，即使恢复后再取诊断也能看到上一次收起的现场。
-  var stripProbe = null;
-  function probeTopStrip() {
-    try {
-      var out = [];
-      var vw = window.innerWidth || 0;
-      var pts = [[Math.round(vw / 2), 6], [Math.round(vw / 2), 24], [Math.round(vw / 2), 44]];
-      for (var i = 0; i < pts.length; i++) {
-        var el = document.elementFromPoint(pts[i][0], pts[i][1]);
-        var hops = 0;
-        while (el && hops < 3) {
-          var r0 = el.getBoundingClientRect();
-          out.push({
-            y: pts[i][1],
-            tag: el.tagName,
-            cls: String(el.className || '').slice(0, 46),
-            rect: [Math.round(r0.top), Math.round(r0.height)],
-            pt: (window.getComputedStyle(el).paddingTop || ''),
-            disp: window.getComputedStyle(el).display
-          });
-          el = el.parentElement;
-          hops++;
-        }
-      }
-      stripProbe = out;
-    } catch (e) { stripProbe = 'err'; }
-  }
   var menuTrace = [];
   var menuTraceSeq = 0;
   function startMenuTrace(menu) {
@@ -2269,45 +2211,6 @@ class MainActivity : ComponentActivity() {
     markMoreMenu();
   }
 
-  // 站名：优先取网页标题第一段，取不到就用 KVideo。
-  function pageName() {
-    var t = '';
-    try { t = String(document.title || '').split(/[-|·—]/)[0].trim(); } catch (e) { t = ''; }
-    if (!t || t.length > 14) t = 'KVideo';
-    return t;
-  }
-  // 把菜单挂到 body 上做固定栏；row 传进来时把它藏掉，避免滚回顶部看到两条。
-  function dockFixed(row) {
-    var m = ensureRoot();
-    if (m.parentNode !== document.body) document.body.appendChild(m);
-    if (m.getAttribute(DOCK_ATTR) !== 'fixed') {
-      m.setAttribute(DOCK_ATTR, 'fixed');
-      if (!m.querySelector('.kvideo-float-brand')) {
-        var brand = document.createElement('span');
-        brand.className = 'kvideo-float-brand';
-        brand.innerHTML = LOGO_SVG + '<b>' + pageName() + '</b>';
-        m.insertBefore(brand, m.firstChild);
-      }
-    }
-    if (row && row.setAttribute && !row.hasAttribute(ROW_HIDDEN_ATTR)) {
-      row.setAttribute(ROW_HIDDEN_ATTR, '1');
-    }
-    document.documentElement.classList.add(READY_CLS);
-    syncAvailability();
-    syncThemeState();
-    bindDiagLongPress();
-    disarmFallback();
-  }
-  // 回到有 sticky 顶栏的页面：收起固定栏与自建品牌，菜单回到行内。
-  function undock(m) {
-    if (!m || m.getAttribute(DOCK_ATTR) !== 'fixed') return;
-    m.removeAttribute(DOCK_ATTR);
-    m.style.removeProperty('padding-left');
-    var brand = m.querySelector('.kvideo-float-brand');
-    if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
-  }
-
-  var lastRow = null;
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2323,26 +2226,10 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    var row = null;
-    if (bar) {
-      row = pickRow(bar);
-      lastRow = row;
-    } else if (lastRow && document.body.contains(lastRow)) {
-      // 行是我们自己收起的（display:none / 高度 0），rect 全为 0，这里不能
-      // 当成「页面没有顶栏」去挂固定栏 —— 否则首页会在两种形态之间来回跳。
-      row = lastRow;
-    } else {
-      dockFixed(null);
-      return;
-    }
-    // 注意：这里**不能**再用「行不是 sticky 且有 video 就改挂固定栏」的判据。
-    // 那条判据是全局的（页面任何位置有 <video> 都算），首页一旦有预览视频就会
-    // 被判成播放页，形态跟着跳。现在只有「彻底找不到行」才挂固定栏。
+    if (!bar) { armFallback(); return; }
+    var row = pickRow(bar);
     var m = ensureRoot();
-    undock(m);
     if (m.parentNode !== row) row.appendChild(m);
-    // 收起顶栏时要靠这个标记把行高压成 0，所以每次 sync 都确保标上
-    if (row.setAttribute && !row.hasAttribute(TOPBAR_ATTR)) row.setAttribute(TOPBAR_ATTR, '1');
     hideNativeControls(row, m);
     hideBrandText(row, m);
     document.documentElement.classList.add(READY_CLS);
@@ -2398,18 +2285,7 @@ class MainActivity : ComponentActivity() {
     setHidden: function (v) {
       hidden = !!v;
       document.documentElement.classList.toggle(CLS, hidden);
-      // 只靠 CSS 把行高压 0 仍然会留一条（行外面还有一层带 padding 的容器）。
-      // 收起时直接给这一行 display:none，恢复时摘掉，条带彻底消失。
-      var rows = document.querySelectorAll('[' + TOPBAR_ATTR + ']');
-      for (var ri = 0; ri < rows.length; ri++) {
-        if (hidden) rows[ri].style.setProperty('display', 'none', 'important');
-        else rows[ri].style.removeProperty('display');
-      }
       if (hidden) closePopover();
-      if (hidden) {
-        if (window.requestAnimationFrame) requestAnimationFrame(probeTopStrip);
-        setTimeout(probeTopStrip, 120);
-      }
       mark();
       syncMenu();
     },
@@ -2461,7 +2337,6 @@ class MainActivity : ComponentActivity() {
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
         menus: menuDiag,
-        stripProbe: stripProbe,
         panels: (function () { try { return panelOpen() ? 1 : 0; } catch (e) { return -1; } })(),
         panelSeen: panelSeenCount,
         panelAgoMs: panelSeenAt ? (Date.now() - panelSeenAt) : -1,
@@ -2685,11 +2560,6 @@ class MainActivity : ComponentActivity() {
     private var swipeStartX = 0f
     private var swipeStartY = 0f
     private var swipeThresholdPx = 0f
-    // 上滑收起顶栏的诊断：DOWN 次数、最大纵向位移、收起/恢复次数
-    private var swipeDownCount = 0
-    private var swipeMaxDy = 0f
-    private var swipeHideCount = 0
-    private var swipeShowCount = 0
     private lateinit var lockOverlay: View
     private lateinit var lockToggle: ImageButton
     private lateinit var lockHint: TextView
@@ -3597,25 +3467,18 @@ class MainActivity : ComponentActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     swipeStartX = event.x
                     swipeStartY = event.y
-                    swipeDownCount++
-                    swipeMaxDy = 0f
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    // 播放页也要能上滑收起顶栏：以前这里有 !playbackActive，
-                    // 而播放页（有 video + 横屏）恒为 true，于是同一个手势两页两种结果。
-                    if (viewsReady && !isSetupVisible() && customView == null &&
+                    if (viewsReady && !playbackActive && !isSetupVisible() && customView == null &&
                         webView.visibility == View.VISIBLE) {
                         val dx = event.x - swipeStartX
                         val dy = event.y - swipeStartY
-                        if (abs(dy) > abs(swipeMaxDy)) swipeMaxDy = dy
                         // 只认明显垂直、且超过 48dp 的滑动；横滑切换/拖进度条不误触发
                         if (abs(dx) < abs(dy) * 0.8f) {
                             if (dy <= -swipeThresholdPx) {
                                 setChromeHidden(true)
-                                swipeHideCount++
                             } else if (dy >= swipeThresholdPx) {
                                 setChromeHidden(false)
-                                swipeShowCount++
                             }
                         }
                     }
@@ -3856,12 +3719,6 @@ class MainActivity : ComponentActivity() {
             append('(').append(BuildConfig.VERSION_CODE).append(")\n")
             append("playbackActive=").append(playbackActive)
             append(" webPanelOpen=").append(webPanelOpen)
-            append(" chromeHidden=").append(chromeHiddenByGesture)
-            append(" swipeDown=").append(swipeDownCount)
-            append(" swipeMaxDy=").append(swipeMaxDy.toInt())
-            append(" swipeHide=").append(swipeHideCount)
-            append(" swipeShow=").append(swipeShowCount)
-            append(" viewsReady=").append(viewsReady)
             append(" customView=").append(customView != null)
             append(" fullscreenContainer=").append(fullscreenContainer.visibility == View.VISIBLE)
             append(" webViewVisible=").append(webView.visibility == View.VISIBLE)
