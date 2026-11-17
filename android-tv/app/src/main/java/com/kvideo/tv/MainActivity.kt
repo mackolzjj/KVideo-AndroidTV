@@ -1318,6 +1318,12 @@ class MainActivity : ComponentActivity() {
             scrub.rect.top + scrub.rect.height / 2);
         }
       } else if (Math.abs(dy) >= Math.abs(dx) * AXIS_RATIO) {
+        // 纵向（音量 / 亮度）只在全屏播放时启用。页面内播放器虽然也放大了
+        // 起手范围，但那里纵向手势没有意义，还会和网页自己的滚动抢事件。
+        if (!isFullscreenPlayback()) {
+          gestureDiag.reject = 'vertical-non-fullscreen';
+          scrub = null; return;
+        }
         scrub.mode = 'vertical';
         gestureDiag.mode = 'vertical';
       } else return;
