@@ -395,16 +395,20 @@ class MainActivity : ComponentActivity() {
   // zoom-in 弹出动画因此跟着失效，只剩「啪」地瞬间出现；三点面板没被接管，
   // 一直是柔和淡入。这里补一套同款：容器只动 opacity（绝不碰 transform，
   // 否则菜单位置会跑偏），条目再叠一点 translateY + scale 做放大感。
-  // 用 !important 的 animation 覆盖网页自带的 animate-in，避免两套叠播。
+  //
+  // 1.1.61 起改成「只保留容器这一条动画」：之前容器淡入 + 每个条目各自
+  // translateY/scale，网页自己还给条目挂 animate-in，两套叠在一起就是
+  // 「点一次、动两次」。现在条目上的 animation / transition 全部禁掉，
+  // 唯一在动的只有容器的 opacity 淡入。
   var SPEED_MENU_ANIM =
     '@keyframes kvideoSpeedFade{from{opacity:0;}to{opacity:1;}}' +
-    '@keyframes kvideoSpeedItem{' +
-      'from{opacity:0;transform:translateY(6px) scale(.96);}' +
-      'to{opacity:1;transform:none;}}' +
     '[' + SPEED_MENU_ATTR + '="1"]{' +
-      'animation:kvideoSpeedFade .18s ease-out !important;}' +
-    '[' + SPEED_MENU_ATTR + '="1"] > button{' +
-      'animation:kvideoSpeedItem .2s cubic-bezier(.16,1,.3,1) backwards !important;}';
+      'animation:kvideoSpeedFade .18s ease-out !important;' +
+      // 网页常挂 transition-all：我们在展开瞬间写 left/bottom/width 会被它
+      // 播成第二段位移，同样表现为「两次动画」。
+      'transition:none !important;}' +
+    '[' + SPEED_MENU_ATTR + '="1"] *{' +
+      'animation:none !important;transition:none !important;}';
 
   // 播放页「更多」三点原本贴在左上角，和绿色 1080P 画质标签挤在一起。
   // 1.1.18 已把右上角 top-8 right-6 的倍速容器整体挪到底栏，右上角空出来。
@@ -428,7 +432,12 @@ class MainActivity : ComponentActivity() {
   var MORE_MENU_CSS =
     '[' + MORE_MENU_ATTR + '="1"]{' +
       'zoom:0.82 !important;width:max-content !important;min-width:0 !important;' +
-      'max-width:300px !important;box-sizing:border-box !important;}';
+      'max-width:300px !important;box-sizing:border-box !important;' +
+      // 只禁 transition：网页的 transition-all 会把我们展开瞬间写的 width/zoom
+      // 播成第二段动画；animation 留给网页自己那一次淡入，不叠第二套。
+      'transition:none !important;}' +
+    '[' + MORE_MENU_ATTR + '="1"] *{' +
+      'transition:none !important;}';
 
   // 手势提示浮层：跟手拖进度时显示目标时间/偏移/进度条，音量亮度时显示百分比。
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
@@ -989,6 +998,27 @@ class MainActivity : ComponentActivity() {
     bar: null, barW: 0, videoDur: null
   };
 
+  // 菜单展开瞬间的样式快照：确认「两次动画」到底来自网页的 transition、
+  // 我们自己的 animation，还是子元素各自动了一套。
+  var menuDiag = { speed: null, more: null };
+  function snapMenu(el) {
+    if (!el) return null;
+    try {
+      var cs = window.getComputedStyle(el);
+      var kids = 0, c = el.children || [];
+      for (var i = 0; i < c.length; i++) {
+        var k = window.getComputedStyle(c[i]);
+        if (k.animationName !== 'none') kids++;
+        else if (k.transitionDuration && k.transitionDuration !== '0s') kids++;
+      }
+      return {
+        cls: String(el.className || '').slice(0, 70),
+        trans: cs.transitionProperty + '/' + cs.transitionDuration,
+        anim: cs.animationName + '/' + cs.animationDuration,
+        kidsMoving: kids, kids: c.length
+      };
+    } catch (e) { return 'err'; }
+  }
   function kvClamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function kvTime(s) {
     s = Math.max(0, Math.floor(s || 0));
@@ -1895,6 +1925,7 @@ class MainActivity : ComponentActivity() {
     if (!menu) return;
     if (menu.getAttribute(SPEED_MENU_ATTR) !== '1') {
       menu.setAttribute(SPEED_MENU_ATTR, '1');
+      menuDiag.speed = snapMenu(menu);
     }
     watchSpeedMenu(menu);
     var b = document.querySelector('[' + RATE_ATTR + '="1"]') || findRateButton();
@@ -2048,6 +2079,7 @@ class MainActivity : ComponentActivity() {
         gestureHud: document.querySelectorAll('[data-kvideo-hud]').length,
         // —— 手势诊断（长按齿轮复制这份）——
         gesture: gestureDiag,
+        menus: menuDiag,
         gestureEnv: (function () {
           var v = document.querySelector('video');
           var r = v ? v.getBoundingClientRect() : null;
