@@ -2307,6 +2307,7 @@ class MainActivity : ComponentActivity() {
     if (brand && brand.parentNode) brand.parentNode.removeChild(brand);
   }
 
+  var lastRow = null;
   function syncMenu() {
     // 放在所有早退之前：播放页没有顶栏（下面会 return），但浅色标记必须照样到位，
     // 否则从首页进播放页后注入的浅色规则会整体失效。
@@ -2322,8 +2323,18 @@ class MainActivity : ComponentActivity() {
         break;
       }
     }
-    if (!bar) { dockFixed(null); return; }
-    var row = pickRow(bar);
+    var row = null;
+    if (bar) {
+      row = pickRow(bar);
+      lastRow = row;
+    } else if (lastRow && document.body.contains(lastRow)) {
+      // 行是我们自己收起的（display:none / 高度 0），rect 全为 0，这里不能
+      // 当成「页面没有顶栏」去挂固定栏 —— 否则首页会在两种形态之间来回跳。
+      row = lastRow;
+    } else {
+      dockFixed(null);
+      return;
+    }
     // 顶栏行不是 sticky/fixed 时它会随页面滚走（播放页就是这样），
     // 注入菜单跟着消失；这种情况改挂固定栏，并把那一行藏掉。
     var rowPinned = false;
