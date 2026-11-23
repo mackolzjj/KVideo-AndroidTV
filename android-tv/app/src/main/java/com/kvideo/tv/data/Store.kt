@@ -86,11 +86,15 @@ class Store(ctx: Context) {
     fun history(): List<SavedItem> = read("history")
 
     /** 播放中定期回写进度，收藏页据此显示「看到 xx:xx」并支持续播 */
-    fun updateProgress(id: String, sourceId: String, positionMs: Long) {
+    fun updateProgress(id: String, sourceId: String, positionMs: Long, durationMs: Long = 0L) {
         val list = history().toMutableList()
         val i = list.indexOfFirst { it.id == id && it.sourceId == sourceId }
         if (i < 0) return
-        list[i] = list[i].copy(positionMs = positionMs, updatedAt = System.currentTimeMillis())
+        list[i] = list[i].copy(
+            positionMs = positionMs,
+            durationMs = if (durationMs > 0) durationMs else list[i].durationMs,
+            updatedAt = System.currentTimeMillis()
+        )
         write("history", list)
     }
 
@@ -127,6 +131,7 @@ class Store(ctx: Context) {
                     episodeIndex = o.optInt("episodeIndex", 0),
                     episodeName = o.optString("episodeName"),
                     positionMs = o.optLong("positionMs", 0L),
+                    durationMs = o.optLong("durationMs", 0L),
                     updatedAt = o.optLong("updatedAt", 0L)
                 )
             }
@@ -147,6 +152,7 @@ class Store(ctx: Context) {
                     .put("episodeIndex", s.episodeIndex)
                     .put("episodeName", s.episodeName)
                     .put("positionMs", s.positionMs)
+                    .put("durationMs", s.durationMs)
                     .put("updatedAt", s.updatedAt)
             )
         }

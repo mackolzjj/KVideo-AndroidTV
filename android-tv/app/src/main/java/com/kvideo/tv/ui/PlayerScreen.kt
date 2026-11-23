@@ -232,7 +232,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 val now = System.currentTimeMillis()
                 if (position > 3_000 && now - lastSave > 10_000) {
                     lastSave = now
-                    vm.saveProgress(route, position)
+                    vm.saveProgress(route, position, duration)
                 }
             }
             delay(400)

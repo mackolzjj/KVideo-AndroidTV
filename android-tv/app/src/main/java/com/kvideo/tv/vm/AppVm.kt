@@ -560,10 +560,23 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** 播放器定期调：把当前进度写进历史，片单页才能显示「看到 xx:xx」并续播 */
-    fun saveProgress(route: Route.Player, ms: Long) {
+    fun saveProgress(route: Route.Player, ms: Long, durationMs: Long = 0L) {
         if (route.videoId.isBlank() || ms <= 0) return
-        store.updateProgress(route.videoId, route.sourceId, ms)
+        store.updateProgress(route.videoId, route.sourceId, ms, durationMs)
         history = store.history()
+    }
+
+    /** 详情页「播放」：上次看到哪一集就接着播哪一集（没有记录才从第 1 集） */
+    fun playResume() {
+        val d = detail ?: return
+        if (d.episodes.isEmpty()) return
+        val saved = store.history().firstOrNull { it.id == d.id && it.sourceId == d.sourceId }
+        // episodeIndex 存的是 Episode.index（服务端口径，可能是 1 起），
+        // 必须反查数组下标，不能直接当 getOrNull 的下标用
+        val pos = saved?.let { s ->
+            d.episodes.indexOfFirst { it.index == s.episodeIndex }
+        } ?: -1
+        playDetail(if (pos >= 0) pos else 0)
     }
 
     fun loadDetail(id: String, sourceId: String) {

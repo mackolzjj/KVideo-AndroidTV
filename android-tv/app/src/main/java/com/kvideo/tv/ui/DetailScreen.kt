@@ -99,7 +99,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                             .height(44.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Kv.Ink)
-                            .clickable { vm.playDetail(0) },
+                            .clickable { vm.playResume() },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -139,10 +139,11 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                 Spacer(Modifier.height(22.dp))
                 Text("选集 · 共 ${d.episodes.size} 集", style = Kv.H2)
                 Spacer(Modifier.height(10.dp))
-                d.episodes.chunked(6).forEach { row ->
+                d.episodes.chunked(6).forEachIndexed { rowIdx, row ->
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEachIndexed { i, ep ->
-                            val idx = d.episodes.indexOf(ep)
+                            // 用行号算下标：indexOf 在两集内容相同时会把两集都指到第一个
+                            val idx = rowIdx * 6 + i
                             Box(
                                 Modifier
                                     .weight(1f)

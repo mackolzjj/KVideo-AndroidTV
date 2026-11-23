@@ -85,5 +85,7 @@ data class SavedItem(
     val episodeIndex: Int = 0,
     val episodeName: String = "",
     val positionMs: Long = 0L,
+    /** 总时长：算「继续观看」进度条用，0 = 不知道 */
+    val durationMs: Long = 0L,
     val updatedAt: Long = 0L
 )

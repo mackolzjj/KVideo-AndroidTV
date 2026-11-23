@@ -26,6 +26,11 @@ import com.kvideo.tv.data.SavedItem
 import com.kvideo.tv.vm.AppVm
 import com.kvideo.tv.vm.Route
 
+private fun mmss(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    return "%02d:%02d".format(total / 60, total % 60)
+}
+
 @Composable
 fun HomeScreen(vm: AppVm) {
     val recs = vm.recommend
@@ -51,9 +56,13 @@ fun HomeScreen(vm: AppVm) {
                 KvRow(vm.history) { h: SavedItem ->
                     WideCard(
                         title = h.name,
-                        subtitle = if (h.episodeName.isNotBlank()) h.episodeName else "上次看到这里",
+                        subtitle = listOfNotNull(
+                            h.episodeName.takeIf { it.isNotBlank() },
+                            if (h.positionMs > 1000) "看到 " + mmss(h.positionMs) else null
+                        ).joinToString(" · ").ifBlank { "上次看到这里" },
                         poster = h.poster,
-                        progress = 0.25f,
+                        progress = if (h.durationMs > 0)
+                            (h.positionMs.toFloat() / h.durationMs).coerceIn(0f, 1f) else 0f,
                         onClick = {
                             vm.go(Route.Detail(h.id, h.sourceId))
                         }
