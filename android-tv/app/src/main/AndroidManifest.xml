@@ -10,6 +10,7 @@
         android:required="true" />
 
     <application
+        android:name=".KvApplication"
         android:allowBackup="true"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"

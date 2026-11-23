@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,8 @@ fun AdvancedScreen(vm: AppVm) {
     var pinMsg by remember { mutableStateOf<String?>(null) }
     var blockedText by remember { mutableStateOf(vm.blockedCategories.joinToString("、")) }
     var blockedMsg by remember { mutableStateOf<String?>(null) }
+    val ctx = LocalContext.current
+    var crash by remember { mutableStateOf(com.kvideo.tv.KvApplication.lastCrash(ctx)) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "高级设置")
@@ -157,6 +160,46 @@ fun AdvancedScreen(vm: AppVm) {
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text("解锁", fontSize = 12.sp, color = Kv.Ink)
+                }
+            }
+
+            Spacer(Modifier.height(26.dp))
+            Text("上次崩溃", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
+            Spacer(Modifier.height(6.dp))
+            if (crash.isBlank()) {
+                Text("没有崩溃记录", style = Kv.Tiny)
+            } else {
+                Text(
+                    crash.trim().take(700),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    color = Kv.Ink2,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Kv.Surface)
+                        .padding(10.dp)
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Kv.Surface2)
+                            .clickable { crash = com.kvideo.tv.KvApplication.lastCrash(ctx) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) { Text("刷新", fontSize = 12.sp, color = Kv.Ink) }
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Kv.Surface2)
+                            .clickable {
+                                com.kvideo.tv.KvApplication.clearCrash(ctx)
+                                crash = ""
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) { Text("清空", fontSize = 12.sp, color = Kv.Ink) }
                 }
             }
 

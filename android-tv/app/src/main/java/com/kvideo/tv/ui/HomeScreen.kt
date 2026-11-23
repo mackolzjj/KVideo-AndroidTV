@@ -164,7 +164,7 @@ fun HomeScreen(vm: AppVm) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HeroPager(items: List<DoubanItem>, onPlay: (String) -> Unit) {
-    val pager = rememberPagerState(pageCount = { if (items.isEmpty()) 1 else items.size })
+    val pager = rememberPagerState(pageCount = { items.size.coerceAtLeast(1) })
     Box(Modifier.fillMaxWidth().height(430.dp)) {
         if (items.isEmpty()) {
             Box(
@@ -186,7 +186,11 @@ private fun HeroPager(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                     model = h.cover,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().blur(22.dp),
+                    // blur 走 RenderEffect，只在 Android 12+ 用；低版本/个别机型会
+                    // 把硬件位图退回软件渲染而崩，这里直接不虚化，只压透明度
+                    modifier = if (android.os.Build.VERSION.SDK_INT >= 31)
+                        Modifier.fillMaxSize().blur(22.dp)
+                    else Modifier.fillMaxSize(),
                     alpha = 0.32f
                 )
                 Box(
