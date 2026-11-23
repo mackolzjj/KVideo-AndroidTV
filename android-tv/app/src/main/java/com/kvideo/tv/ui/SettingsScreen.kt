@@ -71,6 +71,7 @@ fun SettingsScreen(vm: AppVm) {
     var pw by remember { mutableStateOf(vm.password) }
     var live by remember { mutableStateOf(vm.liveUrl) }
     var premiumPw by remember { mutableStateOf("") }
+    var versionTaps by remember { mutableStateOf(0) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "设置",
@@ -154,41 +155,6 @@ fun SettingsScreen(vm: AppVm) {
                 }
             }
 
-            Spacer(Modifier.height(22.dp))
-            Text("高级内容", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (vm.canPremium)
-                    "已解锁 · 订阅里 group=premium 的成人源会参与搜索"
-                else "未解锁 · 订阅里 59 个 premium 源默认不参与搜索",
-                style = Kv.Body.copy(fontSize = 12.sp)
-            )
-            Spacer(Modifier.height(8.dp))
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Kv.Surface2)
-                    .clickable { vm.openPremium() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text("进入高级内容", fontSize = 12.sp, color = Kv.Ink)
-            }
-            if (!vm.canPremium) {
-                Spacer(Modifier.height(8.dp))
-                Field("高级内容密码", premiumPw, "留空不解锁", { premiumPw = it }, password = true)
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(Kv.Surface2)
-                        .clickable { vm.unlockPremium(premiumPw) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("解锁高级内容", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Kv.Ink)
-                }
-            }
-
             Spacer(Modifier.height(26.dp))
             Text("其他", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
             Spacer(Modifier.height(4.dp))
@@ -203,10 +169,36 @@ fun SettingsScreen(vm: AppVm) {
                 Spacer(Modifier.weight(1f))
                 Text("${vm.history.size} 条", style = Kv.Tiny)
             }
-            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 隐藏键：连点「版本」7 次进高级内容（页面上不留任何入口）
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clickable {
+                        versionTaps++
+                        if (versionTaps >= 7) {
+                            versionTaps = 0
+                            vm.openPremium()
+                        }
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("版本", fontSize = 13.5.sp, color = Kv.Ink)
                 Spacer(Modifier.weight(1f))
                 Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = Kv.Tiny)
+            }
+            if (vm.premiumUnlocked) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clickable { vm.openPremium() },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("高级内容", fontSize = 13.5.sp, color = Kv.Ink)
+                    Spacer(Modifier.weight(1f))
+                    Text("已解锁 ›", style = Kv.Tiny)
+                }
             }
             Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("数据来源", fontSize = 13.5.sp, color = Kv.Ink)
