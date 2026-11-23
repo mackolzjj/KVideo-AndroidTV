@@ -2,7 +2,7 @@
 
 KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Media3）。App 不含服务端，需要你自己的部署地址。
 
-[下载 2.0.39](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
+[下载 2.0.40](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
 
 ## 功能
 
