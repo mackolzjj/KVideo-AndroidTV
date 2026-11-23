@@ -530,6 +530,54 @@ class MainActivity : ComponentActivity() {
     '.kv-hud-track i{display:block !important;height:100% !important;width:0 !important;' +
       'background:#3b82f6 !important;border-radius:2px !important;}';
 
+  // 直播页（/iptv）的筛选条是网页自己的 sticky 块：搜索 + 计数 + 全部地区/平台
+  // chip。宽屏上三行，手机上 chip 换成十几行，sticky 后比整屏还高，频道区永远
+  // 被压在下面（393×853 复刻实测占视口 66%，真机截图 ≥94%）。
+  // 壳里不搬动网页节点（React 持有父容器引用，挪走会在下次重渲染时抛
+  // NotFoundError）：只给 chip 容器打标，用 CSS 折叠；展开时把 sticky 块本身
+  // 限高并内部滚动，频道区始终露出来。
+  var IPTV_BAR_ATTR = 'data-kv-iptv-bar';
+  var IPTV_CHIPS_ATTR = 'data-kv-iptv-chips';
+  var IPTV_OPEN_ATTR = 'data-kv-iptv-open';
+  var IPTV_BTN_ATTR = 'data-kv-iptv-btn';
+  var IPTV_CSS =
+    '[' + IPTV_CHIPS_ATTR + ']{display:none !important;}' +
+    '[' + IPTV_BAR_ATTR + '][' + IPTV_OPEN_ATTR + '="1"]{' +
+      'max-height:36vh !important;overflow-y:auto !important;' +
+      'overscroll-behavior:contain;-webkit-overflow-scrolling:touch;' +
+      'padding-bottom:12px !important;' +
+      // 展开时底色改实：条是半透明 + 毛玻璃，一旦变成内滚容器，下层的频道
+      // 卡片就会从条里透出来，看着像「列表文字压在 chip 上」。颜色同样由
+      // JS 按页面底色写进 --kv-iptv-fade。
+      'background:var(--kv-iptv-fade,rgba(12,14,19,.96)) !important;}' +
+    '[' + IPTV_BAR_ATTR + '][' + IPTV_OPEN_ATTR + '="1"] [' + IPTV_CHIPS_ATTR + ']{' +
+      'display:flex !important;}' +
+    // 底边渐隐：底色已改实，这层只盖在 chip 上，不会透出下层。
+    // 不给条本体加 mask —— mask 会连底色一起抹掉，那才是之前「下层文字
+    // 压在 chip 上」的原因。
+    '[' + IPTV_BAR_ATTR + '][' + IPTV_OPEN_ATTR + '="1"]::after{' +
+      'content:"";display:block;position:sticky;bottom:0;height:22px;' +
+      'margin-top:-22px;pointer-events:none;z-index:2;' +
+      'background:linear-gradient(rgba(0,0,0,0),' +
+      'var(--kv-iptv-fade,rgba(12,14,19,.96)));}' +
+    // 折叠/展开钮绝对定位在搜索框右端：不进入网页的 flex 流，网页重渲染也
+    // 不会把它排到别处；万一被清掉，下一拍 syncIptvFilter 会补回来。
+    '[' + IPTV_BTN_ATTR + ']{position:absolute !important;top:14px !important;' +
+      'right:16px !important;height:28px !important;padding:0 12px !important;' +
+      'display:inline-flex !important;align-items:center !important;' +
+      'border-radius:999px !important;border:1px solid rgba(140,150,170,.32) !important;' +
+      'background:rgba(140,150,170,.16) !important;color:inherit !important;' +
+      'font-size:12px !important;font-weight:500 !important;line-height:1 !important;' +
+      'font-family:inherit !important;z-index:3 !important;' +
+      'pointer-events:auto !important;-webkit-tap-highlight-color:transparent;}' +
+    '[' + IPTV_BTN_ATTR + '][' + IPTV_OPEN_ATTR + '="1"]{' +
+      'border-color:rgba(59,130,246,.55) !important;' +
+      'background:rgba(59,130,246,.20) !important;color:#A8C8FF !important;}' +
+    // mark() 会把「贴顶、高 20–240px、position 为 sticky/fixed 或 class 含
+    // sticky」的块打上 data-kvideo-topbar，而那条规则会把该属性压成 36px 高。
+    // 折叠后的筛选条正好落进 20–240 这个区间，不排除就会被压成一条横杠。
+    '[' + IPTV_BAR_ATTR + ']{height:auto !important;min-height:0 !important;}';
+
   // 收起时必须包含注入菜单自己：ATTR 是「顶栏行」的属性（data-kvideo-topbar），
   // 只藏行的话菜单还浮在原处 —— 这就是「上滑后栏还在、只剩图标」的原因。
   var sels = ['[data-kvideo-menu]', '[' + ATTR + ']', NAV, HEADER];
@@ -578,7 +626,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS;
+    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS + IPTV_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
@@ -938,6 +986,9 @@ class MainActivity : ComponentActivity() {
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       var r = el.getBoundingClientRect();
+      // 直播页筛选条由 syncIptvFilter 接管，不能被打上 data-kvideo-topbar ——
+      // 那条属性会把元素压成 36px 高（折叠后的筛选条正好落进打标区间）。
+      if (el.hasAttribute(IPTV_BAR_ATTR)) continue;
       if (r.width < w * 0.5 || r.height < 20 || r.height > 240) continue;
       if (r.top > maxTop || r.top < -r.height) continue;
       var cls = (typeof el.className === 'string') ? el.className : '';
@@ -2441,14 +2492,121 @@ class MainActivity : ComponentActivity() {
     disarmFallback();
   }
 
+  // ---- 直播页（/iptv）筛选条折叠 ------------------------------------------
+  // 判据全走结构与计算样式，不写死上游 class：
+  //   placeholder 含「搜索频道」的输入框 → 向上找最近 position:sticky 的祖先 = 筛选条
+  //   筛选条直接子节点里含 ≥3 个 button 的 = chip 组
+  // 只打标 + 加一枚按钮，绝不搬动网页节点（React 持有它们，挪走会抛 NotFoundError）。
+  var iptvOpen = false;
+  var IPTV_PH_HINT = '搜索频道';
+  function kvSetA(el, k, v) { if (el.getAttribute(k) !== v) el.setAttribute(k, v); }
+
+  function iptvBar() {
+    if (String(location.pathname || '').toLowerCase().indexOf('/iptv') < 0) return null;
+    var ins = document.querySelectorAll('input[placeholder]');
+    for (var i = 0; i < ins.length; i++) {
+      if (String(ins[i].getAttribute('placeholder') || '').indexOf(IPTV_PH_HINT) < 0) continue;
+      var el = ins[i], hops = 0;
+      while (el && el !== document.body && hops < 8) {
+        var cs = null;
+        try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
+        if (cs && cs.position === 'sticky') return el;
+        el = el.parentElement; hops++;
+      }
+    }
+    return null;
+  }
+
+  function iptvTag(bar) {
+    kvSetA(bar, IPTV_BAR_ATTR, '1');
+    var kids = bar.children, n = 0;
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (!el || el.nodeType !== 1 || !el.querySelectorAll) continue;
+      if (el.hasAttribute(IPTV_BTN_ATTR)) continue;
+      if (el.querySelectorAll('button').length < 3) continue;
+      kvSetA(el, IPTV_CHIPS_ATTR, '1');
+      n++;
+    }
+    return n;
+  }
+
+  function iptvApply(bar) {
+    var b = bar.querySelector('[' + IPTV_BTN_ATTR + ']');
+    var v = iptvOpen ? '1' : '0';
+    kvSetA(bar, IPTV_OPEN_ATTR, v);
+    if (b) {
+      kvSetA(b, IPTV_OPEN_ATTR, v);
+      var say = iptvOpen ? '收起 \u25b4' : '筛选 \u25be';
+      if (b.textContent !== say) b.textContent = say;
+    }
+  }
+
+  function iptvSyncBar(bar) {
+    var b = bar.querySelector('[' + IPTV_BTN_ATTR + ']');
+    if (!b) {
+      b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute(IPTV_BTN_ATTR, '1');
+      b.setAttribute('aria-label', '筛选');
+      b.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        iptvOpen = !iptvOpen;
+        iptvApply(bar);
+      }, false);
+      bar.appendChild(b);
+    }
+    iptvApply(bar);
+  }
+
+  function iptvDrop() {
+    iptvOpen = false;
+    var bars = document.querySelectorAll('[' + IPTV_BAR_ATTR + ']');
+    for (var i = 0; i < bars.length; i++) {
+      var bar = bars[i];
+      var b = bar.querySelector('[' + IPTV_BTN_ATTR + ']');
+      if (b && b.parentNode) b.parentNode.removeChild(b);
+      var ch = bar.querySelectorAll('[' + IPTV_CHIPS_ATTR + ']');
+      for (var k = 0; k < ch.length; k++) ch[k].removeAttribute(IPTV_CHIPS_ATTR);
+      bar.removeAttribute(IPTV_BAR_ATTR);
+      bar.removeAttribute(IPTV_OPEN_ATTR);
+    }
+  }
+
+  // 底部渐隐的终点色按页面实际底色算（浅色主题下不能是深灰）
+  function iptvFade(bar) {
+    var c = '';
+    try {
+      var bg = window.getComputedStyle(document.body).backgroundColor || '';
+      var mm = bg.match(/rgba?\(([0-9.]+),\s*([0-9.]+),\s*([0-9.]+)/);
+      if (mm) {
+        c = 'rgba(' + Math.round(+mm[1]) + ',' + Math.round(+mm[2]) + ',' +
+            Math.round(+mm[3]) + ',.96)';
+      }
+    } catch (e) {}
+    if (!c) c = 'rgba(12,14,19,.96)';
+    if (bar.style.getPropertyValue('--kv-iptv-fade') !== c) {
+      bar.style.setProperty('--kv-iptv-fade', c);
+    }
+  }
+
+  function syncIptvFilter() {
+    var bar = iptvBar();
+    if (!bar) { iptvDrop(); return; }
+    if (!iptvTag(bar)) return;   // chip 组还没渲染出来，下一拍再说
+    iptvSyncBar(bar);
+    iptvFade(bar);
+  }
+
   var lastRun = 0;
   var tail = null;
   function schedule() {
     var now = Date.now();
-    if (now - lastRun >= 120) { lastRun = now; mark(); syncMenu(); }
+    if (now - lastRun >= 120) { lastRun = now; syncIptvFilter(); mark(); syncMenu(); }
     if (tail) clearTimeout(tail);
     tail = setTimeout(function () {
-      tail = null; lastRun = Date.now(); mark(); syncMenu();
+      tail = null; lastRun = Date.now(); syncIptvFilter(); mark(); syncMenu();
     }, 200);
   }
 
@@ -2678,6 +2836,7 @@ class MainActivity : ComponentActivity() {
 
   mark();
   syncMenu();
+  try { syncIptvFilter(); } catch (eIptv) {}
   // 播放器由 React 挂载/重渲染：监听 class / aria-label / style 三种变化
   // （自己的写入靠 forceStyle「值相同不写」+ fadeRunning 闸门收尾，不会自触发），
   // 再补一个 1s 低频全量扫描，覆盖注入早于 hydrate、Portal 挂载等漏掉的情况。
