@@ -35,6 +35,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.kvideo.tv.data.Net
 import com.kvideo.tv.vm.AppVm
 import com.kvideo.tv.vm.Route
 import kotlinx.coroutines.delay
@@ -51,7 +52,24 @@ private fun fmt(ms: Long): String {
 fun PlayerScreen(vm: AppVm, route: Route.Player) {
     val ctx = LocalContext.current
     val activity = ctx as? Activity
-    val exo = remember { ExoPlayer.Builder(ctx).build() }
+    // 资源站的 CDN 会挑 UA / Referer（浏览器能播、裸请求 403），
+    // 这里把浏览器那套头补上，并允许 http→https 跳转。
+    val exo = remember {
+        val ds = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setUserAgent(
+                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
+                    "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+            )
+            .setDefaultRequestProperties(
+                mapOf("Referer" to (Net.base.trimEnd('/') + "/"))
+            )
+            .setAllowCrossProtocolRedirects(true)
+        ExoPlayer.Builder(ctx)
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ds)
+            )
+            .build()
+    }
 
     var playing by remember { mutableStateOf(true) }
     var duration by remember { mutableStateOf(0L) }
@@ -80,7 +98,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 if (state == Player.STATE_ENDED) playing = false
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                errorText = error.message ?: "播放失败"
+                // 带错误码和底层原因，方便下一轮直接定位（HTTP 403 / 404 / 解析失败）
+                val cause = error.cause?.message?.take(120).orEmpty()
+                errorText = error.errorCodeName + if (cause.isNotBlank()) " · " + cause else ""
             }
         }
         exo.addListener(listener)

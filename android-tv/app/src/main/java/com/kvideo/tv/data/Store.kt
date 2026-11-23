@@ -8,6 +8,9 @@ import org.json.JSONObject
  * 本地存储：服务器地址、访问密码、直播源、收藏、历史。
  * 用 SharedPreferences 存 JSON，2.0 这点体量不值得上 Room。
  */
+/** 内置直播源：用户的 KVideo 直播清单（614 个频道，HLS） */
+const val DEFAULT_LIVE_URL = "http://192.168.1.254:1905/REDACTED/interface.m3u"
+
 class Store(ctx: Context) {
     private val sp = ctx.getSharedPreferences("kvideo_v2", Context.MODE_PRIVATE)
 
@@ -20,7 +23,8 @@ class Store(ctx: Context) {
         set(v) = sp.edit().putString("password", v).apply()
 
     var liveUrl: String
-        get() = sp.getString("live_url", "") ?: ""
+        // 没手动填过就用内置那份；用户改过就以他的为准
+        get() = (sp.getString("live_url", "") ?: "").ifBlank { DEFAULT_LIVE_URL }
         set(v) = sp.edit().putString("live_url", v.trim()).apply()
 
     var lastUser: String

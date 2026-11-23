@@ -220,7 +220,9 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     fun playChannel(c: Channel) {
         go(
             Route.Player(
-                url = api.streamProxy(c.url),
+                // 直连：这些 relay 地址本身是 HLS（有的没有 .m3u8 后缀），
+                // 走 /api/iptv/stream 代理反而会对无扩展名地址回 403。
+                url = c.url,
                 title = c.name,
                 subtitle = "直播",
                 mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8
