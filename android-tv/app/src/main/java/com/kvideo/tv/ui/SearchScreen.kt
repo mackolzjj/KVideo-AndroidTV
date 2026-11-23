@@ -57,7 +57,7 @@ private fun BadgeRow(items: List<Pair<String, String>>, picked: Set<String>, onC
 fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
     val focus = remember { FocusRequester() }
     var pick by remember { mutableStateOf<ResultGroup?>(null) }
-    LaunchedEffect(Unit) { if (autofocus) runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (autofocus && vm.autoFocusSearch) runCatching { focus.requestFocus() } }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         Row(

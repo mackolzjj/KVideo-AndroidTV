@@ -33,14 +33,18 @@ fun HomeScreen(vm: AppVm) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(
-            onSearch = { vm.go(Route.Search) },
+            onSearch = { vm.openSearchBox() },
             trailing = {
                 KvIconBtn(Icons.Filled.Settings, "设置") { vm.go(Route.Settings) }
             }
         )
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            HeroBlock(hero) { vm.go(Route.Search) }
+            HeroBlock(
+                hero = hero,
+                onPlay = { hero?.let { vm.searchTitle(it.title) } ?: vm.openSearchBox() },
+                onSearch = { vm.openSearchBox() }
+            )
 
             if (vm.history.isNotEmpty()) {
                 SectionHeader("继续观看", count = "${vm.history.size} 部")
@@ -66,7 +70,7 @@ fun HomeScreen(vm: AppVm) {
                 }
             } else {
                 KvRow(recs) { d: DoubanItem ->
-                    PosterCard(d) { vm.go(Route.Search) }
+                    PosterCard(d) { vm.searchTitle(d.title) }
                 }
             }
 
@@ -90,7 +94,7 @@ fun HomeScreen(vm: AppVm) {
 }
 
 @Composable
-private fun HeroBlock(hero: DoubanItem?, onSearch: () -> Unit) {
+private fun HeroBlock(hero: DoubanItem?, onPlay: () -> Unit, onSearch: () -> Unit) {
     Box(
         Modifier.fillMaxWidth().height(268.dp).background(
             Brush.verticalGradient(
@@ -141,12 +145,12 @@ private fun HeroBlock(hero: DoubanItem?, onSearch: () -> Unit) {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Icon(
-                            Icons.Filled.Search, null,
+                            Icons.Filled.PlayArrow, null,
                             tint = Color.Black,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(19.dp)
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text("搜片名开始看", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        Spacer(Modifier.width(6.dp))
+                        Text("播放", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                     }
                 }
                 Spacer(Modifier.width(9.dp))
@@ -154,17 +158,17 @@ private fun HeroBlock(hero: DoubanItem?, onSearch: () -> Unit) {
                     Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .background(Color(0x29FFFFFF))
-                        .clickable(onClick = onSearch)
+                        .clickable(onClick = onPlay)
                         .padding(horizontal = 15.dp, vertical = 11.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Icon(
-                            Icons.Filled.PlayArrow, null,
+                            Icons.Filled.Search, null,
                             tint = Kv.Ink,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("直接播放", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Kv.Ink)
+                        Text("搜片名", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Kv.Ink)
                     }
                 }
             }

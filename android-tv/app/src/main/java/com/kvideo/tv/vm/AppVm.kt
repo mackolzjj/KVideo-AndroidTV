@@ -375,6 +375,21 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 从首页点某部片（豆瓣条目不可直���）→ 用它的标题直接搜出片源，而不是丢到空搜索框 */
+    var autoFocusSearch by mutableStateOf(true)
+
+    fun searchTitle(title: String) {
+        autoFocusSearch = false
+        query = title.trim()
+        go(Route.Search)
+        search(title.trim())
+    }
+
+    fun openSearchBox() {
+        autoFocusSearch = true
+        go(Route.Search)
+    }
+
     fun search(q: String) {
         query = q
         searchJob?.cancel()
