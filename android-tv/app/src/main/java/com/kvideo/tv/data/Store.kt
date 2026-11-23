@@ -27,6 +27,14 @@ class Store(ctx: Context) {
         get() = (sp.getString("live_url", "") ?: "").ifBlank { DEFAULT_LIVE_URL }
         set(v) = sp.edit().putString("live_url", v.trim()).apply()
 
+    /**
+     * 屏蔽分类关键词（官方 settings.blockedCategories）：命中 type_name / vod_class 就不进搜索结果。
+     * 官方默认空，这里默认带上「伦理」，因为普通用户的搜索不该翻出这批。
+     */
+    var blockedCategories: Set<String>
+        get() = sp.getStringSet("blocked_categories", setOf("伦理"))?.toSet() ?: setOf("伦理")
+        set(v) = sp.edit().putStringSet("blocked_categories", v).apply()
+
     /** 搜索是否只留片名真的含关键词的条目（源站会串味，默认开） */
     var onlyRelevant: Boolean
         get() = sp.getBoolean("only_relevant", true)

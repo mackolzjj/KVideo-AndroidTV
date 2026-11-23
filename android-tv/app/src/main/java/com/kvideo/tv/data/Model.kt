@@ -28,7 +28,9 @@ data class VideoItem(
     // 上游筛选条用的三个字段（TypeBadges / LanguageBadges）
     val typeName: String = "",
     val lang: String = "",
-    val area: String = ""
+    val area: String = "",
+    /** 苹果CMS 的 vod_class，官方屏蔽分类时 type_name 空就退到它 */
+    val className: String = ""
 )
 
 data class Episode(val index: Int, val name: String, val url: String)

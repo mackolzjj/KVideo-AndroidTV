@@ -216,6 +216,15 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             store.groupedSearch = v
         }
 
+    /** 屏蔽分类（官方 settings.blockedCategories），默认「伦理」 */
+    private var blockedState by mutableStateOf(store.blockedCategories)
+    var blockedCategories: Set<String>
+        get() = blockedState
+        set(v) {
+            blockedState = v
+            store.blockedCategories = v
+        }
+
     /** 只看相关：有些源（如 zuida）根本不认关键词，直接把最新更新丢回来 */
     private var relevantState by mutableStateOf(store.onlyRelevant)
     var onlyRelevant: Boolean
@@ -229,13 +238,56 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     val hiddenUnrelated: Int
         get() = if (!onlyRelevant) 0 else allResults.size - relevantList().size
 
-    private fun norm(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
+    /** 官方 lib/utils/search.ts：标题里至少要能命中查询词里的一对连续两个字 */
+    private fun hasMinimumMatch(title: String, query: String): Boolean {
+        val t = title.lowercase()
+        val q = query.lowercase().trim()
+        if (q.length < 2) return t.contains(q)
+        for (i in 0..q.length - 2) {
+            if (t.contains(q.substring(i, i + 2))) return true
+        }
+        return false
+    }
 
-    /** 片名归一化后含关键词就算相关：「庆余年 第二季」保留，「吞噬星空」丢掉 */
+    /** 官方 isCategoryBlocked：type_name / vod_class 命中屏蔽词就整条丢掉 */
+    private fun isCategoryBlocked(v: VideoItem): Boolean {
+        val cats = listOf(v.typeName, v.className).joinToString("|").lowercase()
+        if (cats.isBlank() || cats == "|") return false
+        return blockedCategories.any { cats.contains(it.lowercase()) }
+    }
+
+    /** 官方 calculateRelevanceScore 的移植（只保留搜索结果里拿得到的字段） */
+    private fun relevanceScore(v: VideoItem, query: String): Int {
+        var score = 0
+        val q = query.lowercase().trim()
+        val t = v.name.lowercase()
+        if (t == q) return 1000
+        if (t.startsWith(q)) score += 500
+        if (t.contains(q)) {
+            score += 200
+            score += maxOf(0, 50 - t.indexOf(q) * 2)
+        }
+        q.split(" ").forEach { w ->
+            if (w.length >= 2 && t.contains(w)) {
+                score += 30
+                if (t.startsWith(w)) score += 20
+            }
+        }
+        if (t.length > 50) score -= 5
+        val remarks = v.remarks.lowercase()
+        if (remarks.contains("hd") || remarks.contains("1080") || remarks.contains("4k")) score += 5
+        if (remarks.contains("完结") || remarks.contains("全集")) score += 3
+        return maxOf(0, score)
+    }
+
+    /** 结果集：官方那两层（最小匹配 + 屏蔽分类）之后，按相关度分排序 */
     private fun relevantList(): List<VideoItem> {
-        val q = norm(query)
-        if (q.isEmpty() || !onlyRelevant) return allResults
-        return allResults.filter { norm(it.name).contains(q) }
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+        return allResults
+            .filter { !isCategoryBlocked(it) }
+            .filter { !onlyRelevant || hasMinimumMatch(it.name, q) }
+            .sortedByDescending { relevanceScore(it, q) }
     }
 
     /** 上游三个多选筛选：源 / 类型 / 语言（SourceBadges、TypeBadges、LanguageBadges） */

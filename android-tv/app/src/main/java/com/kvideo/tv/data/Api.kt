@@ -370,6 +370,7 @@ class Api {
                 typeName = o.optString("type_name").ifBlank {
                     o.optString("vod_class").substringBefore(",")
                 },
+                className = o.optString("vod_class"),
                 lang = o.optString("vod_lang"),
                 area = o.optString("vod_area")
             )

@@ -72,6 +72,7 @@ fun SettingsScreen(vm: AppVm) {
     var live by remember { mutableStateOf(vm.liveUrl) }
     var premiumPw by remember { mutableStateOf("") }
     var versionTaps by remember { mutableStateOf(0) }
+    var blockedText by remember { mutableStateOf(vm.blockedCategories.joinToString("、")) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "设置",
@@ -124,6 +125,28 @@ fun SettingsScreen(vm: AppVm) {
                     "已连接 · ${vm.accountName}（${vm.accountRole}）· $srcLine",
                     style = Kv.Tiny.copy(color = Kv.Ink2)
                 )
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text("屏蔽分类", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
+            Spacer(Modifier.height(6.dp))
+            Text("命中分类关键词的搜索结果直接隐藏（官方 blockedCategories，用「、」分隔）", style = Kv.Tiny)
+            Spacer(Modifier.height(8.dp))
+            Field("分类关键词", blockedText, "伦理、福利", { blockedText = it })
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Kv.Surface2)
+                    .clickable {
+                        vm.blockedCategories = blockedText
+                            .split("、", ",", " ", "，")
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+                            .toSet()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text("保存屏蔽词", fontSize = 12.sp, color = Kv.Ink)
             }
 
             Spacer(Modifier.height(22.dp))
