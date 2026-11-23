@@ -2856,8 +2856,12 @@ class MainActivity : ComponentActivity() {
       kvDblGuardUntil = now + 450;
       kvLastDblAction = now;
       var v = kvTapVideo, wantPaused = kvTapPaused;
+      // 第一下点击已经把播放切走了，这里**立刻**拨回去 —— 等 600ms 再拨，
+      // 那 600ms 就是肉眼看到的「短暂暂停」。450ms 后再拨一次，覆盖全屏过渡
+      // 期间可能又触发的一次暂停。
+      kvRestorePlay(v, wantPaused);
       kvToggleFullscreen();
-      setTimeout(function () { kvRestorePlay(v, wantPaused); }, 600);
+      setTimeout(function () { kvRestorePlay(v, wantPaused); }, 450);
     } else {
       kvDblTs = now; kvDblX = t.clientX; kvDblY = t.clientY;
       kvTapVideo = kvPlayingVideo();
