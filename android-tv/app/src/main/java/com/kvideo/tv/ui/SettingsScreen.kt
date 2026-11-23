@@ -146,19 +146,6 @@ fun SettingsScreen(vm: AppVm) {
                 Spacer(Modifier.weight(1f))
                 Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = Kv.Tiny)
             }
-            if (vm.canPremium) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .clickable { vm.openPremium() },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("高级内容", fontSize = 13.5.sp, color = Kv.Ink)
-                    Spacer(Modifier.weight(1f))
-                    Text("已解锁 ›", style = Kv.Tiny)
-                }
-            }
             Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("数据来源", fontSize = 13.5.sp, color = Kv.Ink)
                 Spacer(Modifier.weight(1f))

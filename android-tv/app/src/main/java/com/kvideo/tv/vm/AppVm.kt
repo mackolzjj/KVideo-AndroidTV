@@ -458,7 +458,9 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             route = r
             return
         }
-        if (keepStack) backStack = backStack + route
+        // keepStack=false 是「切 tab」：要连栈一起清，
+        // 否则在首页/直播/片单按返回键会跳回上一个 tab 的旧页面，而不是退出
+        if (keepStack) backStack = backStack + route else backStack = emptyList()
         route = r
         if (r is Route.Detail) loadDetail(r.id, r.sourceId)
         if (r is Route.Live && channels.isEmpty()) loadChannels()

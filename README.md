@@ -2,7 +2,7 @@
 
 KVideo 服务端的**原生 Android 客户端**，界面按 Netflix 那套语言重画。App 里不含服务端，需要你自己的 KVideo 部署地址。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `2.0.33`（`versionCode 233`）
+- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `2.0.34`（`versionCode 234`）
 - 运行要求：Android 8.0（API 26）以上；手机与服务端网络互通
 - 目录 `android-tv/` 与包名 `com.kvideo.tv` 沿用上游，只是标识，**不代表只能跑在 TV 上**
 - 上游 MIT，见 [LICENSE](LICENSE)

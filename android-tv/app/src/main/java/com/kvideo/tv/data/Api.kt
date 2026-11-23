@@ -263,7 +263,7 @@ class Api {
             id = o.optString("id", baseUrl),
             name = o.optString("name", o.optString("id", "源")),
             baseUrl = baseUrl,
-            group = o.optString("group", "normal"),
+            group = o.optString("group", "normal").ifBlank { "normal" },
             enabled = o.optBoolean("enabled", true),
             priority = o.optInt("priority", 0),
             tag = o.optString("source", ""),
