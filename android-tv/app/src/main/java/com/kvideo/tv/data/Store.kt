@@ -20,9 +20,8 @@ class Store(ctx: Context) {
         set(v) = sp.edit().putString("password", v).apply()
 
     /**
-     * 直播源。空 = 用 App 里打包的那份（assets/live_default.m3u）。
-     * 注意：这里不许再放任何带口令的默认地址 —— 仓库是公开的，之前那版把
-     * 服务器口令写死在 DEFAULT_LIVE_URL 里，等于公开泄露。
+     * 直播源（M3U 地址），由用户自己在「高级设置」里填。
+     * 不许放任何默认地址/口令：仓库是公开的，之前那版把服务器口令写死在这里等于公开泄露。
      */
     var liveUrl: String
         get() = sp.getString("live_url", "") ?: ""

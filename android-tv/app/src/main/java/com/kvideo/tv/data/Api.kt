@@ -272,10 +272,20 @@ class Api {
         )
     }
 
-    /** 首页内容流：豆瓣推荐（封面走 /api/douban/image 代理） */
-    suspend fun recommend(): List<DoubanItem> = withContext(Dispatchers.IO) {
+    /**
+     * 豆瓣推荐。服务端支持 tag（热门/最新/经典）、type（movie/tv）、page_start，
+     * 实测不同参数会返回不同片单，所以首页 hero 和「热播」列表都从这里取。
+     */
+    suspend fun recommend(
+        tag: String = "热门",
+        type: String = "movie",
+        pageStart: Int = 0,
+        limit: Int = 20
+    ): List<DoubanItem> = withContext(Dispatchers.IO) {
         try {
-            Net.client.newCall(Net.builder("/api/douban/recommend").build()).execute().use { r ->
+            val q = "?tag=" + java.net.URLEncoder.encode(tag, "UTF-8") +
+                "&type=" + type + "&page_start=" + pageStart + "&page_limit=" + limit
+            Net.client.newCall(Net.builder("/api/douban/recommend" + q).build()).execute().use { r ->
                 val text = r.body?.string().orEmpty()
                 if (text.isEmpty()) return@withContext emptyList()
                 val arr = JSONObject(text).optJSONArray("subjects") ?: JSONArray()
@@ -449,9 +459,6 @@ class Api {
             emptyList()
         }
     }
-
-    /** 内置直播源：直接解析 ass 里的 M3U 文本，不走网络 */
-    fun channelsFromText(text: String): List<Channel> = parseM3u(text, "")
 
     /**
      * M3U 解析，按上游 lib/utils/m3u-parser.ts 的规则：

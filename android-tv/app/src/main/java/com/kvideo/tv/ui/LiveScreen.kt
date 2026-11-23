@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,17 +26,10 @@ import com.kvideo.tv.vm.AppVm
 
 @Composable
 fun LiveScreen(vm: AppVm) {
-    val ctx = LocalContext.current
-    // 没填直播源就用打包进 App 的那份（assets/live_default.m3u）
+    // 直播源完全由用户自己填（高级设置里），App 不再内置任何频道清单
     LaunchedEffect(vm.liveUrl) {
-        if (vm.liveUrl.isBlank()) {
-            val text = runCatching {
-                ctx.assets.open("live_default.m3u").bufferedReader().use { it.readText() }
-            }.getOrNull()
-            if (text != null) vm.loadBundledChannels(text)
-        } else if (vm.channels.isEmpty()) {
-            vm.loadChannels()
-        }
+        vm.channels = emptyList()
+        if (vm.liveUrl.isNotBlank()) vm.loadChannels()
     }
 
     var group by remember { mutableStateOf("全部") }
@@ -48,12 +40,12 @@ fun LiveScreen(vm: AppVm) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "直播")
-        if (vm.channels.isEmpty() && vm.liveUrl.isBlank()) {
-            KvEmpty("正在读取内置直播源…")
+        if (vm.liveUrl.isBlank()) {
+            KvEmpty("还没填直播源。设置 → 连点「版本」7 次 → 高级设置里填 M3U 地址。")
             return@Column
         }
         if (vm.channels.isEmpty()) {
-            KvEmpty("没拿到频道。检查直播源地址，或点右上角刷新。")
+            KvEmpty("没拿到频道。检查 M3U 地址是否可访问。")
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),

@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,6 +45,7 @@ fun KvApp(vm: AppVm = viewModel()) {
                 is Route.Settings -> SettingsScreen(vm)
                 is Route.Premium -> PremiumScreen(vm)
                 is Route.Advanced -> AdvancedScreen(vm)
+                is Route.Feed -> FeedScreen(vm)
                 is Route.Detail -> DetailScreen(vm, route)
                 is Route.Player -> PlayerScreen(vm, route)
             }
@@ -90,9 +92,19 @@ private fun BottomBar(tab: Int, onPick: (Int) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(icon, label, tint = if (on) Color.White else Color(0xFF6B6B6B), modifier = Modifier.size(21.dp))
+                Icon(
+                    icon,
+                    label,
+                    tint = if (on) Color.White else Color(0xFF666B71),
+                    modifier = Modifier.size(21.dp).offset(y = if (on) (-1.5).dp else 0.dp)
+                )
                 Spacer(Modifier.height(3.dp))
-                Text(label, fontSize = 9.5.sp, color = if (on) Color.White else Color(0xFF6B6B6B))
+                Text(
+                    label,
+                    fontSize = 9.5.sp,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    color = if (on) Color.White else Color(0xFF666B71)
+                )
             }
         }
     }

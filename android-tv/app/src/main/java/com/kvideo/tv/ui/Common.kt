@@ -83,12 +83,53 @@ fun SectionHeader(title: String, count: String? = null, action: String? = null, 
     }
 }
 
+/**
+ * 海报卡。豆瓣条目自带 rate，右下角压一块 #e50914 评分角标（跟进度条同色，不新增颜色）；
+ * meta 那行放「电影 · 2026」这类信息。
+ */
 @Composable
-fun PosterCard(item: DoubanItem, width: Int = 104, onClick: () -> Unit) {
+fun PosterCard(
+    item: DoubanItem,
+    width: Int = 104,
+    meta: String = "",
+    isNew: Boolean = false,
+    onClick: () -> Unit
+) {
     Column(Modifier.width(width.dp).clickable(onClick = onClick)) {
-        PosterArt(item.cover, ratio = 1.5f, modifier = Modifier.width(width.dp))
+        Box(Modifier.width(width.dp)) {
+            PosterArt(item.cover, ratio = 1.5f, modifier = Modifier.width(width.dp))
+            if (item.rate.isNotBlank()) {
+                Text(
+                    item.rate,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .background(Kv.Red)
+                        .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                )
+            }
+            if (isNew) {
+                Text(
+                    "新",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .background(Color(0x99000000))
+                        .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                )
+            }
+        }
         Spacer(Modifier.height(7.dp))
         Text(item.title, style = Kv.Meta.copy(fontSize = 11.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (meta.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(meta, style = Kv.Tiny.copy(fontSize = 10.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -120,6 +161,8 @@ fun WideCard(
     subtitle: String,
     poster: String,
     badge: String? = null,
+    cornerTag: String? = null,
+    remainText: String? = null,
     progress: Float = 0f,
     width: Int = 196,
     onClick: () -> Unit
@@ -141,6 +184,32 @@ fun WideCard(
                     fontWeight = FontWeight.Bold,
                     color = Color(0xCCFFFFFF),
                     modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 7.dp)
+                )
+            }
+            // 左上角：集数胶囊；右上角：剩余时长
+            if (cornerTag != null) {
+                Text(
+                    cornerTag,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 8.dp, top = 7.dp)
+                        .background(Color(0xA6000000))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            if (remainText != null) {
+                Text(
+                    remainText,
+                    fontSize = 9.5.sp,
+                    color = Color(0xE6FFFFFF),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 8.dp, top = 7.dp)
+                        .background(Color(0xA6000000))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
             if (progress > 0f) {
