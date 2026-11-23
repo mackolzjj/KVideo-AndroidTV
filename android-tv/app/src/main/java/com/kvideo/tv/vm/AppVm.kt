@@ -206,14 +206,16 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var pickedTypes by mutableStateOf<Set<String>>(emptySet())
     var pickedLangs by mutableStateOf<Set<String>>(emptySet())
 
+    // 三排 chip 也从「相关」结果里统计：只返回垃圾的源（比如 new_建安资源）
+    // 不会出现在筛选条上，你一眼就能看出这次到底哪几个源真的给了东西
     val typeBadges: List<String>
-        get() = allResults.map { it.typeName }.filter { it.isNotBlank() }.distinct().take(12)
+        get() = relevantList().map { it.typeName }.filter { it.isNotBlank() }.distinct().take(12)
 
     val langBadges: List<String>
-        get() = allResults.map { it.lang }.filter { it.isNotBlank() }.distinct().take(8)
+        get() = relevantList().map { it.lang }.filter { it.isNotBlank() }.distinct().take(8)
 
     val sourceBadges: List<Pair<String, String>>
-        get() = allResults.map { it.sourceId to it.sourceName.ifBlank { it.sourceId } }
+        get() = relevantList().map { it.sourceId to it.sourceName.ifBlank { it.sourceId } }
             .distinctBy { it.first }.take(20)
 
     /** 当前点开的那一组（详情页据此给出「换源」） */
