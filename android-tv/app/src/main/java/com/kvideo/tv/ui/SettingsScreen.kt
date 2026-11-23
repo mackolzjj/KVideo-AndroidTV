@@ -74,7 +74,6 @@ fun SettingsScreen(vm: AppVm) {
     var pinInput by remember { mutableStateOf("") }
     var pinAgain by remember { mutableStateOf("") }
     var pinErr by remember { mutableStateOf<String?>(null) }
-    var blockedText by remember { mutableStateOf(vm.blockedCategories.joinToString("、")) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "设置",
@@ -113,28 +112,6 @@ fun SettingsScreen(vm: AppVm) {
             }
 
             Spacer(Modifier.height(22.dp))
-            Text("屏蔽分类", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(6.dp))
-            Text("命中分类关键词的搜索结果直接隐藏（官方 blockedCategories，用「、」分隔）", style = Kv.Tiny)
-            Spacer(Modifier.height(8.dp))
-            Field("分类关键词", blockedText, "伦理、福利", { blockedText = it })
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Kv.Surface2)
-                    .clickable {
-                        vm.blockedCategories = blockedText
-                            .split("、", ",", " ", "，")
-                            .map { it.trim() }
-                            .filter { it.isNotBlank() }
-                            .toSet()
-                    }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text("保存屏蔽词", fontSize = 12.sp, color = Kv.Ink)
-            }
-
-            Spacer(Modifier.height(26.dp))
             Text("其他", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
             Spacer(Modifier.height(4.dp))
             Row(

@@ -38,6 +38,8 @@ fun AdvancedScreen(vm: AppVm) {
     var premiumPw by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
     var pinMsg by remember { mutableStateOf<String?>(null) }
+    var blockedText by remember { mutableStateOf(vm.blockedCategories.joinToString("、")) }
+    var blockedMsg by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "高级设置")
@@ -102,6 +104,35 @@ fun AdvancedScreen(vm: AppVm) {
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(if (vm.probing) "正在探活…" else "重新探活源", fontSize = 12.sp, color = Kv.Ink)
+            }
+
+            Spacer(Modifier.height(26.dp))
+            Text("屏蔽分类", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
+            Spacer(Modifier.height(6.dp))
+            Text("命中分类关键词的搜索结果直接隐藏（官方 blockedCategories，用「、」分隔）", style = Kv.Tiny)
+            Spacer(Modifier.height(8.dp))
+            Field("分类关键词", blockedText, "伦理、福利", { blockedText = it })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Kv.Surface2)
+                        .clickable {
+                            vm.blockedCategories = blockedText
+                                .split("、", ",", " ", "，")
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .toSet()
+                            blockedMsg = "已保存（${vm.blockedCategories.size} 个词）"
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text("保存屏蔽词", fontSize = 12.sp, color = Kv.Ink)
+                }
+                blockedMsg?.let {
+                    Spacer(Modifier.width(8.dp))
+                    Text(it, style = Kv.Tiny.copy(color = Kv.Ink2))
+                }
             }
 
             Spacer(Modifier.height(26.dp))
