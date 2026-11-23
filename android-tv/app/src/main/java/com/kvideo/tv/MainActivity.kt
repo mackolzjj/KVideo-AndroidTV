@@ -2319,6 +2319,10 @@ class MainActivity : ComponentActivity() {
   // 没有顶栏的页面（播放页）顶部那条是 div 形态，nav/header 选择器命不中，
   // 会和我们的固定栏叠在一起。按几何兜底：贴顶、横向 ≥60%、高 18–120px。
   function hideStrayHeaders() {
+    // 直播页的播放层是网页自己的 fixed inset-0 浮层，它的顶栏（频道名 + LIVE +
+    // 关闭钮）正落在下面的几何判据里，会被一起藏掉 —— 一藏，用户除了系统返回
+    // 键就没有别的出口，而返回键又会直接退回上一页。浮层在场时不动它。
+    if (iptvPlayerLayer()) return;
     // 只在「页面没有可用顶栏」时调用（播放页）：那条是任意 div，选择器命不中，
     // 所以在顶部横向取 3 个点，把命中元素及其 3 层祖先里「贴顶 + 宽 ≥60% +
     // 高 18–120px」的都标掉。
@@ -2599,14 +2603,96 @@ class MainActivity : ComponentActivity() {
     iptvFade(bar);
   }
 
+  // ---- 直播页播放层的返回键（/iptv）--------------------------------------
+  // 网页的 IPTVPlayer 是一个 fixed inset-0 的 React 浮层，开播/关播只改 state，
+  // 不产生历史条目。于是系统返回键会直接把 /iptv 这条历史退掉，回到首页 ——
+  // 用户期望的是「先回到直播列表」。做法：浮层一出现就压一条同 URL 的历史，
+  // popstate 时先关浮层（网页自己监听 window 的 Escape），历史就停在 /iptv。
+  var iptvPlayerPushed = false;
+
+  function iptvPlayerLayer() {
+    if (String(location.pathname || '').toLowerCase().indexOf('/iptv') < 0) return null;
+    var vids = document.querySelectorAll('video');
+    var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+    for (var i = 0; i < vids.length; i++) {
+      var el = vids[i], hops = 0;
+      while (el && el !== document.body && hops < 6) {
+        var cs = null;
+        try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
+        if (cs && cs.position === 'fixed') {
+          var r = el.getBoundingClientRect();
+          if (r.width >= vw * 0.9 && r.height >= vh * 0.9) return el;
+        }
+        el = el.parentElement; hops++;
+      }
+    }
+    return null;
+  }
+
+  function iptvClosePlayer(layer) {
+    function esc() {
+      try {
+        var ev = new KeyboardEvent('keydown',
+          { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+        window.dispatchEvent(ev);
+      } catch (e) {}
+    }
+    esc();
+    setTimeout(function () {
+      if (!iptvPlayerLayer()) return;
+      // 兜底：点浮层右上角那枚关闭钮（无文字、含 svg、贴右上）
+      var btns = layer.querySelectorAll('button'), vw = window.innerWidth || 0;
+      var best = null, bestR = -1;
+      for (var i = 0; i < btns.length; i++) {
+        var b = btns[i], r = b.getBoundingClientRect();
+        if (String(b.textContent || '').trim()) continue;
+        if (!b.querySelector('svg')) continue;
+        if (r.top > 160 || r.width > 80 || r.height > 80) continue;
+        if (r.right > bestR) { bestR = r.right; best = b; }
+      }
+      if (best && bestR > vw * 0.6) { try { best.click(); } catch (e) {} }
+    }, 240);
+  }
+
+  function syncIptvPlayer() {
+    // 已经离开 /iptv 就不再做补偿性 back()，否则会被退回直播页
+    if (String(location.pathname || '').toLowerCase().indexOf('/iptv') < 0) {
+      iptvPlayerPushed = false;
+      return;
+    }
+    var layer = iptvPlayerLayer();
+    if (layer) {
+      if (!iptvPlayerPushed) {
+        try {
+          history.pushState({ kvIptvPlayer: 1 }, '', location.href);
+          iptvPlayerPushed = true;
+        } catch (e) { iptvPlayerPushed = false; }
+      }
+      return;
+    }
+    if (iptvPlayerPushed) {
+      // 用户自己点了关闭钮：把我们压进去的那条吃掉，否则下次返回会是一次
+      // 「同 URL 空退」。popstate 时 iptvPlayerPushed 已是 false，不会再触发。
+      iptvPlayerPushed = false;
+      try { history.back(); } catch (e) {}
+    }
+  }
+
+  window.addEventListener('popstate', function () {
+    if (!iptvPlayerPushed) return;
+    var layer = iptvPlayerLayer();
+    iptvPlayerPushed = false;
+    if (layer) iptvClosePlayer(layer);
+  });
+
   var lastRun = 0;
   var tail = null;
   function schedule() {
     var now = Date.now();
-    if (now - lastRun >= 120) { lastRun = now; syncIptvFilter(); mark(); syncMenu(); }
+    if (now - lastRun >= 120) { lastRun = now; syncIptvFilter(); syncIptvPlayer(); mark(); syncMenu(); }
     if (tail) clearTimeout(tail);
     tail = setTimeout(function () {
-      tail = null; lastRun = Date.now(); syncIptvFilter(); mark(); syncMenu();
+      tail = null; lastRun = Date.now(); syncIptvFilter(); syncIptvPlayer(); mark(); syncMenu();
     }, 200);
   }
 
@@ -2837,6 +2923,7 @@ class MainActivity : ComponentActivity() {
   mark();
   syncMenu();
   try { syncIptvFilter(); } catch (eIptv) {}
+  try { syncIptvPlayer(); } catch (eIptvP) {}
   // 播放器由 React 挂载/重渲染：监听 class / aria-label / style 三种变化
   // （自己的写入靠 forceStyle「值相同不写」+ fadeRunning 闸门收尾，不会自触发），
   // 再补一个 1s 低频全量扫描，覆盖注入早于 hydrate、Portal 挂载等漏掉的情况。
