@@ -4,7 +4,11 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -90,6 +94,28 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var speedOpen by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var epDialog by remember { mutableStateOf(false) }
+    var brightness by remember {
+        val w = activity?.window
+        mutableStateOf(w?.attributes?.screenBrightness?.takeIf { it > 0f } ?: 0.5f)
+    }
+    var volumePct by remember { mutableStateOf(0) }
+    var hudText by remember { mutableStateOf<String?>(null) }
+    var seekPreview by remember { mutableStateOf<Long?>(null) }
+    var doubleHint by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(doubleHint) {
+        if (doubleHint != null) {
+            delay(600)
+            doubleHint = null
+        }
+    }
+
+    LaunchedEffect(hudText) {
+        if (hudText != null) {
+            delay(900)
+            hudText = null
+        }
+    }
 
     // 线路顺序完全照上游：直播 = 代理(带 UA/Referer) → 直连（route.fallbacks）；
     // 点播 = 直连 → 代理（proxyMode=auto）。任何一条出错就换下一条，都试完才报错。
@@ -217,8 +243,78 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             },
             modifier = Modifier
                 .fillMaxSize()
-                .clickable {
-                    if (locked) showControls = true else showControls = !showControls
+                .pointerInput(locked) {
+                    detectTapGestures(
+                        onTap = {
+                            if (locked) showControls = true else showControls = !showControls
+                        },
+                        onDoubleTap = { off ->
+                            if (!locked) {
+                                if (off.x < size.width / 2f) {
+                                    exo.seekTo((exo.currentPosition - 10_000).coerceAtLeast(0))
+                                    doubleHint = "« 10s"
+                                } else {
+                                    exo.seekTo(exo.currentPosition + 10_000)
+                                    doubleHint = "10s »"
+                                }
+                                showControls = true
+                            }
+                        }
+                    )
+                }
+                .pointerInput(locked) {
+                    if (locked) return@pointerInput
+                    var startX = 0f
+                    var mode = 0 // 0 未定 · 1 横滑进度 · 2 亮度 · 3 音量
+                    var baseSeek = 0L
+                    detectDragGestures(
+                        onDragStart = { p ->
+                            startX = p.x
+                            mode = 0
+                            baseSeek = exo.currentPosition
+                        },
+                        onDrag = { change, drag ->
+                            change.consume()
+                            if (mode == 0) {
+                                mode = if (abs(drag.x) > abs(drag.y)) 1 else if (startX < size.width / 2f) 2 else 3
+                            }
+                            when (mode) {
+                                1 -> {
+                                    val delta = (drag.x / size.width) * 120_000L
+                                    val target = (baseSeek + delta.toLong()).coerceIn(
+                                        0L, if (duration > 0) duration else Long.MAX_VALUE
+                                    )
+                                    seekPreview = target
+                                    hudText = "${fmt(target)} / ${fmt(duration)}"
+                                }
+                                2 -> {
+                                    brightness = (brightness + drag.y / size.height * 1.6f).coerceIn(0.05f, 1f)
+                                    applyBrightness(activity, brightness)
+                                    hudText = "亮度 ${(brightness * 100).toInt()}%"
+                                }
+                                else -> {
+                                    val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                                    val cur = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                                    val next = (cur - drag.y / size.height * max * 1.6f).toInt().coerceIn(0, max)
+                                    if (next != cur) {
+                                        am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, next, 0)
+                                    }
+                                    volumePct = if (max > 0) next * 100 / max else 0
+                                    hudText = "音量 $volumePct%"
+                                }
+                            }
+                            showControls = true
+                        },
+                        onDragEnd = {
+                            if (mode == 1) {
+                                seekPreview?.let { exo.seekTo(it) }
+                                position = seekPreview ?: position
+                            }
+                            seekPreview = null
+                            hudText = null
+                        }
+                    )
                 }
         )
 
@@ -267,7 +363,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .padding(start = 12.dp, end = 12.dp, top = 40.dp, bottom = 10.dp)
             ) {
                 Slider(
-                    value = if (duration > 0) (position.toFloat() / duration) else 0f,
+                    value = if (duration > 0) {
+                        ((seekPreview ?: position).toFloat() / duration).coerceIn(0f, 1f)
+                    } else 0f,
                     onValueChange = { v ->
                         if (duration > 0) {
                             exo.seekTo((v * duration).toLong())
@@ -282,87 +380,20 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     modifier = Modifier.fillMaxWidth().height(24.dp)
                 )
 
-                if (compact) {
-                    // 竖屏窄屏：拆成两行。上面一行放功能键，下面一行只有 播放组 + 全屏，
-                    // 全屏键永远落在屏内（之前一行塞满 9 个控件，它被挤到屏幕外点不到）。
+                run {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (route.episodes.isNotEmpty()) {
-                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 36) { epDialog = true }
-                        }
-                        Text(
-                            "${"%.1f".format(speed)}X",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { speedOpen = !speedOpen }
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
-                        )
-                        KvIconBtn(Icons.Filled.Lock, "锁定", size = 36) {
-                            locked = true
-                            showControls = false
-                        }
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            "${fmt(position)}/${fmt(duration)}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 1
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 40) {
+                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = if (compact) 38 else 42) {
                             exo.seekTo((position - 10_000).coerceAtLeast(0))
                         }
                         KvIconBtn(
                             if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             if (playing) "暂停" else "播放",
-                            size = 44
+                            size = if (compact) 42 else 46
                         ) {
                             if (playing) exo.pause() else exo.play()
                             playing = !playing
                         }
-                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 40) {
-                            exo.seekTo(
-                                (position + 10_000).coerceAtMost(
-                                    if (duration > 0) duration else position + 10_000
-                                )
-                            )
-                        }
-                        Spacer(Modifier.weight(1f))
-                        KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 44) {
-                            activity?.requestedOrientation = if (isLandscape)
-                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                            else
-                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        }
-                    }
-                    if (speedOpen) {
-                        SpeedList(
-                            speed = speed,
-                            onPick = { s ->
-                                speed = s
-                                exo.setPlaybackSpeed(s)
-                                speedOpen = false
-                            }
-                        )
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 42) {
-                            exo.seekTo((position - 10_000).coerceAtLeast(0))
-                        }
-                        KvIconBtn(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            if (playing) "暂停" else "播放",
-                            size = 46
-                        ) {
-                            if (playing) exo.pause() else exo.play()
-                            playing = !playing
-                        }
-                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 42) {
+                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = if (compact) 38 else 42) {
                             exo.seekTo(
                                 (position + 10_000).coerceAtMost(
                                     if (duration > 0) duration else position + 10_000
@@ -379,11 +410,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         )
                         Spacer(Modifier.weight(1f))
                         if (route.episodes.isNotEmpty()) {
-                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 42) { epDialog = true }
+                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = if (compact) 38 else 42) { epDialog = true }
                         }
                         Box {
                             Text(
-                                "倍速 ${"%.1f".format(speed)}X",
+                                if (compact) "${"%.1f".format(speed)}X" else "倍速 ${"%.1f".format(speed)}X",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -425,7 +456,33 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             }
         }
 
+        hudText?.let { text ->
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xCC000000))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+
+        doubleHint?.let { text ->
+            Box(
+                Modifier
+                    .align(if (text.startsWith("«")) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(horizontal = 40.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x99000000))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+
         if (locked) {
+            // 锁定时显示的是「已锁定」的锁图标（之前用了开锁图标，语义反了）
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
@@ -439,7 +496,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.LockOpen, "解锁", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Lock, "解锁", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
 
@@ -552,4 +609,12 @@ private fun SpeedList(speed: Float, onPick: (Float) -> Unit) {
             )
         }
     }
+}
+
+/** 亮度写进窗口属性（不需要 WRITE_SETTINGS 权限），离开播放页不还原属于预期行为 */
+private fun applyBrightness(activity: android.app.Activity?, v: Float) {
+    val w = activity?.window ?: return
+    val lp = w.attributes
+    lp.screenBrightness = v
+    w.attributes = lp
 }
