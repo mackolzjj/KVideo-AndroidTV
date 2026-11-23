@@ -993,13 +993,11 @@ class MainActivity : ComponentActivity() {
       'nav,header,[class*="navbar"],[class*="topbar"],[class*="top-0"],[class*="sticky"]');
     var w = window.innerWidth || document.documentElement.clientWidth;
     var maxTop = Math.max(160, (window.innerHeight || 800) * 0.25);
-    // 直播播放层（/iptv 的全屏浮层）里的元素一律不打标：它自己的顶栏
-    // （LIVE + 频道名 + 关闭钮）class 含 top-0，会被压成 36px 高。
-    var iptvLayerNow = null;
-    try { iptvLayerNow = iptvPlayerLayer(); } catch (eL) { iptvLayerNow = null; }
+    // 直播页正在播时整页不打标：播放层自己的顶栏（LIVE + 频道名 + 关闭钮）
+    // class 含 top-0，被打上 data-kvideo-topbar 后会被压成 36px 高。
+    try { if (iptvPlaying()) return; } catch (eL) { }
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
-      if (iptvLayerNow && (el === iptvLayerNow || iptvLayerNow.contains(el))) continue;
       var r = el.getBoundingClientRect();
       // 直播页筛选条由 syncIptvFilter 接管，不能被打上 data-kvideo-topbar ——
       // 那条属性会把元素压成 36px 高（折叠后的筛选条正好落进打标区间）。
@@ -2337,7 +2335,7 @@ class MainActivity : ComponentActivity() {
     // 直播页的播放层是网页自己的 fixed inset-0 浮层，它的顶栏（频道名 + LIVE +
     // 关闭钮）正落在下面的几何判据里，会被一起藏掉 —— 一藏，用户除了系统返回
     // 键就没有别的出口，而返回键又会直接退回上一页。浮层在场时不动它。
-    if (iptvPlayerLayer()) return;
+    if (iptvPlaying()) return;
     // 只在「页面没有可用顶栏」时调用（播放页）：那条是任意 div，选择器命不中，
     // 所以在顶部横向取 3 个点，把命中元素及其 3 层祖先里「贴顶 + 宽 ≥60% +
     // 高 18–120px」的都标掉。
@@ -2414,7 +2412,7 @@ class MainActivity : ComponentActivity() {
     // 就在最上面。壳再挂一条 56px 固定栏会正好压住那枚关闭钮，所以浮层在场时
     // 不挂固定栏，把顶栏交还网页。
     try {
-      if (iptvPlayerLayer()) {
+      if (iptvPlaying()) {
         if (root && root.getAttribute(DOCK_ATTR) === 'fixed') undock(root);
         return;
       }
@@ -2634,28 +2632,23 @@ class MainActivity : ComponentActivity() {
   // popstate 时先关浮层（网页自己监听 window 的 Escape），历史就停在 /iptv。
   var iptvPlayerPushed = false;
 
-  function iptvPlayerLayer() {
+  // 「直播页正在播」的判据：/iptv 路由上出现了一个有实际尺寸的 <video>。
+  // 不用几何去认那个 fixed 浮层 —— 真机上浮层结构和本地复刻不一致，按几何
+  // 认会漏判（漏判的后果是壳在播放页又挂了一条固定栏，正好压住关闭钮）。
+  function iptvPlaying() {
     if (String(location.pathname || '').toLowerCase().indexOf('/iptv') < 0) return null;
     var vids = document.querySelectorAll('video');
-    var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
     for (var i = 0; i < vids.length; i++) {
-      var el = vids[i], hops = 0;
-      while (el && el !== document.body && hops < 6) {
-        var cs = null;
-        try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
-        if (cs && cs.position === 'fixed') {
-          var r = el.getBoundingClientRect();
-          if (r.width >= vw * 0.9 && r.height >= vh * 0.9) return el;
-        }
-        el = el.parentElement; hops++;
-      }
+      var r = vids[i].getBoundingClientRect();
+      if (r.width > 40 && r.height > 20) return vids[i];
     }
     return null;
   }
+  function iptvPlayerLayer() { return iptvPlaying(); }
 
   // 网页自己的关闭钮是否真的看得见（不是 opacity:0 的淡出条）
-  function iptvWebClose(layer) {
-    var btns = layer.querySelectorAll('button'), vw = window.innerWidth || 0;
+  function iptvWebClose() {
+    var btns = document.querySelectorAll('button'), vw = window.innerWidth || 0;
     var best = null, bestR = -1;
     for (var i = 0; i < btns.length; i++) {
       var b = btns[i], r = b.getBoundingClientRect();
@@ -2673,9 +2666,9 @@ class MainActivity : ComponentActivity() {
   }
 
   // 没有可点的关闭钮时给一枚兜底钮，保证任何时候都能退出播放层
-  function iptvEnsureClose(layer) {
+  function iptvEnsureClose() {
     var mine = document.querySelector('[' + IPTV_CLOSE_ATTR + ']');
-    var web = iptvWebClose(layer);
+    var web = iptvWebClose();
     if (web) { if (mine && mine.parentNode) mine.parentNode.removeChild(mine); return; }
     if (mine) return;
     var b = document.createElement('button');
@@ -2686,12 +2679,12 @@ class MainActivity : ComponentActivity() {
     b.addEventListener('click', function (ev) {
       ev.preventDefault();
       ev.stopPropagation();
-      iptvClosePlayer(layer);
+      iptvClosePlayer();
     });
     (document.body || document.documentElement).appendChild(b);
   }
 
-  function iptvClosePlayer(layer) {
+  function iptvClosePlayer() {
     function esc() {
       try {
         var ev = new KeyboardEvent('keydown',
@@ -2701,18 +2694,10 @@ class MainActivity : ComponentActivity() {
     }
     esc();
     setTimeout(function () {
-      if (!iptvPlayerLayer()) return;
-      // 兜底：点浮层右上角那枚关闭钮（无文字、含 svg、贴右上）
-      var btns = layer.querySelectorAll('button'), vw = window.innerWidth || 0;
-      var best = null, bestR = -1;
-      for (var i = 0; i < btns.length; i++) {
-        var b = btns[i], r = b.getBoundingClientRect();
-        if (String(b.textContent || '').trim()) continue;
-        if (!b.querySelector('svg')) continue;
-        if (r.top > 160 || r.width > 80 || r.height > 80) continue;
-        if (r.right > bestR) { bestR = r.right; best = b; }
-      }
-      if (best && bestR > vw * 0.6) { try { best.click(); } catch (e) {} }
+      if (!iptvPlaying()) return;
+      // 兜底：点网页那枚关闭钮（无文字、含 svg、贴右上）
+      var b = iptvWebClose();
+      if (b) { try { b.click(); } catch (e) {} }
     }, 240);
   }
 
@@ -2730,7 +2715,7 @@ class MainActivity : ComponentActivity() {
           iptvPlayerPushed = true;
         } catch (e) { iptvPlayerPushed = false; }
       }
-      iptvEnsureClose(layer);
+      iptvEnsureClose();
       return;
     }
     if (iptvPlayerPushed) {
@@ -2745,9 +2730,8 @@ class MainActivity : ComponentActivity() {
 
   window.addEventListener('popstate', function () {
     if (!iptvPlayerPushed) return;
-    var layer = iptvPlayerLayer();
     iptvPlayerPushed = false;
-    if (layer) iptvClosePlayer(layer);
+    if (iptvPlaying()) iptvClosePlayer();
   });
 
   var lastRun = 0;
