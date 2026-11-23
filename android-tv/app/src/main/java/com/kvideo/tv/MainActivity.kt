@@ -870,14 +870,10 @@ class MainActivity : ComponentActivity() {
     }
     closePopover();
     if (act === 'live') kvNav('a[aria-label="直播"]', '/iptv');
-    else if (act === 'favorites') {
-      // 三种场景：有导航链接（首页/直播页）→ 直接点；播放页 → 收藏当前视频；
-      // 都没有（收藏页自己的头部把导航挡掉时）→ 跳 /favorites。
-      if (clickNative('a[aria-label="我的收藏"]')) {}
-      else if (clickNative('button[aria-label*="收藏"]') || clickByText('收藏这个视频') ||
-               clickByText('收藏')) {}
-      else kvGo('/favorites');
-    }
+    // 心形 = 「我的收藏」页，不是「收藏这个视频」。以前在播放页退化成点
+    // 「收藏这个视频」，点了只改收藏状态、页面不动，看起来就是「打不开」。
+    // 页面自己的收藏按钮还在，功能没丢。
+    else if (act === 'favorites') kvNav('a[aria-label="我的收藏"]', '/favorites');
     else if (act === 'history') clickNative(history[0]);
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
