@@ -31,6 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -172,6 +175,20 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 duration = exo.duration.coerceAtLeast(0L)
             }
             delay(400)
+        }
+    }
+
+    // 播放页=沉浸式：藏掉状态栏/导航栏，滑一下才临时出现；离开播放页恢复
+    DisposableEffect(Unit) {
+        val win = activity?.window
+        val controller = win?.let { WindowInsetsControllerCompat(it, it.decorView) }
+        if (win != null) WindowCompat.setDecorFitsSystemWindows(win, false)
+        controller?.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+            if (win != null) WindowCompat.setDecorFitsSystemWindows(win, true)
         }
     }
 
