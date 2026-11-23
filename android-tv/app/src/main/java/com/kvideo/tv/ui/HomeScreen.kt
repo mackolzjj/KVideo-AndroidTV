@@ -157,7 +157,7 @@ fun HomeScreen(vm: AppVm) {
     }
 }
 
-/** 半屏 hero：LazyRow + 吸附（不用实验版 HorizontalPager） */
+/** 半屏 hero：LazyRow 横滑（不用实验版 Pager），空数据走单独分支，不用 early return */
 @Composable
 private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
     val state = rememberLazyListState()
@@ -174,98 +174,101 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text("设置里填服务器地址与访问密码", style = Kv.Meta)
             }
-            return@Box
-        }
-
-        LazyRow(state = state, modifier = Modifier.fillMaxSize()) {
-            items(items) { h ->
-                Box(Modifier.fillParentMaxWidth().fillParentMaxHeight()) {
-                    coil.compose.AsyncImage(
-                        model = h.cover,
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        alpha = 0.34f
-                    )
-                    Box(
-                        Modifier.fillMaxSize().background(
-                            Brush.verticalGradient(
-                                0f to Color(0x99000000),
-                                0.26f to Color(0x00000000),
-                                0.60f to Color(0x66000000),
-                                1f to Kv.Bg
+        } else {
+            LazyRow(state = state, modifier = Modifier.fillMaxSize()) {
+                items(items) { h ->
+                    Box(Modifier.fillParentMaxWidth().fillParentMaxHeight()) {
+                        coil.compose.AsyncImage(
+                            model = h.cover,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            alpha = 0.34f
+                        )
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                Brush.verticalGradient(
+                                    0f to Color(0x99000000),
+                                    0.26f to Color(0x00000000),
+                                    0.60f to Color(0x66000000),
+                                    1f to Kv.Bg
+                                )
                             )
                         )
-                    )
-                    Column(Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 18.dp, bottom = 34.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "推荐",
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(Kv.Red)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                            if (h.rate.isNotBlank()) {
-                                Spacer(Modifier.width(6.dp))
+                        Column(
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 18.dp, end = 18.dp, bottom = 34.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "豆瓣 ${h.rate}",
+                                    "推荐",
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(3.dp))
-                                        .background(Color(0x33FFFFFF))
+                                        .background(Kv.Red)
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
+                                if (h.rate.isNotBlank()) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "豆瓣 ${h.rate}",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(Color(0x33FFFFFF))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            h.title,
-                            fontSize = 28.sp,
-                            lineHeight = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text("随时可看 · 多源可选", style = Kv.Meta)
-                        Spacer(Modifier.height(13.dp))
-                        Row(
-                            Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color.White)
-                                .clickable { onPlay(h.title) }
-                                .padding(horizontal = 16.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(5.dp))
-                            Text("播放", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                h.title,
+                                fontSize = 28.sp,
+                                lineHeight = 32.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text("随时可看 · 多源可选", style = Kv.Meta)
+                            Spacer(Modifier.height(13.dp))
+                            Row(
+                                Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.White)
+                                    .clickable { onPlay(h.title) }
+                                    .padding(horizontal = 16.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text("播放", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Row(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            repeat(items.size) { i ->
-                val on = i == state.firstVisibleItemIndex
-                Box(
-                    Modifier
-                        .height(5.dp)
-                        .width(if (on) 16.dp else 5.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (on) Color.White else Color(0x42FFFFFF))
-                )
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                repeat(items.size) { i ->
+                    val on = i == state.firstVisibleItemIndex
+                    Box(
+                        Modifier
+                            .height(5.dp)
+                            .width(if (on) 16.dp else 5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (on) Color.White else Color(0x42FFFFFF))
+                    )
+                }
             }
         }
     }

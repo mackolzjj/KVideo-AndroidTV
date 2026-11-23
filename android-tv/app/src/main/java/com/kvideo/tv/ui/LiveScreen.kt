@@ -40,13 +40,12 @@ fun LiveScreen(vm: AppVm) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "直播")
+        // 不能用 return@Column 提前返回（Compose 的 group 会不平衡，见 App.kt 里的注释）
         if (vm.liveUrl.isBlank()) {
             KvEmpty("还没填直播源。设置 → 连点「版本」7 次 → 高级设置里填 M3U 地址。")
-            return@Column
-        }
-        if (vm.channels.isEmpty()) {
+        } else if (vm.channels.isEmpty()) {
             KvEmpty("没拿到频道。检查 M3U 地址是否可访问。")
-        }
+        } else {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp)
@@ -84,6 +83,7 @@ fun LiveScreen(vm: AppVm) {
                     Text(c.group, style = Kv.Tiny)
                 }
             }
+        }
         }
     }
 }

@@ -39,34 +39,37 @@ fun KvApp(vm: AppVm = viewModel()) {
     // 上次如果崩过，直接开在最前面，不用进高级设置才能看到
     var crash by remember { mutableStateOf(com.kvideo.tv.KvApplication.lastCrash(ctx)) }
 
+    // 注意：这里不能用 return@KvTheme / return@Surface 提前返回。
+    // @Composable 的 content lambda 里提前 return 会让 Compose 的 group 进/出栈不平衡，
+    // 运行到 exitGroup 时抛 IndexOutOfBoundsException: Index -1 out of bounds for length 0
+    // —— 2.0.40 的「打开就闪退」就是这个（崩溃屏一出现必走 early return）。
     KvTheme {
         if (crash.isNotBlank()) {
             CrashScreen(crash) {
                 com.kvideo.tv.KvApplication.clearCrash(ctx)
                 crash = ""
             }
-            return@KvTheme
-        }
-        Surface(Modifier.fillMaxSize(), color = Kv.Bg) {
-            val route = vm.route
+        } else {
+            Surface(Modifier.fillMaxSize(), color = Kv.Bg) {
+                val route = vm.route
 
-            if (vm.serverUrl.isBlank() && route !is Route.Settings) {
-                SetupScreen(vm)
-                return@Surface
-            }
+                if (vm.serverUrl.isBlank() && route !is Route.Settings) {
+                    SetupScreen(vm)
+                } else {
+                    BackHandler(enabled = vm.backStack.isNotEmpty()) { vm.back() }
 
-            BackHandler(enabled = vm.backStack.isNotEmpty()) { vm.back() }
-
-            when (route) {
-                is Route.Home -> MainScaffold(vm, 0) { HomeScreen(vm) }
-                is Route.Live -> MainScaffold(vm, 1) { LiveScreen(vm) }
-                is Route.Saved -> MainScaffold(vm, 2) { SavedScreen(vm) }
-                is Route.Search -> SearchScreen(vm)
-                is Route.Settings -> SettingsScreen(vm)
-                is Route.Premium -> PremiumScreen(vm)
-                is Route.Advanced -> AdvancedScreen(vm)
-                is Route.Detail -> DetailScreen(vm, route)
-                is Route.Player -> PlayerScreen(vm, route)
+                    when (route) {
+                        is Route.Home -> MainScaffold(vm, 0) { HomeScreen(vm) }
+                        is Route.Live -> MainScaffold(vm, 1) { LiveScreen(vm) }
+                        is Route.Saved -> MainScaffold(vm, 2) { SavedScreen(vm) }
+                        is Route.Search -> SearchScreen(vm)
+                        is Route.Settings -> SettingsScreen(vm)
+                        is Route.Premium -> PremiumScreen(vm)
+                        is Route.Advanced -> AdvancedScreen(vm)
+                        is Route.Detail -> DetailScreen(vm, route)
+                        is Route.Player -> PlayerScreen(vm, route)
+                    }
+                }
             }
         }
     }

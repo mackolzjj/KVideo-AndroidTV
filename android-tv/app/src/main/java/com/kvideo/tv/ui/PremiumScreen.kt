@@ -149,9 +149,7 @@ fun PremiumScreen(vm: AppVm) {
                         }
                     }
                 }
-                return@Column
-            }
-
+            } else {
             if (vm.premiumTags.isNotEmpty()) {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -215,6 +213,7 @@ fun PremiumScreen(vm: AppVm) {
                         }
                     }
                 }
+            }
             }
         }
     }
