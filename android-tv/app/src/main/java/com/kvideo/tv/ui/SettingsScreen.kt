@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,9 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kvideo.tv.BuildConfig
 import com.kvideo.tv.vm.AppVm
+import com.kvideo.tv.vm.Route
 
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     placeholder: String,
@@ -67,11 +69,11 @@ private fun Field(
 
 @Composable
 fun SettingsScreen(vm: AppVm) {
-    var server by remember { mutableStateOf(vm.serverUrl) }
-    var pw by remember { mutableStateOf(vm.password) }
-    var live by remember { mutableStateOf(vm.liveUrl) }
-    var premiumPw by remember { mutableStateOf("") }
     var versionTaps by remember { mutableStateOf(0) }
+    var pinDialog by remember { mutableStateOf(false) }
+    var pinInput by remember { mutableStateOf("") }
+    var pinAgain by remember { mutableStateOf("") }
+    var pinErr by remember { mutableStateOf<String?>(null) }
     var blockedText by remember { mutableStateOf(vm.blockedCategories.joinToString("、")) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
@@ -83,39 +85,18 @@ fun SettingsScreen(vm: AppVm) {
                     fontWeight = FontWeight.SemiBold,
                     color = Kv.Red,
                     modifier = Modifier
-                        .clickable { vm.saveServer(server, pw, live); vm.back() }
+                        .clickable { vm.back() }
                         .padding(8.dp)
                 )
             })
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Spacer(Modifier.height(6.dp))
-            Field("服务器地址", server, "http://192.168.1.250:81", { server = it })
-            Field("访问密码", pw, "每个账户各自一个密码，服务器按密码识别身份", { pw = it }, password = true)
-            Field("直播源 M3U 地址（留空用内置的 610 个频道）", live, "http://…/playlist.m3u", { live = it })
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Kv.Ink)
-                    .clickable { vm.saveServer(server, pw, live) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("保存并重连", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            }
-
-            if (vm.busy) {
-                Spacer(Modifier.height(10.dp))
-                Text("正在连接…", style = Kv.Tiny)
-            }
-            vm.error?.let {
-                Spacer(Modifier.height(10.dp))
-                Text(it, fontSize = 12.sp, color = Kv.Red)
-            }
-            if (!vm.busy && vm.error == null && vm.serverUrl.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
+            // 连接状态：只读。服务器地址 / 密码 / 直播源 / 代理都挪进「高级设置」了
+            if (vm.serverUrl.isBlank()) {
+                Text("还没连服务器（首启会引导填写）", style = Kv.Tiny.copy(color = Kv.Red))
+            } else {
                 val srcLine = if (vm.probing) {
                     "正在探活 ${vm.sources.size} 个源…"
                 } else {
@@ -125,6 +106,10 @@ fun SettingsScreen(vm: AppVm) {
                     "已连接 · ${vm.accountName}（${vm.accountRole}）· $srcLine",
                     style = Kv.Tiny.copy(color = Kv.Ink2)
                 )
+            }
+            vm.error?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, fontSize = 12.sp, color = Kv.Red)
             }
 
             Spacer(Modifier.height(22.dp))
@@ -149,35 +134,6 @@ fun SettingsScreen(vm: AppVm) {
                 Text("保存屏蔽词", fontSize = 12.sp, color = Kv.Ink)
             }
 
-            Spacer(Modifier.height(22.dp))
-            Text("播放代理", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                listOf(0 to "自动", 1 to "直连", 2 to "代理").forEach { (mode, label) ->
-                    KvChip(label, selected = vm.proxyMode == mode) { vm.proxyMode = mode }
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            Text("自动 = 先直连，失败再走服务器的 HLS 代理", style = Kv.Tiny)
-
-            if (vm.aliveSources.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "死源已自动跳过（实测一批订阅里只有少数真能返回内容）",
-                    style = Kv.Tiny
-                )
-                Spacer(Modifier.height(6.dp))
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(Kv.Surface2)
-                        .clickable { vm.probeSources() }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text("重新探活", fontSize = 12.sp, color = Kv.Ink)
-                }
-            }
-
             Spacer(Modifier.height(26.dp))
             Text("其他", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
             Spacer(Modifier.height(4.dp))
@@ -192,7 +148,7 @@ fun SettingsScreen(vm: AppVm) {
                 Spacer(Modifier.weight(1f))
                 Text("${vm.history.size} 条", style = Kv.Tiny)
             }
-            // 隐藏键：连点「版本」7 次进高级内容（页面上不留任何入口）
+            // 隐藏入口：连点「版本」7 次 → PIN → 高级设置（页面上不留任何入口）
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -201,7 +157,10 @@ fun SettingsScreen(vm: AppVm) {
                         versionTaps++
                         if (versionTaps >= 7) {
                             versionTaps = 0
-                            vm.openPremium()
+                            pinInput = ""
+                            pinAgain = ""
+                            pinErr = null
+                            pinDialog = true
                         }
                     },
                 verticalAlignment = Alignment.CenterVertically
@@ -210,7 +169,7 @@ fun SettingsScreen(vm: AppVm) {
                 Spacer(Modifier.weight(1f))
                 Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = Kv.Tiny)
             }
-            if (vm.premiumUnlocked) {
+            if (vm.canPremium) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -230,6 +189,95 @@ fun SettingsScreen(vm: AppVm) {
             }
             Spacer(Modifier.height(40.dp))
         }
+    }
+    if (pinDialog) {
+        val firstTime = !vm.hasPin
+        AlertDialog(
+            onDismissRequest = { pinDialog = false },
+            title = {
+                Text(
+                    if (firstTime) "设置访问 PIN" else "输入访问 PIN",
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        if (firstTime) "4–8 位数字，进高级设置时要输它，设好别忘了。"
+                        else "进高级设置需要它。忘了只能清 App 数据重设。",
+                        style = Kv.Tiny
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PinBox(pinInput) { pinInput = it.filter { c -> c.isDigit() }.take(8) }
+                    if (firstTime) {
+                        Spacer(Modifier.height(8.dp))
+                        PinBox(pinAgain) { pinAgain = it.filter { c -> c.isDigit() }.take(8) }
+                    }
+                    pinErr?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(it, fontSize = 11.5.sp, color = Kv.Red)
+                    }
+                }
+            },
+            confirmButton = {
+                Text(
+                    "确定",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Kv.Red,
+                    modifier = Modifier
+                        .clickable {
+                            when {
+                                pinInput.length < 4 -> pinErr = "至少 4 位"
+                                firstTime && pinInput != pinAgain -> pinErr = "两次输入不一致"
+                                firstTime -> {
+                                    vm.setPin(pinInput)
+                                    pinDialog = false
+                                    vm.go(Route.Advanced)
+                                }
+                                vm.verifyPin(pinInput) -> {
+                                    pinDialog = false
+                                    vm.go(Route.Advanced)
+                                }
+                                else -> pinErr = "PIN 不对"
+                            }
+                        }
+                        .padding(8.dp)
+                )
+            },
+            dismissButton = {
+                Text(
+                    "取消",
+                    fontSize = 13.sp,
+                    color = Kv.Ink2,
+                    modifier = Modifier.clickable { pinDialog = false }.padding(8.dp)
+                )
+            },
+            containerColor = Kv.Surface
+        )
+    }
+}
+
+@Composable
+private fun PinBox(value: String, onChange: (String) -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(Kv.Surface2)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (value.isEmpty()) Text("••••", fontSize = 15.sp, color = Kv.Ink3)
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 15.sp, color = Kv.Ink, fontWeight = FontWeight.Bold),
+            cursorBrush = SolidColor(Kv.Red),
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 

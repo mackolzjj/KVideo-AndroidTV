@@ -18,8 +18,8 @@ android {
         applicationId = "com.kvideo.tv"
         minSdk = 26
         targetSdk = 34
-        versionCode = 229
-        versionName = "2.0.29"
+        versionCode = 230
+        versionName = "2.0.30"
 
         buildConfigField("String", "DEFAULT_KVIDEO_URL", "\"$defaultKVideoUrl\"")
     }

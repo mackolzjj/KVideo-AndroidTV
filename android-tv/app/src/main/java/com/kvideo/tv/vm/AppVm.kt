@@ -26,6 +26,7 @@ sealed interface Route {
     data object Saved : Route
     data object Settings : Route
     data object Premium : Route
+    data object Advanced : Route
     data class Detail(val id: String, val sourceId: String) : Route
     data class Player(
         val url: String,
@@ -188,6 +189,22 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             probing = false
         }
     }
+
+    // ---------- 设置页的隐藏锁：高级设置子页 ----------
+
+    private fun pinDigest(pin: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        val bytes = md.digest(("kvideo-pin:" + pin.trim()).toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    val hasPin: Boolean get() = store.pinHash.isNotBlank()
+
+    fun setPin(pin: String) {
+        store.pinHash = if (pin.isBlank()) "" else pinDigest(pin)
+    }
+
+    fun verifyPin(pin: String): Boolean = hasPin && pinDigest(pin) == store.pinHash
 
     fun unlockPremium(pw: String) {
         viewModelScope.launch {

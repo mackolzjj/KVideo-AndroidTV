@@ -56,6 +56,14 @@ class Store(ctx: Context) {
         get() = sp.getBoolean("premium_unlocked", false)
         set(v) = sp.edit().putBoolean("premium_unlocked", v).apply()
 
+    /**
+     * 设置页「高级」子页的访问 PIN。存的是加盐哈希，不存明文 ——
+     * 本地 PIN 只是防误改，不是账号安全，别给用户「已经加密了」的错觉。
+     */
+    var pinHash: String
+        get() = sp.getString("pin_hash", "") ?: ""
+        set(v) = sp.edit().putString("pin_hash", v).apply()
+
     var lastUser: String
         get() = sp.getString("user", "") ?: ""
         set(v) = sp.edit().putString("user", v).apply()
