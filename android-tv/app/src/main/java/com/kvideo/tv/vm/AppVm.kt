@@ -48,7 +48,11 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var backStack by mutableStateOf<List<Route>>(emptyList())
 
     var serverUrl by mutableStateOf(store.serverUrl)
+    var username by mutableStateOf(store.username)
     var password by mutableStateOf(store.password)
+    /** 登录后的账户：服务器是多账户（admin / family），权限由账号决定，界面上要能看见 */
+    var accountName by mutableStateOf("")
+    var accountRole by mutableStateOf("")
     var liveUrl by mutableStateOf(store.liveUrl)
 
     var busy by mutableStateOf(false)
@@ -61,7 +65,22 @@ class AppVm(app: Application) : AndroidViewModel(app) {
 
     var query by mutableStateOf("")
     var searching by mutableStateOf(false)
-    var results by mutableStateOf<List<VideoItem>>(emptyList())
+    /** 服务端回来的全部条目（可能几百条，混着挂羊头卖狗肉的黑产源） */
+    var allResults by mutableStateOf<List<VideoItem>>(emptyList())
+    /** 默认只说人话：片名要真的含搜索词，否则 122 个源能刷出几百条垃圾 */
+    var strict by mutableStateOf(true)
+
+    /** 界面用这个：严格模式下按相关度过滤并排序 */
+    val results: List<VideoItem>
+        get() {
+            val q = query.trim()
+            if (!strict || q.isEmpty()) return allResults
+            return allResults
+                .map { it to relevance(it.name, q) }
+                .filter { it.second >= 0 }
+                .sortedWith(compareBy({ it.second }, { it.first.name.length }, { it.first.sourceName }))
+                .map { it.first }
+        }
     var progressDone by mutableStateOf(0)
     var progressTotal by mutableStateOf(0)
 
@@ -74,6 +93,24 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var channelGroup by mutableStateOf("全部")
 
     private var searchJob: Job? = null
+
+    /**
+     * 相关度：0 = 片名以搜索词开头，1 = 含搜索词，-1 = 不相关（严格模式下丢掉）。
+     * 归一化只保留中英文数字，去掉「【】·」这类装饰，避免「庆余年 第一季」被判不匹配。
+     */
+    private fun relevance(name: String, query: String): Int {
+        val n = normalize(name)
+        val q = normalize(query)
+        if (q.isEmpty()) return 1
+        return when {
+            n.startsWith(q) -> 0
+            n.contains(q) -> 1
+            else -> -1
+        }
+    }
+
+    private fun normalize(s: String): String =
+        s.lowercase().filter { it.isLetterOrDigit() }
 
     val loggedIn: Boolean get() = Net.hasSession()
 
@@ -103,9 +140,11 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    fun saveServer(url: String, pw: String, live: String) {
+    fun saveServer(url: String, user: String, pw: String, live: String) {
         serverUrl = url.trim().trimEnd('/')
+        username = user.trim().ifBlank { "admin" }
         password = pw
+        store.username = username
         liveUrl = live.trim()
         store.serverUrl = serverUrl
         store.password = password
@@ -122,8 +161,13 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             busy = true
             error = null
             try {
-                val ok = api.login(store.password)
-                if (!ok) error = "登录失败：访问密码不对，或服务器没开鉴权"
+                val acc = api.login(store.username, store.password)
+                if (acc == null) {
+                    error = "登录失败：用户名或密码不对（多账户服务器要填对用户名）"
+                } else {
+                    accountName = acc.name.ifBlank { acc.username }
+                    accountRole = acc.role
+                }
                 sources = api.sources()
                 recommend = api.recommend()
                 if (sources.isEmpty() && recommend.isEmpty()) {
@@ -141,11 +185,11 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         query = q
         searchJob?.cancel()
         if (q.isBlank()) {
-            results = emptyList()
+            allResults = emptyList()
             searching = false
             return
         }
-        results = emptyList()
+        allResults = emptyList()
         progressDone = 0
         progressTotal = sources.size
         searching = true
@@ -157,8 +201,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 // 回调来自 IO 线程，状态更新统一回主线程
                 onVideos = { list ->
                     viewModelScope.launch {
-                        val seen = results.map { it.id + "|" + it.sourceId }.toHashSet()
-                        results = results + list.filter { (it.id + "|" + it.sourceId) !in seen }
+                        val seen = allResults.map { it.id + "|" + it.sourceId }.toHashSet()
+                        allResults = allResults + list.filter { (it.id + "|" + it.sourceId) !in seen }
                     }
                 },
                 onProgress = { d, t ->
@@ -200,15 +244,17 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         history = store.history()
         go(
             Route.Player(
-                url = Net.abs(ep.url),
+                // 片源 CDN 对手机端的裸请求回 403（同样地址服务器侧能拉），
+                // 所以点播统一走服务器的 HLS 代理：/api/iptv/stream?url=
+                // 它把清单里的子地址重写成 /api/iptv/stream?...，相对根路径，播放器能直接跟。
+                url = api.streamProxy(ep.url),
                 title = d.name,
                 subtitle = ep.name,
                 videoId = d.id,
                 sourceId = d.sourceId,
                 epIndex = ep.index,
                 episodeName = ep.name,
-                mime = if (ep.url.contains(".m3u8", true))
-                    androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null
+                mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8
             )
         )
     }

@@ -88,15 +88,32 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             }
         } else if (vm.searching && vm.progressTotal > 0) {
             Text(
-                "已搜 ${vm.progressDone}/${vm.progressTotal} 个源 · 找到 ${vm.results.size} 条",
+                "已搜 ${vm.progressDone}/${vm.progressTotal} 个源 · 找到 ${vm.allResults.size} 条",
                 style = Kv.Tiny,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
         } else if (vm.results.isEmpty()) {
             KvEmpty(
-                if (vm.sources.isEmpty()) "没有可用片源：订阅没拉到（设置页「已连接」后面应该是 122 个源，不是 0）"
-                else "没有结果。换个片名试试。"
+                when {
+                    vm.sources.isEmpty() -> "没有可用片源：订阅没拉到（设置页「已连接」后面应该是 122 个源，不是 0）"
+                    vm.allResults.isNotEmpty() -> "没有一条片名真的含「${vm.query.trim()}」。点下面「显示全部」能看到服务器返回的 ${vm.allResults.size} 条。"
+                    else -> "没有结果。换个片名试试。"
+                }
             )
+        }
+
+        // 相关度开关：122 个源里混着挂羊头卖狗肉的，默认只看片名真含搜索词的
+        if (vm.allResults.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("相关 ${vm.results.size} 条 · 全部 ${vm.allResults.size} 条", style = Kv.Tiny)
+                Spacer(Modifier.weight(1f))
+                KvChip(if (vm.strict) "只看相关" else "显示全部", selected = vm.strict) {
+                    vm.strict = !vm.strict
+                }
+            }
         }
 
         LazyVerticalGrid(

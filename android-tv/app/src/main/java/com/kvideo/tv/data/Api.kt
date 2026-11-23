@@ -64,21 +64,52 @@ object Net {
     fun jsonBody(obj: JSONObject) = obj.toString().toRequestBody("application/json".toMediaType())
 }
 
+data class Account(val username: String = "", val name: String = "", val role: String = "")
+
 class Api {
 
-    /** 用访问密码登录，成功返回 true（服务端会下发会话 cookie） */
-    suspend fun login(password: String): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * 登录。服务器有多个账户（admin / family …）时**必须带 username**：
+     * 只发 password 的话服务端会永远匹配到管理员那个账号，普通用户就成了管理员，
+     * 权限自然「全乱」。返回登录后的账户信息（名字 + 角色）。
+     */
+    suspend fun login(username: String, password: String): Account? = withContext(Dispatchers.IO) {
         try {
-            val body = Net.jsonBody(JSONObject().put("password", password))
-            Net.client.newCall(Net.builder("/api/auth").post(body).build()).execute().use { r ->
+            val payload = JSONObject().put("password", password)
+            if (username.isNotBlank()) payload.put("username", username)
+            Net.client.newCall(Net.builder("/api/auth").post(Net.jsonBody(payload)).build()).execute().use { r ->
                 Net.eatCookies(r.headers("Set-Cookie"))
                 val text = r.body?.string().orEmpty()
-                if (text.isEmpty()) return@withContext false
-                JSONObject(text).optBoolean("valid", false)
+                if (text.isEmpty()) return@withContext null
+                val root = JSONObject(text)
+                if (!root.optBoolean("valid", false)) return@withContext null
+                accountOf(root.optJSONObject("session"))
             }
         } catch (e: Exception) {
-            false
+            null
         }
+    }
+
+    /** 当前会话的账户（页面重开时确认自己是谁） */
+    suspend fun session(): Account? = withContext(Dispatchers.IO) {
+        try {
+            Net.client.newCall(Net.builder("/api/auth/session").build()).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (text.isEmpty()) return@withContext null
+                accountOf(JSONObject(text).optJSONObject("session"))
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun accountOf(s: JSONObject?): Account? {
+        if (s == null) return null
+        return Account(
+            username = s.optString("username"),
+            name = s.optString("name"),
+            role = s.optString("role")
+        )
     }
 
     /**
