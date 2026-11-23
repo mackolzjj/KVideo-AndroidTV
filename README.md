@@ -2,7 +2,7 @@
 
 KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Media3）。App 不含服务端，需要你自己的部署地址。
 
-[下载 2.0.40](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
+[下载 2.0.41](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
 
 ## 功能
 
@@ -22,7 +22,7 @@ KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Med
 - 频道线路失败自动跳下一个台（最多 3 次）
 
 **首页**
-- 剧照 hero + 继续观看（真实进度）+ 今日热播（「换一批 ↻」原地换一屏）+ 正在直播
+- 半屏 hero，可横滑 3 张（LazyRow 吸附，不用实验 API）+ 继续观看（真实进度）+ 今日热播「换一批 ↻」
 - 底栏选中态上浮；崩溃日志屏（崩过就开在最前面，可直接拷 /Android/data/com.kvideo.tv/files/last_crash.txt）
 
 
