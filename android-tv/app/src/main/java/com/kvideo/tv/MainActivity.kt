@@ -579,7 +579,12 @@ class MainActivity : ComponentActivity() {
     // mark() 会把「贴顶、高 20–240px、position 为 sticky/fixed 或 class 含
     // sticky」的块打上 data-kvideo-topbar，而那条规则会把该属性压成 36px 高。
     // 折叠后的筛选条正好落进 20–240 这个区间，不排除就会被压成一条横杠。
-    '[' + IPTV_BAR_ATTR + ']{height:auto !important;min-height:0 !important;}' +
+    // 筛选条固定吸顶：它是 sticky，但网页给的 top-4 在滚动到父容器边界前有效；
+    // 这里改成恒定 top:0 + 高 z-index，保证它一直在最上面，迷你播放器才能固定贴它下面。
+    '[' + IPTV_BAR_ATTR + ']{height:auto !important;min-height:0 !important;' +
+      'position:sticky !important;top:0 !important;z-index:40 !important;' +
+      'background:var(--kv-iptv-fade, rgba(12,14,19,.96)) !important;' +
+      'border-radius:0 0 18px 18px !important;}' +
     // 直播播放层：网页自己的关闭钮（右上角）在某些状态下整条顶栏看不到。
     // 这枚是我们兜底的关闭钮，只在检测不到网页那枚可见时才创建。
     '[' + IPTV_CLOSE_ATTR + ']{position:fixed !important;top:calc(env(safe-area-inset-top,0px) + 12px) !important;' +
@@ -2791,9 +2796,10 @@ class MainActivity : ComponentActivity() {
     try {
       var bar = document.querySelector('[' + IPTV_BAR_ATTR + ']');
       if (bar) {
+        // 只看高度：筛选条已经恒定吸顶，高度不随滚动变化 —— 于是迷你条是
+        // 固定不动的，不会跟着页面上下漂。
         var br = bar.getBoundingClientRect();
-        var vh = window.innerHeight || 0;
-        if (br.height > 20 && br.bottom > 0 && br.bottom < vh * 0.55) top = br.bottom + 8;
+        if (br.height > 20) top = br.height + 8;
       }
     } catch (e) {}
     if (Math.abs(top - kvMiniTop) > 1) {
