@@ -1188,6 +1188,9 @@ class MainActivity : ComponentActivity() {
 
   // 全量扫描：每次都对已打标元素重刷内联样式，React 重建 DOM 后也能自愈。
   function shrinkSeekButtons() {
+    // 直播播放层里没有可 seek 的时间轴（IPTVPlayer 压根没有快进/倍速钮），
+    // 壳这边不去缩、不去标，免得在真机上凑出多余的小图标。
+    try { if (iptvPlaying()) return; } catch (eS) {}
     var list = document.querySelectorAll('button');
     for (var i = 0; i < list.length; i++) {
       var b = list[i];
@@ -1663,9 +1666,26 @@ class MainActivity : ComponentActivity() {
     var info = videoInfo();
     if (!info) {
       var vv = document.querySelector('video');
-      gestureDiag.reject = 'no-video-info';
       gestureDiag.videoDur = vv ? String(vv.duration) : 'no-video';
-      scrub = null; return;
+      // 直播流 duration = Infinity：没有可拖动的时间轴，但纵向的音量/亮度
+      // 仍然有用（全屏判定照旧）。开一个 live 态的 scrub，横向在 move 里丢弃。
+      // 只有 duration === Infinity 才算直播流；NaN（元数据未到）仍按老逻辑丢弃，
+      // 免得点播加载中也能起纵向手势。
+      if (!vv || vv.duration !== Infinity) {
+        gestureDiag.reject = 'no-video-info';
+        scrub = null; return;
+      }
+      gestureDiag.reject = null;
+      gestureDiag.bar = 'live';
+      gestureDiag.barW = 0;
+      scrub = {
+        x: t.clientX, y: t.clientY, lastY: t.clientY, t0: 0, d: 0, v: vv,
+        width: 0, rect: null, bar: null, usable: false, baseX: 0,
+        side: t.clientX < (window.innerWidth || 0) / 2 ? 'left' : 'right',
+        mode: null, target: 0, synthStarted: false,
+        onVideo: onVideo, inPlayer: inPlayer, live: true
+      };
+      return;
     }
     var bar = findProgressBar();
     var rect = bar ? bar.getBoundingClientRect() : null;
@@ -1703,6 +1723,10 @@ class MainActivity : ComponentActivity() {
     if (!scrub.mode) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_MIN_PX) return;
       if (Math.abs(dx) >= Math.abs(dy) * AXIS_RATIO) {
+        if (scrub.live) {   // 直播：横向拖动没有意义，直接放手
+          gestureDiag.reject = 'live-no-seek';
+          scrub = null; return;
+        }
         scrub.mode = 'scrub';
         gestureDiag.mode = 'scrub';
         gestureDiag.scrub++;
@@ -1871,6 +1895,7 @@ class MainActivity : ComponentActivity() {
   // React 不会因节点被移走而在下次 commit 抛 removeChild；同时网页速度
   // 菜单的两套定位算法（getBoundingClientRect / offsetTop 累加）仍能跟上。
   function moveRateButton() {
+    try { if (iptvPlaying()) return; } catch (eR) {}
     var b = findRateButton();
     if (!b) return;
     if (b.getAttribute(RATE_ATTR) !== '1') b.setAttribute(RATE_ATTR, '1');
@@ -2291,6 +2316,7 @@ class MainActivity : ComponentActivity() {
     return null;
   }
   function placeSpeedMenu(node) {
+    try { if (iptvPlaying()) return; } catch (eP2) {}
     var menu = node || findSpeedMenu();
     if (!menu) return;
     if (menu.getAttribute(SPEED_MENU_ATTR) !== '1') {
