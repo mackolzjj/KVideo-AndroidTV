@@ -69,14 +69,13 @@ data class Account(val username: String = "", val name: String = "", val role: S
 class Api {
 
     /**
-     * 登录。服务器有多个账户（admin / family …）时**必须带 username**：
-     * 只发 password 的话服务端会永远匹配到管理员那个账号，普通用户就成了管理员，
-     * 权限自然「全乱」。返回登录后的账户信息（名字 + 角色）。
+     * 登录。**服务器是按密码识别账户的**（ACCOUNTS 里每个账户各带一个密码），
+     * 不需要也不应该传 username —— 传错用户名反而会登不上。
+     * 登录成功后再从 session 里读回「你其实是哪个账户、什么角色」。
      */
-    suspend fun login(username: String, password: String): Account? = withContext(Dispatchers.IO) {
+    suspend fun login(password: String): Account? = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().put("password", password)
-            if (username.isNotBlank()) payload.put("username", username)
             Net.client.newCall(Net.builder("/api/auth").post(Net.jsonBody(payload)).build()).execute().use { r ->
                 Net.eatCookies(r.headers("Set-Cookie"))
                 val text = r.body?.string().orEmpty()

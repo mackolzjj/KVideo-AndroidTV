@@ -68,7 +68,6 @@ private fun Field(
 @Composable
 fun SettingsScreen(vm: AppVm) {
     var server by remember { mutableStateOf(vm.serverUrl) }
-    var user by remember { mutableStateOf(vm.username) }
     var pw by remember { mutableStateOf(vm.password) }
     var live by remember { mutableStateOf(vm.liveUrl) }
 
@@ -81,7 +80,7 @@ fun SettingsScreen(vm: AppVm) {
                     fontWeight = FontWeight.SemiBold,
                     color = Kv.Red,
                     modifier = Modifier
-                        .clickable { vm.saveServer(server, user, pw, live); vm.back() }
+                        .clickable { vm.saveServer(server, pw, live); vm.back() }
                         .padding(8.dp)
                 )
             })
@@ -89,8 +88,7 @@ fun SettingsScreen(vm: AppVm) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Spacer(Modifier.height(6.dp))
             Field("服务器地址", server, "http://192.168.1.250:81", { server = it })
-            Field("用户名", user, "admin / family", { user = it })
-            Field("访问密码", pw, "服务器没开鉴权就留空", { pw = it }, password = true)
+            Field("访问密码", pw, "每个账户各自一个密码，服务器按密码识别身份", { pw = it }, password = true)
             Field("直播源（M3U）", live, "http://…/playlist.m3u", { live = it })
 
             Box(
@@ -99,7 +97,7 @@ fun SettingsScreen(vm: AppVm) {
                     .height(44.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(Kv.Ink)
-                    .clickable { vm.saveServer(server, user, pw, live) },
+                    .clickable { vm.saveServer(server, pw, live) },
                 contentAlignment = Alignment.Center
             ) {
                 Text("保存并重连", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
@@ -153,7 +151,6 @@ fun SettingsScreen(vm: AppVm) {
 @Composable
 fun SetupScreen(vm: AppVm) {
     var server by remember { mutableStateOf(vm.serverUrl) }
-    var user by remember { mutableStateOf(vm.username) }
     var pw by remember { mutableStateOf(vm.password) }
 
     Column(
@@ -167,15 +164,14 @@ fun SetupScreen(vm: AppVm) {
         Text("填写服务器地址和访问密码，App 会直接读服务端的接口，不再套网页。", style = Kv.Body)
         Spacer(Modifier.height(24.dp))
         Field("服务器地址", server, "http://192.168.1.250:81", { server = it })
-        Field("用户名", user, "admin / family", { user = it })
-        Field("访问密码", pw, "服务器没开鉴权就留空", { pw = it }, password = true)
+        Field("访问密码", pw, "每个账户一个密码，服务器按密码识别身份", { pw = it }, password = true)
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(46.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .background(Kv.Ink)
-                .clickable { vm.saveServer(server, user, pw, vm.liveUrl) },
+                .clickable { vm.saveServer(server, pw, vm.liveUrl) },
             contentAlignment = Alignment.Center
         ) {
             Text("连接", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Black)

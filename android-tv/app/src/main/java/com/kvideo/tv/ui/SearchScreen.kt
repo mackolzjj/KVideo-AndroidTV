@@ -15,6 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.AlertDialog
+import com.kvideo.tv.data.ResultGroup
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +37,7 @@ import com.kvideo.tv.vm.Route
 @Composable
 fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
     val focus = remember { FocusRequester() }
+    var pick by remember { mutableStateOf<ResultGroup?>(null) }
     LaunchedEffect(Unit) { if (autofocus) runCatching { focus.requestFocus() } }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
@@ -108,12 +114,51 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("相关 ${vm.results.size} 条 · 全部 ${vm.allResults.size} 条", style = Kv.Tiny)
+                Text("相关 ${vm.results.size} 部 · 全部 ${vm.allResults.size} 条", style = Kv.Tiny)
                 Spacer(Modifier.weight(1f))
                 KvChip(if (vm.strict) "只看相关" else "显示全部", selected = vm.strict) {
                     vm.strict = !vm.strict
                 }
             }
+        }
+
+        if (pick != null) {
+            val g = pick!!
+            AlertDialog(
+                onDismissRequest = { pick = null },
+                title = { Text(g.title, style = Kv.H2) },
+                text = {
+                    Column {
+                        Text("${g.items.size} 个源，选一条线路", style = Kv.Tiny)
+                        Spacer(Modifier.height(8.dp))
+                        g.items.forEach { item ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        vm.openGroup(g, item)
+                                        pick = null
+                                    }
+                                    .padding(vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(item.sourceName, fontSize = 13.sp, color = Kv.Ink)
+                                Spacer(Modifier.weight(1f))
+                                Text(item.remarks, style = Kv.Tiny)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Text(
+                        "取消",
+                        fontSize = 13.sp,
+                        color = Kv.Ink2,
+                        modifier = Modifier.clickable { pick = null }.padding(8.dp)
+                    )
+                },
+                containerColor = Kv.Surface
+            )
         }
 
         LazyVerticalGrid(
@@ -123,12 +168,17 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.weight(1f)
         ) {
-            items(vm.results) { v: VideoItem ->
-                Column(Modifier.clickable { vm.playItem(v) }) {
-                    PosterArt(v.poster, ratio = 1.5f, modifier = Modifier.fillMaxWidth())
+            items(vm.results) { g: ResultGroup ->
+                Column(
+                    Modifier.clickable {
+                        if (g.items.size == 1) vm.openGroup(g, g.items.first())
+                        else pick = g
+                    }
+                ) {
+                    PosterArt(g.poster, ratio = 1.5f, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        v.name,
+                        g.title,
                         fontSize = 11.sp,
                         color = Kv.Ink,
                         fontWeight = FontWeight.Medium,
@@ -136,7 +186,11 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                         lineHeight = 15.sp
                     )
                     Text(
-                        listOfNotNull(v.sourceName.ifBlank { null }, v.remarks.ifBlank { null }).joinToString(" · "),
+                        if (g.items.size > 1) "${g.items.size} 个源 · 点选线路"
+                        else listOfNotNull(
+                            g.items.first().sourceName.ifBlank { null },
+                            g.items.first().remarks.ifBlank { null }
+                        ).joinToString(" · "),
                         style = Kv.Tiny.copy(fontSize = 10.sp),
                         maxLines = 1
                     )

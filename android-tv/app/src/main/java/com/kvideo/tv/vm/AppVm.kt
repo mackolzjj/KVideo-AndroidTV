@@ -11,6 +11,7 @@ import com.kvideo.tv.data.Channel
 import com.kvideo.tv.data.Detail
 import com.kvideo.tv.data.DoubanItem
 import com.kvideo.tv.data.Net
+import com.kvideo.tv.data.ResultGroup
 import com.kvideo.tv.data.SavedItem
 import com.kvideo.tv.data.Source
 import com.kvideo.tv.data.Store
@@ -48,7 +49,6 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var backStack by mutableStateOf<List<Route>>(emptyList())
 
     var serverUrl by mutableStateOf(store.serverUrl)
-    var username by mutableStateOf(store.username)
     var password by mutableStateOf(store.password)
     /** 登录后的账户：服务器是多账户（admin / family），权限由账号决定，界面上要能看见 */
     var accountName by mutableStateOf("")
@@ -70,17 +70,49 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     /** 默认只说人话：片名要真的含搜索词，否则 122 个源能刷出几百条垃圾 */
     var strict by mutableStateOf(true)
 
-    /** 界面用这个：严格模式下按相关度过滤并排序 */
-    val results: List<VideoItem>
+    /** 当前点开的那一组（详情页据此给出「换源」） */
+    var currentGroup by mutableStateOf<ResultGroup?>(null)
+
+    /**
+     * 界面用这个：
+     * 1. 严格模式下先剔掉片名不含搜索词的，再剔掉魔改/AI换脸这类黑产标题；
+     * 2. 同名合并成一组 —— 122 个源对同一部片会给十几条，铺成网格就是一屏重复；
+     * 3. 按「片名开头命中 > 中间命中 > 源多的 > 名字短的」排序。
+     */
+    val results: List<ResultGroup>
         get() {
             val q = query.trim()
-            if (!strict || q.isEmpty()) return allResults
-            return allResults
-                .map { it to relevance(it.name, q) }
-                .filter { it.second >= 0 }
-                .sortedWith(compareBy({ it.second }, { it.first.name.length }, { it.first.sourceName }))
-                .map { it.first }
+            if (q.isEmpty()) return emptyList()
+            val base = if (strict) allResults.filter { !isJunk(it.name) && relevance(it.name, q) >= 0 } else allResults
+            val grouped = LinkedHashMap<String, MutableList<VideoItem>>()
+            base.forEach { v -> grouped.getOrPut(groupKey(v.name)) { mutableListOf() }.add(v) }
+            return grouped.map { (_, list) ->
+                ResultGroup(
+                    title = list.first().name,
+                    poster = list.firstOrNull { it.poster.isNotBlank() }?.poster ?: "",
+                    items = list.sortedBy { relevance(it.name, q) }
+                )
+            }.sortedWith(
+                compareBy<ResultGroup> { relevance(it.title, q) }
+                    .thenByDescending { it.items.size }
+                    .thenBy { it.title.length }
+            )
         }
+
+    /** 魔改 / 换脸 / 擦边这类标题：片名里可能真带「庆余年」，但根本不是那部剧 */
+    private fun isJunk(name: String): Boolean {
+        val n = name.lowercase()
+        return JUNK.any { n.contains(it) }
+    }
+
+    /** 同名归并用的 key：去掉「全46集 / 更新至40集」这类后缀与标点，但保留「第X季」 */
+    private fun groupKey(name: String): String {
+        var s = name.lowercase()
+        s = Regex("(全|共|更新至)\\s*\\d+\\s*集?").replace(s, "")
+        s = Regex("\\d+\\s*集").replace(s, "")
+        s = Regex("[\\s\\p{Punct}【】（）()·、]+").replace(s, "")
+        return s
+    }
     var progressDone by mutableStateOf(0)
     var progressTotal by mutableStateOf(0)
 
@@ -93,6 +125,11 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var channelGroup by mutableStateOf("全部")
 
     private var searchJob: Job? = null
+
+    private val JUNK = listOf(
+        "魔改", "换脸", "ai换", "无删减", "未删减", "激情", "网红", "不雅", "流出",
+        "舔", "裸", "艳照", "私拍", "福利", "成人", "三级", "黄片", "约炮", "嫩妹"
+    )
 
     /**
      * 相关度：0 = 片名以搜索词开头，1 = 含搜索词，-1 = 不相关（严格模式下丢掉）。
@@ -140,11 +177,9 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    fun saveServer(url: String, user: String, pw: String, live: String) {
+    fun saveServer(url: String, pw: String, live: String) {
         serverUrl = url.trim().trimEnd('/')
-        username = user.trim().ifBlank { "admin" }
         password = pw
-        store.username = username
         liveUrl = live.trim()
         store.serverUrl = serverUrl
         store.password = password
@@ -161,9 +196,9 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             busy = true
             error = null
             try {
-                val acc = api.login(store.username, store.password)
+                val acc = api.login(store.password)
                 if (acc == null) {
-                    error = "登录失败：用户名或密码不对（多账户服务器要填对用户名）"
+                    error = "登录失败：密码不对（服务器按密码识别账户）"
                 } else {
                     accountName = acc.name.ifBlank { acc.username }
                     accountRole = acc.role
@@ -259,8 +294,15 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun playItem(item: VideoItem) {
+    fun openGroup(g: ResultGroup, item: VideoItem) {
+        currentGroup = g
         go(Route.Detail(item.id, item.sourceId))
+    }
+
+    /** 详情页换源：同一组的另一条资源 */
+    fun switchSource(item: VideoItem) {
+        detail = null
+        loadDetail(item.id, item.sourceId)
     }
 
     fun playChannel(c: Channel) {

@@ -52,6 +52,15 @@ data class DoubanItem(
 
 data class Channel(val name: String, val url: String, val group: String)
 
+/** 同名合并后的一组结果 = 一部片，items 是各资源站给的同一条资源 */
+data class ResultGroup(
+    val title: String,
+    val poster: String,
+    val items: List<VideoItem>
+) {
+    val sourceCount: Int get() = items.size
+}
+
 /** 播放历史 / 收藏条目 */
 data class SavedItem(
     val id: String,

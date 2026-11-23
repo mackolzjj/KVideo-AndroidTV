@@ -3,6 +3,7 @@ package com.kvideo.tv.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -67,6 +68,24 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                     ).joinToString("  ·  "),
                     style = Kv.Meta
                 )
+                // 换源：同一部片在别的资源站的线路（搜索里同名合并的那一组）
+                val group = vm.currentGroup
+                if (group != null && group.items.size > 1) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        group.items.forEach { item ->
+                            val on = item.sourceId == d.sourceId
+                            KvChip(
+                                item.sourceName.ifBlank { "源" },
+                                selected = on
+                            ) { if (!on) vm.switchSource(item) }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(

@@ -18,10 +18,6 @@ class Store(ctx: Context) {
         get() = sp.getString("server", "") ?: ""
         set(v) = sp.edit().putString("server", v.trim()).apply()
 
-    var username: String
-        get() = sp.getString("username", "admin") ?: "admin"
-        set(v) = sp.edit().putString("username", v.trim()).apply()
-
     var password: String
         get() = sp.getString("password", "") ?: ""
         set(v) = sp.edit().putString("password", v).apply()
