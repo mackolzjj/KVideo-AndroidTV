@@ -64,7 +64,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var errorText by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
-        exo.setMediaItem(MediaItem.fromUri(route.url))
+        val item = MediaItem.Builder()
+            .setUri(route.url)
+            .apply { route.mime?.let { setMimeType(it) } }
+            .build()
+        exo.setMediaItem(item)
         exo.prepare()
         exo.playWhenReady = true
         val listener = object : Player.Listener {
@@ -282,13 +286,31 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 Spacer(Modifier.height(6.dp))
                 Text(errorText!!, fontSize = 11.5.sp, color = Kv.Ink2)
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "返回换个源",
-                    fontSize = 13.sp,
-                    color = Kv.Red,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { vm.back() }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "重试",
+                        fontSize = 13.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable {
+                                errorText = null
+                                runCatching {
+                                    exo.prepare()
+                                    exo.play()
+                                }
+                            }
+                            .padding(8.dp)
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        "返回换个源",
+                        fontSize = 13.sp,
+                        color = Kv.Red,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { vm.back() }.padding(8.dp)
+                    )
+                }
             }
         }
     }

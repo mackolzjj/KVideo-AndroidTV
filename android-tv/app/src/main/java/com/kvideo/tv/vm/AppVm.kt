@@ -32,7 +32,10 @@ sealed interface Route {
         val videoId: String = "",
         val sourceId: String = "",
         val epIndex: Int = 0,
-        val episodeName: String = ""
+        val episodeName: String = "",
+        // 显式声明媒体类型：直播流走 /api/iptv/stream 代理，URI 路径里没有 .m3u8
+        // 后缀，ExoPlayer 会猜成普通渐进媒体 → 直接 Source error。
+        val mime: String? = null
     ) : Route
 }
 
@@ -203,7 +206,9 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 videoId = d.id,
                 sourceId = d.sourceId,
                 epIndex = ep.index,
-                episodeName = ep.name
+                episodeName = ep.name,
+                mime = if (ep.url.contains(".m3u8", true))
+                    androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null
             )
         )
     }
@@ -217,7 +222,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             Route.Player(
                 url = api.streamProxy(c.url),
                 title = c.name,
-                subtitle = "直播"
+                subtitle = "直播",
+                mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8
             )
         )
     }
