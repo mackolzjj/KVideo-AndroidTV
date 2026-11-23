@@ -102,6 +102,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var hudText by remember { mutableStateOf<String?>(null) }
     var seekPreview by remember { mutableStateOf<Long?>(null) }
     var doubleHint by remember { mutableStateOf<String?>(null) }
+    var lockChipVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(doubleHint) {
         if (doubleHint != null) {
@@ -238,6 +239,13 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         }
     }
 
+    LaunchedEffect(locked, lockChipVisible) {
+        if (locked && lockChipVisible) {
+            delay(2500)
+            lockChipVisible = false
+        }
+    }
+
     // 3 秒无操作自动收起控制层
     LaunchedEffect(showControls, locked, playing) {
         if (showControls && !locked && playing) {
@@ -262,7 +270,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 .pointerInput(locked) {
                     detectTapGestures(
                         onTap = {
-                            if (locked) showControls = true else showControls = !showControls
+                            if (locked) lockChipVisible = true else showControls = !showControls
                         },
                         onDoubleTap = { off ->
                             if (!locked) {
@@ -283,6 +291,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     var startX = 0f
                     var mode = 0 // 0 未定 · 1 横滑进度 · 2 亮度 · 3 音量
                     var baseSeek = 0L
+                    var lastSeekAt = 0L
                     detectDragGestures(
                         onDragStart = { p ->
                             startX = p.x
@@ -296,12 +305,20 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                             }
                             when (mode) {
                                 1 -> {
-                                    val delta = (drag.x / size.width) * 120_000L
-                                    val target = (baseSeek + delta.toLong()).coerceIn(
-                                        0L, if (duration > 0) duration else Long.MAX_VALUE
-                                    )
+                                    // 跟手：位移实时累加到预览位置，整屏宽 ≈ ±3 分钟
+                                    val max = if (duration > 0) duration else Long.MAX_VALUE
+                                    val target = ((seekPreview ?: baseSeek) +
+                                        ((drag.x / size.width) * 180_000f).toLong())
+                                        .coerceIn(0L, max)
                                     seekPreview = target
+                                    position = target
                                     hudText = "${fmt(target)} / ${fmt(duration)}"
+                                    // 边拖边真的跳，画面跟着手指走（约 8 帧节流）
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastSeekAt > 120) {
+                                        lastSeekAt = now
+                                        exo.seekTo(target)
+                                    }
                                 }
                                 2 -> {
                                     brightness = (brightness + drag.y / size.height * 1.6f).coerceIn(0.05f, 1f)
@@ -459,6 +476,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         }
                         KvIconBtn(Icons.Filled.Lock, "锁定", size = 40) {
                             locked = true
+                            lockChipVisible = true
                             showControls = false
                         }
                         KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 40) {
@@ -497,8 +515,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             }
         }
 
-        if (locked) {
+        if (locked && lockChipVisible) {
             // 锁定时显示的是「已锁定」的锁图标（之前用了开锁图标，语义反了）
+            // 只闪 2.5 秒：锁着的时候不该一直有个按钮挂在那儿
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
@@ -508,6 +527,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .background(Color(0x66000000))
                     .clickable {
                         locked = false
+                        lockChipVisible = false
                         showControls = true
                     },
                 contentAlignment = Alignment.Center
