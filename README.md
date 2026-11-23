@@ -1,48 +1,46 @@
-# KVideo Android（手机 / 平板）
+# KVideo Android
 
-KVideo 服务端的**原生 Android 客户端**，界面按 Netflix 那套语言重画。App 里不含服务端，需要你自己的 KVideo 部署地址。
+KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Media3）。App 不含服务端，需要你自己的部署地址。
 
-- 最新版：[Releases](https://github.com/mackolzjj/KVideo-AndroidTV/releases) · `2.0.34`（`versionCode 234`）
-- 运行要求：Android 8.0（API 26）以上；手机与服务端网络互通
-- 目录 `android-tv/` 与包名 `com.kvideo.tv` 沿用上游，只是标识，**不代表只能跑在 TV 上**
-- 上游 MIT，见 [LICENSE](LICENSE)
+[下载 2.0.34](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
 
-## 2.0 是什么
+## 功能
 
-1.1.x 是 WebView 壳 + 一大坨注入 CSS/JS（4900 行，靠选择器猜网页结构）。2.0 把那层整体删掉，
-改成 **Kotlin + Jetpack Compose + Media3** 的原生 App，直接读服务端接口：
+**搜索**
+- 多源并行（SSE 流式），边搜边出结果，350ms 防抖
+- 官方检索逻辑：最小匹配（标题至少命中查询词里一对连续两字）、屏蔽分类（默认「伦理」）、相关度打分排序
+- 三排筛选：源 / 类型 / 语言；「只看相关」「合并同名」两个开关，同名合并后可按实测延迟选线路
 
-| 接口 | 用途 |
-| --- | --- |
-| `POST /api/auth` | 访问密码登录，服务端下发会话 cookie |
-| `GET /api/config` | 订阅源列表（`subscriptionSources`） |
-| `GET /api/douban/recommend` | 首页内容流 |
-| `POST /api/search-parallel` | 搜索，SSE 流式返回（`start / videos / progress`） |
-| `POST /api/detail` | 详情 + 剧集播放地址 |
-| `GET /api/iptv` `/api/iptv/stream` | 直播列表 / 直播流代理 |
+**播放**
+- 自绘控制层：红色细进度条、`←10s 播放 10s→`、时间、剧集、倍速、锁定、全屏
+- 手势：单击显隐、双击左右 ±10s、横滑跟手快进、左半屏上下滑亮度、右半屏上下滑音量
+- 竖屏/横屏自适应；沉浸式全屏；换集不断片，退出重进自动续播
+- 线路自动降级：直连失败 → 服务器代理 → 备用线路
 
-## 界面
+**直播**
+- 内置 610 个频道 / 49 分组（M3U 打包在 APK 里，设置里留空即可看）
+- 也可填自己的 M3U 地址；频道线路失败自动跳下一个台（最多 3 次）
 
-- **首页**：大剧照 hero + 白色「播放」、继续观看、今日热播、正在直播
-- **搜索**：搜片名，多源并行，边搜边出结果
-- **详情**：剧照 hero、集数网格、收藏
-- **播放**：ExoPlayer 自绘控制层 —— 红色细进度条、`←10s 播放 10s→ 时间`、倍速、锁定、全屏
-- **直播**：分类 chip + 频道列表
-- **片单**：收藏 / 历史
-- **设置**：服务器地址、访问密码、直播源
+**内容与权限**
+- 首页豆瓣推荐、继续观看（真实进度）、今日热播、正在直播
+- 片单：收藏 / 历史，历史显示「看到 mm:ss」
+- 普通用户搜索**不含**成人 / 伦理源；这些源只在「高级内容」里，需管理员账号或高级密码解锁
+- 高级内容支持分类切换与分页
 
-视觉规则：纯黑底，唯一强调色 `#e50914` 只给进度；圆角最大 4px；字重只有两档。
+**设置**
+- 普通设置页只放：连接状态（只读）、清除历史、版本
+- 隐藏入口：连点「版本」7 次 → 访问 PIN（4–8 位，加盐 SHA-256 存储）→ 高级设置
+- 高级设置里：服务器地址 / 访问密码 / 直播源 / 播放代理（自动·直连·代理）/ 重新探活 / 屏蔽分类 / 高级内容 / 修改 PIN
+
+## 服务端接口
+
+`POST /api/auth` · `GET /api/config` · `GET /api/douban/recommend` · `POST /api/search-parallel` · `POST /api/detail` · `GET /api/iptv` · `GET /api/iptv/stream` · `POST /api/premium/types` · `POST /api/premium/category`
 
 ## 构建
 
 ```bash
 cd android-tv
-./gradlew assembleDebug           # 产物 app/build/outputs/apk/debug/app-debug.apk
-./gradlew assembleDebug -PkvideoUrl="http://192.168.1.2:81"   # 预置服务器地址
+./gradlew assembleDebug
 ```
 
-推送 `v*` 标签会触发 workflow 建 Release，资产名 `KVideo-Android-<versionName>.apk`。
-
-## 回滚
-
-1.1.x 的 WebView 壳仍在 git 历史里，最后一个可用版本是标签 `v1.1.144`（`versionCode 146`）。
+推 `v*` 标签触发 GitHub Actions 建 Release，资产名 `KVideo-Android-<versionName>.apk`。
