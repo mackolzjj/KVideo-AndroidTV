@@ -358,29 +358,72 @@ class Api {
             val url = "/api/iptv?url=" + java.net.URLEncoder.encode(m3uUrl, "UTF-8")
             Net.client.newCall(Net.builder(url).build()).execute().use { r ->
                 val text = r.body?.string().orEmpty()
-                parseM3u(text)
+                parseM3u(text, m3uUrl)
             }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    private fun parseM3u(text: String): List<Channel> {
+    /**
+     * M3U 解析，按上游 lib/utils/m3u-parser.ts 的规则：
+     * - #EXTINF 里读 group-title / http-user-agent / http-referrer（引号内的逗号不能当分隔符）
+     * - 支持 #EXTVLCOPT:http-user-agent= / http-referrer=
+     * - 相对地址按播放清单地址补全
+     */
+    private fun parseM3u(text: String, playlistUrl: String): List<Channel> {
         val out = mutableListOf<Channel>()
         var name = ""
         var group = ""
+        var ua = ""
+        var ref = ""
+        val base = runCatching { java.net.URI(playlistUrl) }.getOrNull()
+
+        fun reset() {
+            name = ""; group = ""; ua = ""; ref = ""
+        }
+
         text.lineSequence().forEach { raw ->
             val line = raw.trim()
             when {
                 line.startsWith("#EXTINF") -> {
-                    name = line.substringAfterLast(',').trim()
-                    group = Regex("group-title=\"([^\"]*)\"").find(line)?.groupValues?.get(1) ?: ""
+                    reset()
+                    // 名字 = 最后一个引号之后的逗号后面那段
+                    val commaIdx = line.lastIndexOf(',')
+                    val quotedEnd = line.lastIndexOf('"')
+                    name = if (commaIdx > quotedEnd) line.substring(commaIdx + 1).trim() else ""
+                    group = Regex("group-title=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1) ?: ""
+                    ua = Regex("http-user-agent=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1) ?: ""
+                    ref = Regex("http-referrer=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1) ?: ""
+                }
+                line.startsWith("#EXTVLCOPT", true) -> {
+                    val u = Regex("http-user-agent=(.*)", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1)
+                    if (u != null) ua = u.trim()
+                    val r = Regex("http-referrer=(.*)", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1)
+                    if (r != null) ref = r.trim()
+                }
+                line.startsWith("#EXTGRP", true) -> {
+                    if (group.isBlank()) group = line.substringAfter(':').trim()
                 }
                 line.startsWith("#") || line.isEmpty() -> Unit
                 else -> {
                     if (name.isNotEmpty()) {
-                        out.add(Channel(name = name, url = line, group = group.ifBlank { "其他" }))
-                        name = ""
+                        val url = if (line.startsWith("http") || line.startsWith("rtmp") || line.startsWith("rtsp")) {
+                            line
+                        } else runCatching { base?.resolve(line)?.toString() ?: line }.getOrDefault(line)
+                        out.add(
+                            Channel(
+                                name = name,
+                                url = url,
+                                group = group.ifBlank { "其他" },
+                                userAgent = ua,
+                                referrer = ref
+                            )
+                        )
+                        reset()
                     }
                 }
             }
@@ -388,8 +431,15 @@ class Api {
         return out
     }
 
-    /** 直播播放地址走服务端代理，绕开 CORS / 防盗链 */
-    fun streamProxy(url: String): String {
-        return Net.abs("/api/iptv/stream?url=" + java.net.URLEncoder.encode(url, "UTF-8"))
+    /**
+     * 直播/点播都走这个代理（同上游 getProxiedUrl）：把逐频道的 UA / Referer 一起带上，
+     * 服务端代理时会用它们去取清单，这正是很多中继线「直连能播、代理播不了」的分界。
+     */
+    fun streamProxy(url: String, ua: String = "", referrer: String = ""): String {
+        val sb = StringBuilder("/api/iptv/stream?")
+        if (ua.isNotBlank()) sb.append("ua=").append(java.net.URLEncoder.encode(ua, "UTF-8")).append("&")
+        if (referrer.isNotBlank()) sb.append("referer=").append(java.net.URLEncoder.encode(referrer, "UTF-8")).append("&")
+        sb.append("url=").append(java.net.URLEncoder.encode(url, "UTF-8"))
+        return Net.abs(sb.toString())
     }
 }

@@ -37,8 +37,10 @@ sealed interface Route {
         // 显式声明媒体类型：直播流走 /api/iptv/stream 代理，URI 路径里没有 .m3u8
         // 后缀，ExoPlayer 会猜成普通渐进媒体 → 直接 Source error。
         val mime: String? = null,
-        /** 直播流：不走代理兜底（服务端会限流），也不强制点播那套 mime 推断 */
-        val isLive: Boolean = false
+        /** 直播流 */
+        val isLive: Boolean = false,
+        /** 备用线路：主线路出错后依次重试（上游 IPTVPlayer 是「代理失败再试直连」） */
+        val fallbacks: List<String> = emptyList()
     ) : Route
 }
 
@@ -410,13 +412,14 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     fun playChannel(c: Channel) {
         go(
             Route.Player(
-                // 直连：这些 relay 地址本身是 HLS（有的没有 .m3u8 后缀），
-                // 走 /api/iptv/stream 代理反而会对无扩展名地址回 403。
-                url = c.url,
+                // 上游 IPTVPlayer 的顺序：先 /api/iptv/stream（带该频道的 UA/Referer），
+                // 失败再直连 —— fallbacks 里放直连地址。
+                url = api.streamProxy(c.url, c.userAgent, c.referrer),
                 title = c.name,
                 subtitle = "直播",
                 mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
-                isLive = true
+                isLive = true,
+                fallbacks = listOf(c.url) + c.routes.filter { it != c.url }
             )
         )
     }

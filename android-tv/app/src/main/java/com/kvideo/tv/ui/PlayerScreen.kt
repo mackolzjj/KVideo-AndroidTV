@@ -81,47 +81,60 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var landscape by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
-    // 上游 VideoPlayer 的做法：proxyMode=auto 时先直连，出错再切 /api/iptv/stream 代理重试一次
+    // 线路顺序完全照上游：直播 = 代理(带 UA/Referer) → 直连（route.fallbacks）；
+    // 点播 = 直连 → 代理（proxyMode=auto）。任何一条出错就换下一条，都试完才报错。
     var viaProxy by remember { mutableStateOf(vm.proxyMode == 2) }
+    var fbIndex by remember { mutableStateOf(0) }
+    var ready by remember { mutableStateOf(false) }
 
-    fun mediaFor(useProxy: Boolean): MediaItem {
-        val url = if (useProxy) {
-            Net.abs("/api/iptv/stream?url=" + java.net.URLEncoder.encode(route.url, "UTF-8"))
-        } else route.url
-        return MediaItem.Builder()
-            .setUri(url)
+    fun play(rawUrl: String) {
+        val item = MediaItem.Builder()
+            .setUri(rawUrl)
             .apply { route.mime?.let { setMimeType(it) } }
             .build()
+        runCatching {
+            exo.setMediaItem(item)
+            exo.prepare()
+            exo.playWhenReady = true
+        }
+    }
+
+    fun proxyUrlOf(raw: String): String =
+        Net.abs("/api/iptv/stream?url=" + java.net.URLEncoder.encode(raw, "UTF-8"))
+
+    fun nextOrFail(reason: String) {
+        if (fbIndex < route.fallbacks.size) {
+            val next = route.fallbacks[fbIndex]
+            fbIndex++
+            ready = false
+            play(next)
+            return
+        }
+        if (!route.isLive && vm.proxyMode == 0 && !viaProxy) {
+            viaProxy = true
+            ready = false
+            play(proxyUrlOf(route.url))
+            return
+        }
+        errorText = reason
     }
 
     DisposableEffect(Unit) {
-        val item = mediaFor(viaProxy)
-        exo.setMediaItem(item)
-        exo.prepare()
-        exo.playWhenReady = true
+        play(if (viaProxy) proxyUrlOf(route.url) else route.url)
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
             }
+
             override fun onPlaybackStateChanged(state: Int) {
                 duration = exo.duration.coerceAtLeast(0L)
+                if (state == Player.STATE_READY) ready = true
                 if (state == Player.STATE_ENDED) playing = false
             }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // 自动模式：直连失败就切服务器代理再试一次。
-                // 直播不做这个兜底 —— 直播中继会按「短时间内请求了 N 个不同频道」限流，
-                // 一失败就再打一次只会更快被判成批量探测。
-                if (vm.proxyMode == 0 && !route.isLive && !viaProxy) {
-                    viaProxy = true
-                    runCatching {
-                        exo.setMediaItem(mediaFor(true))
-                        exo.prepare()
-                        exo.playWhenReady = true
-                    }
-                    return
-                }
                 val cause = error.cause?.message?.take(120).orEmpty()
-                errorText = error.errorCodeName + if (cause.isNotBlank()) " · " + cause else ""
+                nextOrFail(error.errorCodeName + if (cause.isNotBlank()) " · " + cause else "")
             }
         }
         exo.addListener(listener)
@@ -129,6 +142,19 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             runCatching { exo.removeListener(listener) }
             exo.release()
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // 加载超时：上游 IPTVPlayer 有 LOADING_TIMEOUT_MS，卡住就换线路而不是一直黑屏
+    LaunchedEffect(fbIndex, viaProxy) {
+        ready = false
+        delay(20_000)
+        if (!ready && errorText == null) {
+            if (route.isLive) {
+                nextOrFail("加载超时（20s）· 这条线路可能已失效或正被限流")
+            } else {
+                nextOrFail("加载超时（20s）")
+            }
         }
     }
 

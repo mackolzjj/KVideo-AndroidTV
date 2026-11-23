@@ -54,7 +54,16 @@ data class DoubanItem(
     val rate: String
 )
 
-data class Channel(val name: String, val url: String, val group: String)
+data class Channel(
+    val name: String,
+    val url: String,
+    val group: String,
+    /** 上游 m3u-parser 会从 #EXTINF / #EXTVLCOPT 里读这两个头，逐频道带上 */
+    val userAgent: String = "",
+    val referrer: String = "",
+    /** 同一频道的备用线路（上游 M3UChannel.routes） */
+    val routes: List<String> = emptyList()
+)
 
 /** 同名合并后的一组结果 = 一部片，items 是各资源站给的同一条资源 */
 data class ResultGroup(
