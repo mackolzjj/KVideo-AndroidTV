@@ -595,7 +595,8 @@ class MainActivity : ComponentActivity() {
       'padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)) !important;}' +
     // 迷你播放器：直播页把全屏浮层收成顶部一条，下面的频道列表露出来可以直接换台。
     '[' + IPTV_MINI_ATTR + '="1"]{' +
-      'position:fixed !important;top:calc(env(safe-area-inset-top, 0px) + 8px) !important;' +
+      'position:fixed !important;' +
+      'top:calc(env(safe-area-inset-top, 0px) + var(--kv-mini-top, 8px)) !important;' +
       'left:8px !important;right:8px !important;bottom:auto !important;' +
       'height:32vh !important;max-height:32vh !important;min-height:0 !important;' +
       'border-radius:18px !important;overflow:hidden !important;z-index:9998 !important;' +
@@ -606,7 +607,7 @@ class MainActivity : ComponentActivity() {
     '[' + IPTV_MINI_ATTR + '="1"] [data-sidebar]{display:none !important;}' +
     '[' + IPTV_MINI_ATTR + '="1"] video{object-fit:contain !important;}' +
     '[' + IPTV_MINI_BTNS_ATTR + ']{position:fixed !important;z-index:9999 !important;' +
-      'top:calc(env(safe-area-inset-top, 0px) + 14px) !important;right:16px !important;' +
+      'top:calc(env(safe-area-inset-top, 0px) + var(--kv-mini-top, 8px) + 8px) !important;right:16px !important;' +
       'display:flex !important;gap:8px !important;align-items:center !important;}' +
     '[' + IPTV_MINI_BTNS_ATTR + '] button{width:34px !important;height:34px !important;' +
       'border-radius:50% !important;border:1px solid rgba(255,255,255,.18) !important;' +
@@ -2400,6 +2401,9 @@ class MainActivity : ComponentActivity() {
     function consider(e) {
       if (!e || !e.getBoundingClientRect) return;
       if (root && (e === root || (e.contains && e.contains(root)))) return;
+      // 直播页的筛选条由 syncIptvFilter 接管；收起后 82px 高正好落进
+      // 「贴顶 + 宽 ≥60% + 高 18–120」这条判据，不排除就会被当杂条藏掉。
+      if (e.hasAttribute && e.hasAttribute(IPTV_BAR_ATTR)) return;
       for (var k = 0; k < seen.length; k++) if (seen[k] === e) return;
       seen.push(e);
       var r = e.getBoundingClientRect();
@@ -2598,6 +2602,7 @@ class MainActivity : ComponentActivity() {
 
   function iptvTag(bar) {
     kvSetA(bar, IPTV_BAR_ATTR, '1');
+    if (bar.hasAttribute('data-kvideo-stray')) bar.removeAttribute('data-kvideo-stray');
     var kids = bar.children, n = 0;
     for (var i = 0; i < kids.length; i++) {
       var el = kids[i];
@@ -2778,29 +2783,51 @@ class MainActivity : ComponentActivity() {
   // 收起成迷你 / 放大回全屏。
   var kvMiniOn = true;
   var kvMiniScrolled = false;   // 本轮播放是否已把列表滚到迷你条下方
+  var kvMiniTop = 8;
+  function kvMiniPlace(host) {
+    // 迷你条挂在网页自己的筛选条下面：筛选条是 sticky 的，一直可见，
+    // 所以迷你条跟着它的底边走，能还原「搜索框在上、播放器在中、列表在下」。
+    var top = 8;
+    try {
+      var bar = document.querySelector('[' + IPTV_BAR_ATTR + ']');
+      if (bar) {
+        var br = bar.getBoundingClientRect();
+        var vh = window.innerHeight || 0;
+        if (br.height > 20 && br.bottom > 0 && br.bottom < vh * 0.55) top = br.bottom + 8;
+      }
+    } catch (e) {}
+    if (Math.abs(top - kvMiniTop) > 1) {
+      kvMiniTop = top;
+      try { document.documentElement.style.setProperty('--kv-mini-top', top + 'px'); } catch (e2) {}
+    } else if (!document.documentElement.style.getPropertyValue('--kv-mini-top')) {
+      try { document.documentElement.style.setProperty('--kv-mini-top', top + 'px'); } catch (e3) {}
+    }
+    return top;
+  }
   function kvScrollListUnderMini(host) {
     if (kvMiniScrolled || !host) return;
     try {
       var g = document.querySelector('div[class*="grid-cols-2"]');
       if (!g) {
-        // 上游改 class 时的兜底：迷你条下方第一枚「够大」的按钮，其父节点就是频道网格
         var hostBottom = host.getBoundingClientRect().bottom;
         var all = document.querySelectorAll('button');
         for (var i = 0; i < all.length; i++) {
           var b = all[i];
-          if (host.contains(b) || document.querySelector('[' + IPTV_MINI_BTNS_ATTR + ']').contains(b)) continue;
-          var br = b.getBoundingClientRect();
-          if (br.width < 80 || br.height < 32) continue;
-          if (br.top < hostBottom) continue;
+          if (host.contains(b)) continue;
+          var br2 = b.getBoundingClientRect();
+          if (br2.width < 80 || br2.height < 32) continue;
+          if (br2.top < hostBottom) continue;
           g = b.parentElement; break;
         }
       }
       if (!g) return;
       var sy = window.scrollY || document.documentElement.scrollTop || 0;
       var gridTop = g.getBoundingClientRect().top + sy;
-      var want = host.getBoundingClientRect().bottom + 12;
-      if (Math.abs(gridTop - want) < 24) { kvMiniScrolled = true; return; }
-      window.scrollTo(0, Math.max(0, gridTop - want));
+      var bar = document.querySelector('[' + IPTV_BAR_ATTR + ']');
+      var barAbsTop = bar ? (bar.getBoundingClientRect().top + sy) : 0;
+      var hr = host.getBoundingClientRect();
+      var target = Math.max(bar ? barAbsTop - 8 : 0, gridTop - (hr.height + kvMiniTop + 12));
+      if (Math.abs((window.scrollY || 0) - target) > 4) window.scrollTo(0, Math.max(0, target));
       kvMiniScrolled = true;
     } catch (e) {}
   }
@@ -2862,6 +2889,7 @@ class MainActivity : ComponentActivity() {
     if (!host) return;
     if (kvMiniOn) {
       if (host.getAttribute(IPTV_MINI_ATTR) !== '1') host.setAttribute(IPTV_MINI_ATTR, '1');
+      kvMiniPlace(host);
       kvMiniButtons();
       // 等一帧让 32vh 的高度落定，再把频道列表滚到迷你条正下方
       setTimeout(function () { kvScrollListUnderMini(host); }, 120);
@@ -3039,6 +3067,12 @@ class MainActivity : ComponentActivity() {
     kvLastDblAction = Date.now();
     kvToggleFullscreen();
   }, true);
+
+  window.addEventListener('scroll', function () {
+    if (!iptvPlaying()) return;
+    var host = kvMiniHost();
+    if (host && host.getAttribute(IPTV_MINI_ATTR) === '1') kvMiniPlace(host);
+  }, { passive: true });
 
   var lastRun = 0;
   var tail = null;
