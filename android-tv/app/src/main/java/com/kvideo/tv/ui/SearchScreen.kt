@@ -133,11 +133,16 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("找到 ${vm.allResults.size} 条 · 当前 ${vm.results.size} 项", style = Kv.Tiny)
+                Text(
+                    if (vm.hiddenUnrelated > 0)
+                        "找到 ${vm.allResults.size} 条 · 已挡掉 ${vm.hiddenUnrelated} 条不相干"
+                    else "找到 ${vm.allResults.size} 条 · 当前 ${vm.results.size} 项",
+                    style = Kv.Tiny
+                )
                 Spacer(Modifier.weight(1f))
-                KvChip(if (vm.grouped) "已合并同名" else "合并同名", selected = vm.grouped) {
-                    vm.grouped = !vm.grouped
-                }
+                KvChip("只看相关", selected = vm.onlyRelevant) { vm.onlyRelevant = !vm.onlyRelevant }
+                Spacer(Modifier.width(6.dp))
+                KvChip("合并同名", selected = vm.grouped) { vm.grouped = !vm.grouped }
             }
             BadgeRow(
                 items = vm.sourceBadges.map { it.first to it.second },

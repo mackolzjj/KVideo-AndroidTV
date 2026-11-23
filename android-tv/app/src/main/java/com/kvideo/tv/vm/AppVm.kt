@@ -145,6 +145,28 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             store.groupedSearch = v
         }
 
+    /** 只看相关：有些源（如 zuida）根本不认关键词，直接把最新更新丢回来 */
+    private var relevantState by mutableStateOf(store.onlyRelevant)
+    var onlyRelevant: Boolean
+        get() = relevantState
+        set(v) {
+            relevantState = v
+            store.onlyRelevant = v
+        }
+
+    /** 被「只看相关」挡掉的条数，界面要讲清楚挡了什么 */
+    val hiddenUnrelated: Int
+        get() = if (!onlyRelevant) 0 else allResults.size - relevantList().size
+
+    private fun norm(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
+
+    /** 片名归一化后含关键词就算相关：「庆余年 第二季」保留，「吞噬星空」丢掉 */
+    private fun relevantList(): List<VideoItem> {
+        val q = norm(query)
+        if (q.isEmpty() || !onlyRelevant) return allResults
+        return allResults.filter { norm(it.name).contains(q) }
+    }
+
     /** 上游三个多选筛选：源 / 类型 / 语言（SourceBadges、TypeBadges、LanguageBadges） */
     var pickedSources by mutableStateOf<Set<String>>(emptySet())
     var pickedTypes by mutableStateOf<Set<String>>(emptySet())
@@ -179,7 +201,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     }
 
     private fun filtered(): List<VideoItem> {
-        var list = allResults
+        var list = relevantList()
         if (pickedSources.isNotEmpty()) list = list.filter { it.sourceId in pickedSources }
         if (pickedTypes.isNotEmpty()) list = list.filter { it.typeName in pickedTypes }
         if (pickedLangs.isNotEmpty()) list = list.filter { it.lang in pickedLangs }

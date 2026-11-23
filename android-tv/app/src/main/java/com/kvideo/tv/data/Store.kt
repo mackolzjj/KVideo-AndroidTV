@@ -27,6 +27,11 @@ class Store(ctx: Context) {
         get() = (sp.getString("live_url", "") ?: "").ifBlank { DEFAULT_LIVE_URL }
         set(v) = sp.edit().putString("live_url", v.trim()).apply()
 
+    /** 搜索是否只留片名真的含关键词的条目（源站会串味，默认开） */
+    var onlyRelevant: Boolean
+        get() = sp.getBoolean("only_relevant", true)
+        set(v) = sp.edit().putBoolean("only_relevant", v).apply()
+
     /** 搜索结果是否合并同名（对齐上游 settings.searchDisplayMode） */
     var groupedSearch: Boolean
         get() = sp.getBoolean("grouped_search", false)
