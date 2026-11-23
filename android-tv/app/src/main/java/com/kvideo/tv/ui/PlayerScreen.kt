@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -56,6 +58,11 @@ private fun fmt(ms: Long): String {
 fun PlayerScreen(vm: AppVm, route: Route.Player) {
     val ctx = LocalContext.current
     val activity = ctx as? Activity
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    // 方向以系统实际方向为准（之前用本地 boolean，横转竖会错乱）
+    val isLandscape = cfg.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    // 竖屏窄屏：右侧按钮只留图标，保证「全屏」不被挤出屏幕
+    val compact = cfg.screenWidthDp < 480
     // 资源站的 CDN 会挑 UA / Referer（浏览器能播、裸请求 403），
     // 这里把浏览器那套头补上，并允许 http→https 跳转。
     val exo = remember {
@@ -82,7 +89,6 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var locked by remember { mutableStateOf(false) }
     var speed by remember { mutableStateOf(1f) }
     var speedOpen by remember { mutableStateOf(false) }
-    var landscape by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var epDialog by remember { mutableStateOf(false) }
     var subOff by remember { mutableStateOf(false) }
@@ -278,68 +284,67 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     modifier = Modifier.fillMaxWidth().height(24.dp)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 42) { exo.seekTo((position - 10_000).coerceAtLeast(0)) }
+                    KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = if (compact) 38 else 42) {
+                        exo.seekTo((position - 10_000).coerceAtLeast(0))
+                    }
                     KvIconBtn(
                         if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         if (playing) "暂停" else "播放",
-                        size = 46
+                        size = if (compact) 42 else 46
                     ) {
                         if (playing) exo.pause() else exo.play()
                         playing = !playing
                     }
-                    KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 42) {
-                        exo.seekTo((position + 10_000).coerceAtMost(if (duration > 0) duration else position + 10_000))
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "${fmt(position)} / ${fmt(duration)}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.weight(1f))
-                    if (route.episodes.isNotEmpty()) {
-                        Text(
-                            "剧集",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { epDialog = true }
-                                .padding(horizontal = 9.dp, vertical = 8.dp)
+                    KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = if (compact) 38 else 42) {
+                        exo.seekTo(
+                            (position + 10_000).coerceAtMost(
+                                if (duration > 0) duration else position + 10_000
+                            )
                         )
                     }
+                    Spacer(Modifier.width(if (compact) 4.dp else 6.dp))
                     Text(
-                        if (subOff) "字幕关" else "字幕",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (subOff) Kv.Ink3 else Color.White,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable {
-                                subOff = !subOff
-                                runCatching {
-                                    exo.trackSelectionParameters = exo.trackSelectionParameters
-                                        .buildUpon()
-                                        .setTrackTypeDisabled(
-                                            androidx.media3.common.C.TRACK_TYPE_TEXT, subOff
-                                        )
-                                        .build()
-                                }
-                            }
-                            .padding(horizontal = 9.dp, vertical = 8.dp)
+                        if (compact) "${fmt(position)}/${fmt(duration)}"
+                        else "${fmt(position)} / ${fmt(duration)}",
+                        fontSize = if (compact) 11.sp else 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1
                     )
+                    Spacer(Modifier.weight(1f))
+
+                    // 右侧组：竖屏窄屏只放图标/text，横屏才带文字，保证全屏键永远在屏幕内
+                    if (route.episodes.isNotEmpty()) {
+                        KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = if (compact) 38 else 42) {
+                            epDialog = true
+                        }
+                    }
+                    KvIconBtn(
+                        androidx.compose.material.icons.Icons.Filled.Subtitles,
+                        "字幕",
+                        size = if (compact) 38 else 42
+                    ) {
+                        subOff = !subOff
+                        runCatching {
+                            exo.trackSelectionParameters = exo.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(
+                                    androidx.media3.common.C.TRACK_TYPE_TEXT, subOff
+                                )
+                                .build()
+                        }
+                    }
                     Box {
                         Text(
-                            "倍速 ${"%.1f".format(speed)}X",
+                            if (compact) "${"%.1f".format(speed)}X" else "倍速 ${"%.1f".format(speed)}X",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
+                            maxLines = 1,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .clickable { speedOpen = !speedOpen }
-                                .padding(horizontal = 9.dp, vertical = 8.dp)
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
                         )
                         if (speedOpen) {
                             Column(
@@ -368,15 +373,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                             }
                         }
                     }
-                    KvIconBtn(Icons.Filled.Lock, "锁定", size = 40) {
+                    KvIconBtn(Icons.Filled.Lock, "锁定", size = if (compact) 38 else 40) {
                         locked = true
                         showControls = false
                     }
-                    KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 40) {
-                        landscape = !landscape
-                        activity?.requestedOrientation = if (landscape)
+                    // 按当前实际方向判断，不再用一个本地 boolean（那会和系统方向对不上）
+                    KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = if (compact) 38 else 40) {
+                        activity?.requestedOrientation = if (isLandscape)
+                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        else
                             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }
             }
