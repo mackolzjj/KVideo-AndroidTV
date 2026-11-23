@@ -321,7 +321,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                     }
                                 }
                                 2 -> {
-                                    brightness = (brightness + drag.y / size.height * 1.6f).coerceIn(0.05f, 1f)
+                                    // 上滑变亮、下滑变暗（之前符号写反了）
+                                    brightness = (brightness - drag.y / size.height * 1.6f).coerceIn(0.05f, 1f)
                                     applyBrightness(activity, brightness)
                                     hudText = "亮度 ${(brightness * 100).toInt()}%"
                                 }
