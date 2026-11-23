@@ -128,10 +128,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             .setUri(rawUrl)
             .apply { route.mime?.let { setMimeType(it) } }
             .build()
-        runCatching {
+        try {
+            // 换集时先把上一条的缓冲/轨道清干净，否则字幕/音轨状态会串到下一集
+            exo.stop()
+            exo.clearMediaItems()
             exo.setMediaItem(item)
             exo.prepare()
             exo.playWhenReady = true
+        } catch (t: Throwable) {
+            // 别再静默吞掉：换集失败要能看见原因
+            errorText = "播放器异常 · " + (t.message ?: t.javaClass.simpleName)
         }
     }
 
@@ -180,7 +186,17 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         exo.addListener(listener)
         onDispose {
             runCatching { exo.removeListener(listener) }
-            exo.release()
+            // 注意：这里绝对不能 release()。换集走的是同一个 exo 实例，
+            // 上一版在这里 release 掉了，下一集 setMediaItem 全被 runCatching 吞掉，
+            // 表现就是「切到第 2 集卡死」。
+        }
+    }
+
+    // 播放器实例与播放页同生共死：只有离开播放页才释放
+    DisposableEffect(exo) {
+        onDispose {
+            runCatching { exo.stop() }
+            runCatching { exo.release() }
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
