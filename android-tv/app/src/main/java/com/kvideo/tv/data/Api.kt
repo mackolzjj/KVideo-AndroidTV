@@ -109,7 +109,9 @@ class Api {
             group = o.optString("group", "normal"),
             enabled = o.optBoolean("enabled", true),
             priority = o.optInt("priority", 0),
-            tag = o.optString("source", "")
+            tag = o.optString("source", ""),
+            searchPath = o.optString("searchPath", ""),
+            detailPath = o.optString("detailPath", "")
         )
     }
 
@@ -152,6 +154,9 @@ class Api {
                     .put("group", s.group)
                     .put("enabled", s.enabled)
                     .put("priority", s.priority)
+                    .put("searchPath", s.searchPath)
+                    .put("detailPath", s.detailPath)
+                    .put("headers", JSONObject())
             )
         }
         val payload = JSONObject().put("query", query).put("sources", arr)
@@ -204,6 +209,9 @@ class Api {
                 .put("group", source.group)
                 .put("enabled", source.enabled)
                 .put("priority", source.priority)
+                .put("searchPath", source.searchPath)
+                .put("detailPath", source.detailPath)
+                .put("headers", JSONObject())
             val payload = JSONObject().put("id", id).put("source", src)
             Net.client.newCall(Net.builder("/api/detail").post(Net.jsonBody(payload)).build())
                 .execute().use { r ->

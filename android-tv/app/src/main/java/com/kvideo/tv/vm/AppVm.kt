@@ -149,7 +149,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         searchJob = viewModelScope.launch {
             api.search(
                 q,
-                sources,
+                // 只搜启用的源，按 priority 排前面先出结果
+                sources.filter { it.enabled }.sortedBy { it.priority },
                 // 回调来自 IO 线程，状态更新统一回主线程
                 onVideos = { list ->
                     viewModelScope.launch {

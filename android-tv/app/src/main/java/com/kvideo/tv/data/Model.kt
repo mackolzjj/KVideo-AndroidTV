@@ -8,7 +8,12 @@ data class Source(
     val group: String = "normal",
     val enabled: Boolean = true,
     val priority: Int = 0,
-    val tag: String = ""
+    val tag: String = "",
+    // 服务端拼 URL 用的是 baseUrl + searchPath / detailPath。订阅清单里的 baseUrl
+    // 已经带完整路径（…/api.php/provide/vod），所以这两项正常是空串；
+    // 但字段必须存在 —— 缺了服务端会拼成 `${baseUrl}undefined`，搜索直接 0 条、详情 500。
+    val searchPath: String = "",
+    val detailPath: String = ""
 )
 
 /** 搜索结果条目（资源站 vod_* 的投影） */
