@@ -540,6 +540,7 @@ class MainActivity : ComponentActivity() {
   var IPTV_CHIPS_ATTR = 'data-kv-iptv-chips';
   var IPTV_OPEN_ATTR = 'data-kv-iptv-open';
   var IPTV_BTN_ATTR = 'data-kv-iptv-btn';
+  var IPTV_CLOSE_ATTR = 'data-kv-iptv-close';
   var IPTV_CSS =
     '[' + IPTV_CHIPS_ATTR + ']{display:none !important;}' +
     '[' + IPTV_BAR_ATTR + '][' + IPTV_OPEN_ATTR + '="1"]{' +
@@ -576,7 +577,16 @@ class MainActivity : ComponentActivity() {
     // mark() 会把「贴顶、高 20–240px、position 为 sticky/fixed 或 class 含
     // sticky」的块打上 data-kvideo-topbar，而那条规则会把该属性压成 36px 高。
     // 折叠后的筛选条正好落进 20–240 这个区间，不排除就会被压成一条横杠。
-    '[' + IPTV_BAR_ATTR + ']{height:auto !important;min-height:0 !important;}';
+    '[' + IPTV_BAR_ATTR + ']{height:auto !important;min-height:0 !important;}' +
+    // 直播播放层：网页自己的关闭钮（右上角）在某些状态下整条顶栏看不到。
+    // 这枚是我们兜底的关闭钮，只在检测不到网页那枚可见时才创建。
+    '[' + IPTV_CLOSE_ATTR + ']{position:fixed !important;top:calc(env(safe-area-inset-top,0px) + 12px) !important;' +
+      'right:12px !important;width:36px !important;height:36px !important;' +
+      'border-radius:50% !important;border:1px solid rgba(255,255,255,.18) !important;' +
+      'background:rgba(0,0,0,.55) !important;color:#fff !important;' +
+      'display:flex !important;align-items:center !important;justify-content:center !important;' +
+      'font-size:18px !important;line-height:1 !important;z-index:2147483646 !important;' +
+      'padding:0 !important;-webkit-tap-highlight-color:transparent;}';
 
   // 收起时必须包含注入菜单自己：ATTR 是「顶栏行」的属性（data-kvideo-topbar），
   // 只藏行的话菜单还浮在原处 —— 这就是「上滑后栏还在、只剩图标」的原因。
@@ -983,8 +993,13 @@ class MainActivity : ComponentActivity() {
       'nav,header,[class*="navbar"],[class*="topbar"],[class*="top-0"],[class*="sticky"]');
     var w = window.innerWidth || document.documentElement.clientWidth;
     var maxTop = Math.max(160, (window.innerHeight || 800) * 0.25);
+    // 直播播放层（/iptv 的全屏浮层）里的元素一律不打标：它自己的顶栏
+    // （LIVE + 频道名 + 关闭钮）class 含 top-0，会被压成 36px 高。
+    var iptvLayerNow = null;
+    try { iptvLayerNow = iptvPlayerLayer(); } catch (eL) { iptvLayerNow = null; }
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
+      if (iptvLayerNow && (el === iptvLayerNow || iptvLayerNow.contains(el))) continue;
       var r = el.getBoundingClientRect();
       // 直播页筛选条由 syncIptvFilter 接管，不能被打上 data-kvideo-topbar ——
       // 那条属性会把元素压成 36px 高（折叠后的筛选条正好落进打标区间）。
@@ -2395,6 +2410,15 @@ class MainActivity : ComponentActivity() {
   }
 
   function dockFixed() {
+    // 直播页的播放层本来就是全屏浮层，网页自己的顶栏（LIVE + 频道名 + 关闭钮）
+    // 就在最上面。壳再挂一条 56px 固定栏会正好压住那枚关闭钮，所以浮层在场时
+    // 不挂固定栏，把顶栏交还网页。
+    try {
+      if (iptvPlayerLayer()) {
+        if (root && root.getAttribute(DOCK_ATTR) === 'fixed') undock(root);
+        return;
+      }
+    } catch (eDock) {}
     // 只有播放页才挂固定栏：设置页/列表页滚到某个位置也会「找不到顶栏」，
     // 一挂就变成一条浮在内容上的菜单。判据走路由 /player（与播放器是否就绪无关）。
     if (!isPlayerPage()) {
@@ -2629,6 +2653,44 @@ class MainActivity : ComponentActivity() {
     return null;
   }
 
+  // 网页自己的关闭钮是否真的看得见（不是 opacity:0 的淡出条）
+  function iptvWebClose(layer) {
+    var btns = layer.querySelectorAll('button'), vw = window.innerWidth || 0;
+    var best = null, bestR = -1;
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i], r = b.getBoundingClientRect();
+      if (String(b.textContent || '').trim()) continue;
+      if (!b.querySelector('svg')) continue;
+      if (r.top > 160 || r.width < 20 || r.width > 80 || r.height > 80) continue;
+      var cs = null;
+      try { cs = window.getComputedStyle(b); } catch (e) { cs = null; }
+      if (!cs || +cs.opacity < 0.15 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+      var pe = cs.pointerEvents;
+      if (pe === 'none') continue;
+      if (r.right > bestR) { bestR = r.right; best = b; }
+    }
+    return (best && bestR > vw * 0.6) ? best : null;
+  }
+
+  // 没有可点的关闭钮时给一枚兜底钮，保证任何时候都能退出播放层
+  function iptvEnsureClose(layer) {
+    var mine = document.querySelector('[' + IPTV_CLOSE_ATTR + ']');
+    var web = iptvWebClose(layer);
+    if (web) { if (mine && mine.parentNode) mine.parentNode.removeChild(mine); return; }
+    if (mine) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute(IPTV_CLOSE_ATTR, '1');
+    b.setAttribute('aria-label', '关闭播放');
+    b.textContent = '\u2715';
+    b.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      iptvClosePlayer(layer);
+    });
+    (document.body || document.documentElement).appendChild(b);
+  }
+
   function iptvClosePlayer(layer) {
     function esc() {
       try {
@@ -2668,6 +2730,7 @@ class MainActivity : ComponentActivity() {
           iptvPlayerPushed = true;
         } catch (e) { iptvPlayerPushed = false; }
       }
+      iptvEnsureClose(layer);
       return;
     }
     if (iptvPlayerPushed) {
@@ -2676,6 +2739,8 @@ class MainActivity : ComponentActivity() {
       iptvPlayerPushed = false;
       try { history.back(); } catch (e) {}
     }
+    var mineClose = document.querySelector('[' + IPTV_CLOSE_ATTR + ']');
+    if (mineClose && mineClose.parentNode) mineClose.parentNode.removeChild(mineClose);
   }
 
   window.addEventListener('popstate', function () {
