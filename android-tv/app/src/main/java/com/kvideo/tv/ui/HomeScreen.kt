@@ -2,7 +2,6 @@ package com.kvideo.tv.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -162,7 +161,6 @@ fun HomeScreen(vm: AppVm) {
 @Composable
 private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
     val state = rememberLazyListState()
-    val snap = rememberSnapFlingBehavior(lazyListState = state)
 
     Box(Modifier.fillMaxWidth().height(380.dp)) {
         if (items.isEmpty()) {
@@ -179,7 +177,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
             return@Box
         }
 
-        LazyRow(state = state, flingBehavior = snap, modifier = Modifier.fillMaxSize()) {
+        LazyRow(state = state, modifier = Modifier.fillMaxSize()) {
             items(items) { h ->
                 Box(Modifier.fillParentMaxWidth().fillParentMaxHeight()) {
                     coil.compose.AsyncImage(
