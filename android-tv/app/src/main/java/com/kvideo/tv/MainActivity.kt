@@ -3692,7 +3692,8 @@ class MainActivity : ComponentActivity() {
                     loadProgress.visibility = View.GONE
                     webView.visibility = View.GONE
                     setupContainer.visibility = View.GONE
-                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    // 全屏不再强制横屏：跟随手机当前方向（横着拿就横屏、竖着拿就竖屏）。
+                    // 之前写死 SENSOR_LANDSCAPE，双击进全屏会突然转屏，观感突兀。
                     applySystemBars(true)
                 }
 
