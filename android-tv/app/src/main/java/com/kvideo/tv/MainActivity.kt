@@ -723,6 +723,11 @@ class MainActivity : ComponentActivity() {
     return root;
   }
 
+  // 直接用路由跳转兜底（播放页没有网页导航链接时用）
+  function kvGo(path) {
+    try { location.href = path; } catch (e) {}
+  }
+  function kvGoIptv() { kvGo('/iptv'); }
   function clickNative(sel) {
     var el = q(sel);
     if (!el) return false;
@@ -851,13 +856,17 @@ class MainActivity : ComponentActivity() {
       togglePopover(); return;
     }
     closePopover();
-    if (act === 'live') clickNative('a[aria-label="直播"]');
+    if (act === 'live') {
+      // 播放页没有网页的「直播」导航链接（顶栏被壳接管），点了没反应。
+      // 找不到原生入口就直接跳路由。
+      if (!clickNative('a[aria-label="直播"]')) kvGoIptv();
+    }
     else if (act === 'favorites') {
       if (!clickNative('a[aria-label="我的收藏"]') &&
           !clickNative('button[aria-label*="收藏"]') &&
           !clickByText('收藏这个视频')) clickByText('收藏');
     }
-    else if (act === 'history') clickNative(history[0]);
+    else if (act === 'history') { if (!clickNative(history[0])) kvGo('/history'); }
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
     else if (act === 'appsettings') {
