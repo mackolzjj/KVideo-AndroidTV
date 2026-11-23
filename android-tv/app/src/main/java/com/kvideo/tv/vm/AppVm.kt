@@ -43,7 +43,9 @@ sealed interface Route {
         /** 备用线路：主线路出错后依次重试（上游 IPTVPlayer 是「代理失败再试直连」） */
         val fallbacks: List<String> = emptyList(),
         /** 播放器里的「剧集」面板用 */
-        val episodes: List<com.kvideo.tv.data.Episode> = emptyList()
+        val episodes: List<com.kvideo.tv.data.Episode> = emptyList(),
+        /** 续播起点（毫秒），0 = 从头 */
+        val startMs: Long = 0L
     ) : Route
 }
 
@@ -280,14 +282,26 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         return maxOf(0, score)
     }
 
-    /** 结果集：官方那两层（最小匹配 + 屏蔽分类）之后，按相关度分排序 */
+    /**
+     * 结果集：官方那两层（最小匹配 + 屏蔽分类）之后，按相关度分排序。
+     * 这个 getter 会被 results / typeBadges / langBadges / sourceBadges / hiddenUnrelated
+     * 各调一次，几百条时一帧要排序好几遍 → 缓存一份，输入没变就直接复用。
+     */
+    private var relCacheKey: String = ""
+    private var relCacheVal: List<VideoItem> = emptyList()
+
     private fun relevantList(): List<VideoItem> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()
-        return allResults
+        val key = "${System.identityHashCode(allResults)}|$q|$onlyRelevant|$blockedState|${allResults.size}"
+        if (key == relCacheKey) return relCacheVal
+        val out = allResults
             .filter { !isCategoryBlocked(it) }
             .filter { !onlyRelevant || hasMinimumMatch(it.name, q) }
             .sortedByDescending { relevanceScore(it, q) }
+        relCacheKey = key
+        relCacheVal = out
+        return out
     }
 
     /** 上游三个多选筛选：源 / 类型 / 语言（SourceBadges、TypeBadges、LanguageBadges） */
@@ -376,6 +390,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var channelGroup by mutableStateOf("全部")
 
     private var searchJob: Job? = null
+    /** 搜索代次：每发起一次搜索 +1，旧回调靠它自认作废 */
+    private var searchGeneration = 0
 
 
     /**
@@ -479,9 +495,14 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         go(Route.Search)
     }
 
+    /** 已经搜过的关键词：SearchScreen 的防抖据此跳过重复请求 */
+    var lastSearched by mutableStateOf("")
+
     fun search(q: String) {
         query = q
+        lastSearched = q
         searchJob?.cancel()
+        val gen = ++searchGeneration
         if (q.isBlank()) {
             allResults = emptyList()
             searching = false
@@ -503,19 +524,29 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 // 回调来自 IO 线程，状态更新统一回主线程
                 onVideos = { list ->
                     viewModelScope.launch {
+                        // 关键：旧关键词的回调不许往新结果里追加
+                        if (gen != searchGeneration) return@launch
                         val seen = allResults.map { it.id + "|" + it.sourceId }.toHashSet()
                         allResults = allResults + list.filter { (it.id + "|" + it.sourceId) !in seen }
                     }
                 },
                 onProgress = { d, t ->
                     viewModelScope.launch {
+                        if (gen != searchGeneration) return@launch
                         progressDone = d
                         progressTotal = t
                     }
                 }
             )
-            searching = false
+            if (gen == searchGeneration) searching = false
         }
+    }
+
+    /** 播放器定期调：把当前进度写进历史，片单页才能显示「看到 xx:xx」并续播 */
+    fun saveProgress(route: Route.Player, ms: Long) {
+        if (route.videoId.isBlank() || ms <= 0) return
+        store.updateProgress(route.videoId, route.sourceId, ms)
+        history = store.history()
     }
 
     fun loadDetail(id: String, sourceId: String) {
@@ -544,9 +575,13 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             )
         )
         history = store.history()
+        // 上次就是看到这一集 → 从上次的位置续播
+        val savedEp = store.history().firstOrNull { it.id == d.id && it.sourceId == d.sourceId }?.episodeIndex
+        val startMs = if (savedEp == ep.index) store.progressOf(d.id, d.sourceId) else 0L
         go(
             Route.Player(
                 // 先直连；播不了由播放器按 proxyMode=auto 自动切服务器代理（同上游 VideoPlayer）
+                startMs = startMs,
                 url = Net.abs(ep.url),
                 title = d.name,
                 subtitle = ep.name,
@@ -559,6 +594,30 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 episodes = d.episodes
             )
         )
+    }
+
+    /**
+     * 播放器里换集（没有 Detail 的情况：从收藏/历史直接进播放页时 detail 是空的，
+     * 之前点集数会静默没反应）。
+     */
+    fun switchEpisodeRaw(route: Route.Player, ep: com.kvideo.tv.data.Episode) {
+        if (ep.url.isBlank()) return
+        backStack = backStack.dropLast(1)
+        route.let { r ->
+            this.route = Route.Player(
+                url = Net.abs(ep.url),
+                title = r.title,
+                subtitle = ep.name,
+                videoId = r.videoId,
+                sourceId = r.sourceId,
+                epIndex = ep.index,
+                episodeName = ep.name,
+                mime = if (ep.url.contains(".m3u8", true))
+                    androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null,
+                episodes = r.episodes,
+                startMs = if (ep.index == r.epIndex) store.progressOf(r.videoId, r.sourceId) else 0L
+            )
+        }
     }
 
     /** 播放器里换集：用同一部片的另一集替换当前播放 */

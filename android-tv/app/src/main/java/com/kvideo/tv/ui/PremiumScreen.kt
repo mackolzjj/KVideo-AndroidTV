@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,6 +95,16 @@ fun PremiumScreen(vm: AppVm) {
                 }
             }
         } else {
+            LaunchedEffect(vm.premiumQuery) {
+                val q = vm.premiumQuery.trim()
+                if (q.isBlank()) {
+                    if (vm.premiumResults.isNotEmpty() || vm.premiumSearching) vm.searchPremium("")
+                    return@LaunchedEffect
+                }
+                kotlinx.coroutines.delay(350L)
+                vm.searchPremium(q)
+            }
+
             // 官方 /premium 页同样有搜索框，且只用 premium 源搜（usePremiumHomePage → enabledPremiumSources）
             Row(
                 Modifier
@@ -108,7 +119,7 @@ fun PremiumScreen(vm: AppVm) {
                 if (vm.premiumQuery.isEmpty()) Text("在高级源里搜片名", fontSize = 13.sp, color = Kv.Ink3)
                 BasicTextField(
                     value = vm.premiumQuery,
-                    onValueChange = { vm.searchPremium(it) },
+                    onValueChange = { vm.premiumQuery = it },
                     singleLine = true,
                     textStyle = TextStyle(fontSize = 13.sp, color = Kv.Ink),
                     cursorBrush = SolidColor(Kv.Red),

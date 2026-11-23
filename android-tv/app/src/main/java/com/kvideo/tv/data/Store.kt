@@ -8,9 +8,6 @@ import org.json.JSONObject
  * 本地存储：服务器地址、访问密码、直播源、收藏、历史。
  * 用 SharedPreferences 存 JSON，2.0 这点体量不值得上 Room。
  */
-/** 内置直播源：用户的 KVideo 直播清单（614 个频道，HLS） */
-const val DEFAULT_LIVE_URL = "http://192.168.1.254:1905/REDACTED/interface.m3u"
-
 class Store(ctx: Context) {
     private val sp = ctx.getSharedPreferences("kvideo_v2", Context.MODE_PRIVATE)
 
@@ -22,9 +19,13 @@ class Store(ctx: Context) {
         get() = sp.getString("password", "") ?: ""
         set(v) = sp.edit().putString("password", v).apply()
 
+    /**
+     * 直播源。空 = 用 App 里打包的那份（assets/live_default.m3u）。
+     * 注意：这里不许再放任何带口令的默认地址 —— 仓库是公开的，之前那版把
+     * 服务器口令写死在 DEFAULT_LIVE_URL 里，等于公开泄露。
+     */
     var liveUrl: String
-        // 没手动填过就用内置那份；用户改过就以他的为准
-        get() = (sp.getString("live_url", "") ?: "").ifBlank { DEFAULT_LIVE_URL }
+        get() = sp.getString("live_url", "") ?: ""
         set(v) = sp.edit().putString("live_url", v.trim()).apply()
 
     /**
@@ -76,9 +77,29 @@ class Store(ctx: Context) {
 
     fun history(): List<SavedItem> = read("history")
 
+    /** 播放中定期回写进度，收藏页据此显示「看到 xx:xx」并支持续播 */
+    fun updateProgress(id: String, sourceId: String, positionMs: Long) {
+        val list = history().toMutableList()
+        val i = list.indexOfFirst { it.id == id && it.sourceId == sourceId }
+        if (i < 0) return
+        list[i] = list[i].copy(positionMs = positionMs, updatedAt = System.currentTimeMillis())
+        write("history", list)
+    }
+
+    fun progressOf(id: String, sourceId: String): Long =
+        history().firstOrNull { it.id == id && it.sourceId == sourceId }?.positionMs ?: 0L
+
     fun pushHistory(item: SavedItem) {
+        val prev = history().firstOrNull { it.id == item.id && it.sourceId == item.sourceId }
         val list = history().filterNot { it.id == item.id && it.sourceId == item.sourceId }.toMutableList()
-        list.add(0, item.copy(updatedAt = System.currentTimeMillis()))
+        // 换集时别把已看的进度清零
+        list.add(
+            0,
+            item.copy(
+                positionMs = if (item.positionMs > 0) item.positionMs else (prev?.positionMs ?: 0L),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
         write("history", list.take(60))
     }
 

@@ -203,7 +203,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     }
 
     // 加载超时：上游 IPTVPlayer 有 LOADING_TIMEOUT_MS，卡住就换线路而不是一直黑屏
-    LaunchedEffect(fbIndex, viaProxy) {
+    LaunchedEffect(fbIndex, viaProxy, route.url) {
         ready = false
         delay(20_000)
         if (!ready && errorText == null) {
@@ -215,11 +215,25 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         }
     }
 
+    var resumed by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
+        var lastSave = 0L
         while (true) {
             runCatching {
                 position = exo.currentPosition
                 duration = exo.duration.coerceAtLeast(0L)
+                // 续播：媒体准备好后跳到上次的位置（只跳一次）
+                if (!resumed && route.startMs > 0 && duration > 0) {
+                    resumed = true
+                    if (route.startMs < duration - 5_000) exo.seekTo(route.startMs)
+                }
+                // 每 10 秒把进度写回历史
+                val now = System.currentTimeMillis()
+                if (position > 3_000 && now - lastSave > 10_000) {
+                    lastSave = now
+                    vm.saveProgress(route, position)
+                }
             }
             delay(400)
         }
@@ -400,11 +414,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     value = if (duration > 0) {
                         ((seekPreview ?: position).toFloat() / duration).coerceIn(0f, 1f)
                     } else 0f,
+                    // 拖动时只更新预览，松手才真 seek —— 之前每动一个像素 seek 一次，卡
                     onValueChange = { v ->
-                        if (duration > 0) {
-                            exo.seekTo((v * duration).toLong())
-                            position = (v * duration).toLong()
+                        if (duration > 0) seekPreview = (v * duration).toLong()
+                    },
+                    onValueChangeFinished = {
+                        seekPreview?.let {
+                            exo.seekTo(it)
+                            position = it
                         }
+                        seekPreview = null
                     },
                     colors = SliderDefaults.colors(
                         thumbColor = Kv.Red,
@@ -556,10 +575,13 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                     .clickable {
                                         epDialog = false
                                         val det = vm.detail
-                                        if (det != null) {
+                                        if (det != null && det.id == route.videoId) {
                                             vm.switchEpisode(
                                                 route.videoId, route.sourceId, ep, det, route.title
                                             )
+                                        } else {
+                                            // 从收藏/历史直接进的播放页没有 detail，也要能换
+                                            vm.switchEpisodeRaw(route, ep)
                                         }
                                     }
                                     .padding(vertical = 10.dp)

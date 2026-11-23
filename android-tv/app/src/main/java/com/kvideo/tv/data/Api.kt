@@ -21,7 +21,10 @@ object Net {
     @Volatile
     var base: String = ""
 
-    private val cookies = LinkedHashMap<String, String>()
+    // 登录在 IO 线程写、请求并发读，普通 Map 会撞
+    private val cookies = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun cookieHeader(): String = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
 
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -44,7 +47,7 @@ object Net {
             .header("User-Agent", "KVideo-Android/2.0")
             .header("Accept", "application/json, text/plain, */*")
         if (cookies.isNotEmpty()) {
-            b.header("Cookie", cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
+            b.header("Cookie", cookieHeader())
         }
         return b
     }
@@ -331,9 +334,15 @@ class Api {
             )
         }
         val payload = JSONObject().put("query", query).put("sources", arr)
+        val call = Net.client.newCall(
+            Net.builder("/api/search-parallel").post(Net.jsonBody(payload)).build()
+        )
+        // searchJob.cancel() 打断不了阻塞的 readUtf8Line，必须显式 cancel 连接，
+        // 否则上一个关键词的 SSE 会继续往新结果里塞东西（搜索结果串味）
+        val handle = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+            ?.invokeOnCompletion { runCatching { call.cancel() } }
         try {
-            Net.client.newCall(Net.builder("/api/search-parallel").post(Net.jsonBody(payload)).build())
-                .execute().use { r ->
+            call.execute().use { r ->
                     val source = r.body?.source() ?: return@withContext
                     while (true) {
                         val line = source.readUtf8Line() ?: break
@@ -352,6 +361,8 @@ class Api {
                 }
         } catch (e: IOException) {
             // 单源失败不影响其它源，界面按已收到的结果展示
+        } finally {
+            handle?.dispose()
         }
     }
 

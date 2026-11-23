@@ -59,6 +59,18 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
     var pick by remember { mutableStateOf<ResultGroup?>(null) }
     LaunchedEffect(Unit) { if (autofocus && vm.autoFocusSearch) runCatching { focus.requestFocus() } }
 
+    // 防抖：以前每敲一个字就对全部源发一次并行搜索，结果还会串味
+    LaunchedEffect(vm.query) {
+        val q = vm.query.trim()
+        if (q.isBlank()) {
+            vm.search("")
+            return@LaunchedEffect
+        }
+        if (q == vm.lastSearched) return@LaunchedEffect
+        kotlinx.coroutines.delay(350)
+        vm.search(q)
+    }
+
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -81,7 +93,7 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                     }
                     BasicTextField(
                         value = vm.query,
-                        onValueChange = { vm.search(it) },
+                        onValueChange = { vm.query = it },
                         singleLine = true,
                         textStyle = TextStyle(fontSize = 13.sp, color = Kv.Ink),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(Kv.Red),

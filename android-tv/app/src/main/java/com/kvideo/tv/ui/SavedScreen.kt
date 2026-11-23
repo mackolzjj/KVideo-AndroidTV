@@ -20,6 +20,12 @@ import com.kvideo.tv.data.SavedItem
 import com.kvideo.tv.vm.AppVm
 import com.kvideo.tv.vm.Route
 
+private fun clock(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    return if (total >= 3600) "%d:%02d:%02d".format(total / 3600, (total % 3600) / 60, total % 60)
+    else "%02d:%02d".format(total / 60, total % 60)
+}
+
 @Composable
 fun SavedScreen(vm: AppVm) {
     var tab by remember { mutableStateOf(0) }
@@ -59,7 +65,8 @@ fun SavedScreen(vm: AppVm) {
                         Spacer(Modifier.height(6.dp))
                         Text(s.name, fontSize = 11.sp, color = Kv.Ink, fontWeight = FontWeight.Medium, maxLines = 2, lineHeight = 15.sp)
                         if (s.episodeName.isNotBlank()) {
-                            Text(s.episodeName, style = Kv.Tiny.copy(fontSize = 10.sp), maxLines = 1)
+                            val seen = if (s.positionMs > 1000) " · 看到 ${clock(s.positionMs)}" else ""
+                            Text(s.episodeName + seen, style = Kv.Tiny.copy(fontSize = 10.sp), maxLines = 1)
                         }
                     }
                 }
