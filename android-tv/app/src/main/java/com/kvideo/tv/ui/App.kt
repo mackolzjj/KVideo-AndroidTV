@@ -4,6 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Home
@@ -13,6 +16,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,7 +34,18 @@ import com.kvideo.tv.vm.Route
 
 @Composable
 fun KvApp(vm: AppVm = viewModel()) {
+    val ctx = LocalContext.current
+    // 上次如果崩过，直接开在最前面，不用进高级设置才能看到
+    var crash by remember { mutableStateOf(com.kvideo.tv.KvApplication.lastCrash(ctx)) }
+
     KvTheme {
+        if (crash.isNotBlank()) {
+            CrashScreen(crash) {
+                com.kvideo.tv.KvApplication.clearCrash(ctx)
+                crash = ""
+            }
+            return@KvTheme
+        }
         Surface(Modifier.fillMaxSize(), color = Kv.Bg) {
             val route = vm.route
 
@@ -48,6 +67,40 @@ fun KvApp(vm: AppVm = viewModel()) {
                 is Route.Detail -> DetailScreen(vm, route)
                 is Route.Player -> PlayerScreen(vm, route)
             }
+        }
+    }
+}
+
+/** 崩溃日志屏：把最后一段堆栈直接摆在第一屏 */
+@Composable
+private fun CrashScreen(text: String, onContinue: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Kv.Bg).padding(18.dp)) {
+        Text("上次运行时崩了", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Kv.Ink)
+        Spacer(Modifier.height(6.dp))
+        Text("下面是堆栈（也可以从 /Android/data/com.kvideo.tv/files/last_crash.txt 拷出来）", fontSize = 11.5.sp, color = Kv.Ink3)
+        Spacer(Modifier.height(12.dp))
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .background(Kv.Surface)
+                .verticalScroll(rememberScrollState())
+                .padding(12.dp)
+        ) {
+            Text(text.trim(), fontSize = 10.5.sp, lineHeight = 15.sp, color = Kv.Ink2)
+        }
+        Spacer(Modifier.height(12.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Kv.Ink)
+                .clickable { onContinue() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("继续使用（并清空这条日志）", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
     }
 }

@@ -25,15 +25,27 @@ class KvApplication : Application() {
                     appendLine("thread=${thread.name}")
                     appendLine("sdk=${android.os.Build.VERSION.SDK_INT} ${android.os.Build.MODEL}")
                 }
-                File(filesDir, "last_crash.txt").writeText(head + sw.toString())
+                val text = head + sw.toString()
+                File(filesDir, "last_crash.txt").writeText(text)
+                // 同时写一份到外部私有目录：手机文件管理器 / USB 能直接拷出来
+                runCatching {
+                    getExternalFilesDir(null)?.mkdirs()
+                    getExternalFilesDir(null)?.let { File(it, "last_crash.txt").writeText(text) }
+                }
             }
             prev?.uncaughtException(thread, error)
         }
     }
 
     companion object {
-        fun lastCrash(ctx: Context): String =
-            runCatching { File(ctx.filesDir, "last_crash.txt").readText() }.getOrDefault("")
+        fun lastCrash(ctx: Context): String {
+            val ext = runCatching {
+                ctx.getExternalFilesDir(null)?.let { File(it, "last_crash.txt") }
+            }.getOrNull()
+            val f = listOfNotNull(ext, File(ctx.filesDir, "last_crash.txt"))
+                .firstOrNull { it.exists() && it.length() > 0 }
+            return f?.let { runCatching { it.readText() }.getOrNull() }.orEmpty()
+        }
 
         fun clearCrash(ctx: Context) {
             runCatching { File(ctx.filesDir, "last_crash.txt").delete() }
