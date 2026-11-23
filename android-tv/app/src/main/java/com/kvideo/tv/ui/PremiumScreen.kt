@@ -194,6 +194,26 @@ fun PremiumScreen(vm: AppVm) {
                             Text(v.sourceName, style = Kv.Tiny.copy(fontSize = 10.sp), maxLines = 1)
                         }
                     }
+                    // 分类列表是分页的（limit=20），到底了就不再多调接口
+                    if (vm.premiumHasMore) {
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Kv.Surface2)
+                                    .clickable { vm.loadMorePremium() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (vm.premiumLoading) "加载中…" else "加载更多（第 ${vm.premiumPage} 页）· 点这里",
+                                    fontSize = 12.sp,
+                                    color = Kv.Ink
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -46,7 +46,9 @@ sealed interface Route {
         /** 播放器里的「剧集」面板用 */
         val episodes: List<com.kvideo.tv.data.Episode> = emptyList(),
         /** 续播起点（毫秒），0 = 从头 */
-        val startMs: Long = 0L
+        val startMs: Long = 0L,
+        /** 直播自动跳台的重试计数（最多 3 次） */
+        val liveTries: Int = 0
     ) : Route
 }
 
@@ -122,13 +124,25 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun loadPremiumCategory(value: String) {
+    var premiumPage by mutableStateOf(1)
+    var premiumHasMore by mutableStateOf(false)
+
+    fun loadPremiumCategory(value: String, page: Int = 1, append: Boolean = false) {
         premiumTagValue = value
+        premiumPage = page
         premiumLoading = true
         viewModelScope.launch {
-            premiumVideos = api.premiumVideos(premiumSources, value)
+            val list = api.premiumVideos(premiumSources, value, page)
+            premiumVideos = if (append) premiumVideos + list else list
+            // 接口按 limit=20 返回，不满一页就是到底了
+            premiumHasMore = list.size >= 20
             premiumLoading = false
         }
+    }
+
+    fun loadMorePremium() {
+        if (premiumLoading || !premiumHasMore || premiumTagValue.isBlank()) return
+        loadPremiumCategory(premiumTagValue, premiumPage + 1, append = true)
     }
 
     /** 高级内容（成人源）是否解锁；管理员角色默认就有权限 */
@@ -585,8 +599,27 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         detail = null
         detailLoading = true
         viewModelScope.launch {
-            detail = api.detail(id, src)
+            val d = api.detail(id, src)
+            detail = d
             detailLoading = false
+            // 换源列表：搜索结果点进来的用点击时那一组；从收藏/首页进来的没有，
+            // 就用本次搜索结果里同名的那批补上，不然详情页永远没有「换源」
+            if (d != null) {
+                val cur = currentGroup
+                if (cur == null || cur.items.none { it.id == d.id && it.sourceId == d.sourceId }) {
+                    val same = allResults.filter { it.name.trim() == d.name.trim() }
+                    if (same.size > 1) {
+                        currentGroup = ResultGroup(
+                            title = d.name,
+                            poster = d.poster,
+                            items = same
+                        )
+                        pingGroup(currentGroup!!)
+                    } else {
+                        currentGroup = null
+                    }
+                }
+            }
         }
     }
 
@@ -707,6 +740,27 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 isLive = true,
                 fallbacks = listOf(c.url) + c.routes.filter { it != c.url }
             )
+        )
+    }
+
+    /**
+     * 直播自动跳台：当前频道所有线路都失败时，顺着频道列表找下一个再试。
+     * tries 每次 +1，超过 3 次就停手，交给用户自己挑（不然会一路跳到底）。
+     */
+    fun playNextLive(currentUrl: String, tries: Int) {
+        if (tries > 3) return
+        val idx = channels.indexOfFirst { it.url == currentUrl }
+        val next = channels.drop(idx + 1)
+            .firstOrNull { it.url != currentUrl && it.url.isNotBlank() }
+            ?: return
+        route = Route.Player(
+            url = next.url,
+            title = next.name,
+            subtitle = next.group.ifBlank { "直播" },
+            mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
+            isLive = true,
+            fallbacks = next.routes.filter { it != next.url },
+            liveTries = tries
         )
     }
 

@@ -159,6 +159,12 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             play(proxyUrlOf(route.url))
             return
         }
+        // 直播：这个频道的线路全挂了就自动换下一个台（最多 3 次）
+        if (route.isLive && route.liveTries < 3) {
+            val before = route.url
+            vm.playNextLive(route.url, route.liveTries + 1)
+            if (vm.route !== route && (vm.route as? Route.Player)?.url != before) return
+        }
         errorText = reason
     }
 

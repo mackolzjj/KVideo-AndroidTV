@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -112,12 +113,15 @@ private fun HeroBlock(hero: DoubanItem?, onPlay: () -> Unit, onSearch: () -> Uni
         )
     ) {
         if (hero != null) {
+            // 背景：同一张竖版图铺满并虚化，只当氛围，不承担构图
             coil.compose.AsyncImage(
                 model = hero.cover,
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                alpha = 0.55f
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(20.dp),
+                alpha = 0.28f
             )
         }
         Box(
@@ -128,7 +132,26 @@ private fun HeroBlock(hero: DoubanItem?, onPlay: () -> Unit, onSearch: () -> Uni
                 )
             )
         )
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) {
+        if (hero != null) {
+            // 前景：完整竖版海报（3:4 裁切而不是把整张拉成横幅），人像不再被切
+            coil.compose.AsyncImage(
+                model = hero.cover,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 18.dp, bottom = 16.dp)
+                    .width(104.dp)
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(4.dp))
+            )
+        }
+
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 18.dp, end = 140.dp, bottom = 16.dp)
+        ) {
             Text("本周新上", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Kv.Red, letterSpacing = 2.sp)
             Spacer(Modifier.height(7.dp))
             Text(
