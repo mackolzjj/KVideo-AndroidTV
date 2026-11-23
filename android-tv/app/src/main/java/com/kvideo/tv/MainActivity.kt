@@ -586,7 +586,11 @@ class MainActivity : ComponentActivity() {
       'background:rgba(0,0,0,.55) !important;color:#fff !important;' +
       'display:flex !important;align-items:center !important;justify-content:center !important;' +
       'font-size:18px !important;line-height:1 !important;z-index:2147483646 !important;' +
-      'padding:0 !important;-webkit-tap-highlight-color:transparent;}';
+      'padding:0 !important;-webkit-tap-highlight-color:transparent;}' +
+    // 播放器底部控制条原本贴着屏幕下沿，全面屏手势上滑很容易误触到它。
+    // 加一点底部留白：env() 在没有 viewport-fit=cover 时是 0，所以固定补 10px 兜底。
+    '[data-controls][class*="bottom-0"]{' +
+      'padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)) !important;}';
 
   // 收起时必须包含注入菜单自己：ATTR 是「顶栏行」的属性（data-kvideo-topbar），
   // 只藏行的话菜单还浮在原处 —— 这就是「上滑后栏还在、只剩图标」的原因。
@@ -2665,11 +2669,28 @@ class MainActivity : ComponentActivity() {
     return (best && bestR > vw * 0.6) ? best : null;
   }
 
-  // 没有可点的关闭钮时给一枚兜底钮，保证任何时候都能退出播放层
+  // 网页控制层是否显示中。网页自己给上下两条控制条打了 data-controls，
+  // 淡出是 opacity 变化（class 切换会触发 MutationObserver → schedule）。
+  function iptvControlsVisible() {
+    var els = document.querySelectorAll('[data-controls]');
+    for (var i = 0; i < els.length; i++) {
+      var cs = null;
+      try { cs = window.getComputedStyle(els[i]); } catch (e) { cs = null; }
+      if (!cs) continue;
+      if (+cs.opacity > 0.15 && cs.visibility !== 'hidden' && cs.display !== 'none') return true;
+    }
+    return false;
+  }
+
+  // 没有可点的关闭钮时给一枚兜底钮，保证任何时候都能退出播放层。
+  // 它跟随网页控制条一起显隐 —— 控制条淡出时不留一枚孤立的白叉。
   function iptvEnsureClose() {
     var mine = document.querySelector('[' + IPTV_CLOSE_ATTR + ']');
-    var web = iptvWebClose();
-    if (web) { if (mine && mine.parentNode) mine.parentNode.removeChild(mine); return; }
+    function drop() {
+      if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
+    }
+    if (iptvWebClose()) { drop(); return; }
+    if (!iptvControlsVisible()) { drop(); return; }
     if (mine) return;
     var b = document.createElement('button');
     b.type = 'button';
@@ -2733,6 +2754,70 @@ class MainActivity : ComponentActivity() {
     iptvPlayerPushed = false;
     if (iptvPlaying()) iptvClosePlayer();
   });
+
+  // ---- 双击视频 → 全屏切换 ----------------------------------------------
+  // 竖屏看直播时视频只占中间一条，上下大片黑，出口只有右下角那枚小全屏钮。
+  // 直接调 requestFullscreen(播放容器)，让 WebChromeClient.onShowCustomView
+  // 接管；网页自己监听 fullscreenchange，图标状态会自动跟上。
+  // 不依赖找按钮：IPTVPlayer 那枚全屏钮没有 aria-label，靠文字/几何认不可靠。
+  var kvDblTs = 0, kvDblX = 0, kvDblY = 0;
+  function kvPlayingVideo() {
+    var vids = document.querySelectorAll('video');
+    for (var i = 0; i < vids.length; i++) {
+      var r = vids[i].getBoundingClientRect();
+      if (r.width > 40 && r.height > 20) return vids[i];
+    }
+    return null;
+  }
+  function kvFullscreenTarget(v) {
+    var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+    var t = v, hops = 0;
+    while (t && t !== document.body && hops < 5) {
+      var r = t.getBoundingClientRect();
+      if (r.width >= vw * 0.9 && r.height >= vh * 0.9) return t;
+      t = t.parentElement; hops++;
+    }
+    return v.parentElement || v;
+  }
+  function kvToggleFullscreen() {
+    try {
+      if (document.fullscreenElement) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        return;
+      }
+      var v = kvPlayingVideo();
+      if (!v) return;
+      var target = kvFullscreenTarget(v);
+      if (target.requestFullscreen) target.requestFullscreen();
+      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+      else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+    } catch (e) {}
+  }
+  function kvHitVideo(x, y) {
+    var vids = document.querySelectorAll('video');
+    for (var i = 0; i < vids.length; i++) {
+      var r = vids[i].getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return true;
+    }
+    return false;
+  }
+  // 自己数双击：WebView 对合成的 dblclick 不一定可靠，touchstart 最稳。
+  document.addEventListener('touchstart', function (ev) {
+    if (!ev.touches || ev.touches.length !== 1) { kvDblTs = 0; return; }
+    var t = ev.touches[0], now = Date.now();
+    if (!kvHitVideo(t.clientX, t.clientY)) { kvDblTs = 0; return; }
+    if (now - kvDblTs < 320 &&
+        Math.abs(t.clientX - kvDblX) < 40 && Math.abs(t.clientY - kvDblY) < 40) {
+      kvDblTs = 0;
+      kvToggleFullscreen();
+    } else {
+      kvDblTs = now; kvDblX = t.clientX; kvDblY = t.clientY;
+    }
+  }, { capture: true, passive: true });
+  document.addEventListener('dblclick', function (ev) {
+    var v = ev.target && ev.target.closest ? ev.target.closest('video') : null;
+    if (v) { ev.preventDefault(); kvToggleFullscreen(); }
+  }, true);
 
   var lastRun = 0;
   var tail = null;
