@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -91,17 +90,6 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var speedOpen by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var epDialog by remember { mutableStateOf(false) }
-    var subOff by remember { mutableStateOf(false) }
-
-    fun toggleSub() {
-        subOff = !subOff
-        runCatching {
-            exo.trackSelectionParameters = exo.trackSelectionParameters
-                .buildUpon()
-                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, subOff)
-                .build()
-        }
-    }
 
     // 线路顺序完全照上游：直播 = 代理(带 UA/Referer) → 直连（route.fallbacks）；
     // 点播 = 直连 → 代理（proxyMode=auto）。任何一条出错就换下一条，都试完才报错。
@@ -301,7 +289,6 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         if (route.episodes.isNotEmpty()) {
                             KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 36) { epDialog = true }
                         }
-                        KvIconBtn(Icons.Filled.Subtitles, "字幕", size = 36) { toggleSub() }
                         Text(
                             "${"%.1f".format(speed)}X",
                             fontSize = 12.sp,
@@ -394,7 +381,6 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         if (route.episodes.isNotEmpty()) {
                             KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 42) { epDialog = true }
                         }
-                        KvIconBtn(Icons.Filled.Subtitles, "字幕", size = 42) { toggleSub() }
                         Box {
                             Text(
                                 "倍速 ${"%.1f".format(speed)}X",
