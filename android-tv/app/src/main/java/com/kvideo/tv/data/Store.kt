@@ -27,6 +27,21 @@ class Store(ctx: Context) {
         get() = (sp.getString("live_url", "") ?: "").ifBlank { DEFAULT_LIVE_URL }
         set(v) = sp.edit().putString("live_url", v.trim()).apply()
 
+    /** 搜索结果是否合并同名（对齐上游 settings.searchDisplayMode） */
+    var groupedSearch: Boolean
+        get() = sp.getBoolean("grouped_search", false)
+        set(v) = sp.edit().putBoolean("grouped_search", v).apply()
+
+    /** 播放代理：0 自动（先直连、失败再走服务器代理），1 始终直连，2 始终代理 */
+    var proxyMode: Int
+        get() = sp.getInt("proxy_mode", 0)
+        set(v) = sp.edit().putInt("proxy_mode", v).apply()
+
+    /** 高级内容密码解锁标记（每台设备记住） */
+    var premiumUnlocked: Boolean
+        get() = sp.getBoolean("premium_unlocked", false)
+        set(v) = sp.edit().putBoolean("premium_unlocked", v).apply()
+
     var lastUser: String
         get() = sp.getString("user", "") ?: ""
         set(v) = sp.edit().putString("user", v).apply()

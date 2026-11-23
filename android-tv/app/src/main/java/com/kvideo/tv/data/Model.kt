@@ -24,7 +24,11 @@ data class VideoItem(
     val remarks: String,
     val year: String,
     val sourceId: String,
-    val sourceName: String
+    val sourceName: String,
+    // 上游筛选条用的三个字段（TypeBadges / LanguageBadges）
+    val typeName: String = "",
+    val lang: String = "",
+    val area: String = ""
 )
 
 data class Episode(val index: Int, val name: String, val url: String)

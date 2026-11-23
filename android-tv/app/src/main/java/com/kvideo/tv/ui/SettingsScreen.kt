@@ -70,6 +70,7 @@ fun SettingsScreen(vm: AppVm) {
     var server by remember { mutableStateOf(vm.serverUrl) }
     var pw by remember { mutableStateOf(vm.password) }
     var live by remember { mutableStateOf(vm.liveUrl) }
+    var premiumPw by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "设置",
@@ -117,6 +118,42 @@ fun SettingsScreen(vm: AppVm) {
                     "已连接 · ${vm.accountName}（${vm.accountRole}）· ${vm.sources.size} 个源",
                     style = Kv.Tiny.copy(color = Kv.Ink2)
                 )
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text("播放代理", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                listOf(0 to "自动", 1 to "直连", 2 to "代理").forEach { (mode, label) ->
+                    KvChip(label, selected = vm.proxyMode == mode) { vm.proxyMode = mode }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("自动 = 先直连，失败再走服务器的 HLS 代理", style = Kv.Tiny)
+
+            Spacer(Modifier.height(22.dp))
+            Text("高级内容", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (vm.canPremium)
+                    "已解锁 · 订阅里 group=premium 的成人源会参与搜索"
+                else "未解锁 · 订阅里 59 个 premium 源默认不参与搜索",
+                style = Kv.Body.copy(fontSize = 12.sp)
+            )
+            if (!vm.canPremium) {
+                Spacer(Modifier.height(8.dp))
+                Field("高级内容密码", premiumPw, "留空不解锁", { premiumPw = it }, password = true)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Kv.Surface2)
+                        .clickable { vm.unlockPremium(premiumPw) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("解锁高级内容", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Kv.Ink)
+                }
             }
 
             Spacer(Modifier.height(26.dp))

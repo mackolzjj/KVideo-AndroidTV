@@ -59,79 +59,126 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
 
     var sources by mutableStateOf<List<Source>>(emptyList())
+
+    /** 高级内容（成人源）是否解锁；管理员角色默认就有权限 */
+    private var premiumState by mutableStateOf(store.premiumUnlocked)
+    var premiumUnlocked: Boolean
+        get() = premiumState
+        set(v) {
+            premiumState = v
+            store.premiumUnlocked = v
+        }
+
+    /** 管理员本来就有 premium 权限，普通用户（viewer）必须另输高级密码 */
+    val canPremium: Boolean
+        get() = premiumUnlocked || accountRole == "super_admin" || accountRole == "admin"
+
+    /** 搜索/详情只可见这些源：group=premium 的那 59 个成人源没解锁就不出现 */
+    val visibleSources: List<Source>
+        get() = sources.filter { canPremium || it.group != "premium" }
+
+    fun unlockPremium(pw: String) {
+        viewModelScope.launch {
+            if (api.unlockPremium(pw)) {
+                premiumUnlocked = true
+                error = null
+            } else {
+                error = "高级内容密码不对"
+            }
+        }
+    }
     var recommend by mutableStateOf<List<DoubanItem>>(emptyList())
     var history by mutableStateOf(store.history())
     var favorites by mutableStateOf(store.favorites())
 
     var query by mutableStateOf("")
     var searching by mutableStateOf(false)
-    /** 服务端回来的全部条目（可能几百条，混着挂羊头卖狗肉的黑产源） */
+    /** 服务端回来的全部条目，按到达顺序追加（上游就是不排序、不筛） */
     var allResults by mutableStateOf<List<VideoItem>>(emptyList())
-    /** 默认只说人话：片名要真的含搜索词，否则 122 个源能刷出几百条垃圾 */
-    var strict by mutableStateOf(true)
+
+    /** 上游 settings.searchDisplayMode：普通 / 同名合并 */
+    private var groupedState by mutableStateOf(store.groupedSearch)
+    var grouped: Boolean
+        get() = groupedState
+        set(v) {
+            groupedState = v
+            store.groupedSearch = v
+        }
+
+    /** 上游三个多选筛选：源 / 类型 / 语言（SourceBadges、TypeBadges、LanguageBadges） */
+    var pickedSources by mutableStateOf<Set<String>>(emptySet())
+    var pickedTypes by mutableStateOf<Set<String>>(emptySet())
+    var pickedLangs by mutableStateOf<Set<String>>(emptySet())
+
+    val typeBadges: List<String>
+        get() = allResults.map { it.typeName }.filter { it.isNotBlank() }.distinct().take(12)
+
+    val langBadges: List<String>
+        get() = allResults.map { it.lang }.filter { it.isNotBlank() }.distinct().take(8)
+
+    val sourceBadges: List<Pair<String, String>>
+        get() = allResults.map { it.sourceId to it.sourceName.ifBlank { it.sourceId } }
+            .distinctBy { it.first }.take(20)
 
     /** 当前点开的那一组（详情页据此给出「换源」） */
     var currentGroup by mutableStateOf<ResultGroup?>(null)
 
-    /** sourceId → 实测延迟(ms)，用来给同一部的多条线路排序（跟上游 SourceSelector 一致） */
+    /** sourceId → 实测延迟(ms)，组内按它排序 —— 上游 SourceSelector / VideoGrid 都是这个口径 */
     var lineLatency by mutableStateOf<Map<String, Long>>(emptyMap())
 
     fun pingGroup(g: ResultGroup) {
-        lineLatency = emptyMap()
         viewModelScope.launch {
             g.items.forEach { item ->
+                if (lineLatency.containsKey(item.sourceId)) return@forEach
                 val base = sources.firstOrNull { it.id == item.sourceId }?.baseUrl ?: return@forEach
                 launch {
-                    api.ping(base)?.let { ms ->
-                        lineLatency = lineLatency + (item.sourceId to ms)
-                    }
+                    api.ping(base)?.let { ms -> lineLatency = lineLatency + (item.sourceId to ms) }
                 }
             }
         }
     }
 
+    private fun filtered(): List<VideoItem> {
+        var list = allResults
+        if (pickedSources.isNotEmpty()) list = list.filter { it.sourceId in pickedSources }
+        if (pickedTypes.isNotEmpty()) list = list.filter { it.typeName in pickedTypes }
+        if (pickedLangs.isNotEmpty()) list = list.filter { it.lang in pickedLangs }
+        return list
+    }
+
     /**
-     * 界面用这个：
-     * 1. 严格模式下先剔掉片名不含搜索词的，再剔掉魔改/AI换脸这类黑产标题；
-     * 2. 同名合并成一组 —— 122 个源对同一部片会给十几条，铺成网格就是一屏重复；
-     * 3. 按「片名开头命中 > 中间命中 > 源多的 > 名字短的」排序。
+     * 界面用的列表。合并开关打开时按 `vod_name.lowercase().trim()` 归并 —— 上游 VideoGrid
+     * 用的就是这个 key，组内按实测延迟升序、取延迟最低的那条当代表。
+     * 不做相关度过滤、不剔任何标题：那是上游没有的行为，要不要筛交给用户自己用下面的筛选条。
+     * 单条分组在界面上就表现成普通卡片。
      */
     val results: List<ResultGroup>
         get() {
-            val q = query.trim()
-            if (q.isEmpty()) return emptyList()
-            val base = if (strict) allResults.filter { !isJunk(it.name) && relevance(it.name, q) >= 0 } else allResults
-            val grouped = LinkedHashMap<String, MutableList<VideoItem>>()
-            base.forEach { v -> grouped.getOrPut(groupKey(v.name)) { mutableListOf() }.add(v) }
-            return grouped.map { (_, list) ->
+            val list = filtered()
+            if (!grouped) return list.map { ResultGroup(it.name, it.poster, listOf(it)) }
+            val map = LinkedHashMap<String, MutableList<VideoItem>>()
+            list.forEach { v -> map.getOrPut(v.name.lowercase().trim()) { mutableListOf() }.add(v) }
+            return map.map { (_, items) ->
+                val sorted = items.sortedBy { lineLatency[it.sourceId] ?: Long.MAX_VALUE }
                 ResultGroup(
-                    title = list.first().name,
-                    poster = list.firstOrNull { it.poster.isNotBlank() }?.poster ?: "",
-                    items = list.sortedBy { relevance(it.name, q) }
+                    title = sorted.first().name,
+                    poster = sorted.firstOrNull { it.poster.isNotBlank() }?.poster ?: "",
+                    items = sorted
                 )
-            }.sortedWith(
-                compareBy<ResultGroup> { relevance(it.title, q) }
-                    .thenByDescending { it.items.size }
-                    .thenBy { it.title.length }
-            )
+            }
         }
 
-    /** 魔改 / 换脸 / 擦边这类标题：片名里可能真带「庆余年」，但根本不是那部剧 */
-    private fun isJunk(name: String): Boolean {
-        val n = name.lowercase()
-        return JUNK.any { n.contains(it) }
-    }
-
-    /** 同名归并用的 key：去掉「全46集 / 更新至40集」这类后缀与标点，但保留「第X季」 */
-    private fun groupKey(name: String): String {
-        var s = name.lowercase()
-        s = Regex("(全|共|更新至)\\s*\\d+\\s*集?").replace(s, "")
-        s = Regex("\\d+\\s*集").replace(s, "")
-        s = Regex("[\\s\\p{Punct}【】（）()·、]+").replace(s, "")
-        return s
-    }
     var progressDone by mutableStateOf(0)
     var progressTotal by mutableStateOf(0)
+
+    /** 0 自动（先直连、失败再代理）· 1 始终直连 · 2 始终代理（上游 proxyMode 的等价物） */
+    private var proxyState by mutableStateOf(store.proxyMode)
+    var proxyMode: Int
+        get() = proxyState
+        set(v) {
+            proxyState = v
+            store.proxyMode = v
+        }
 
     var detail by mutableStateOf<Detail?>(null)
     var detailLoading by mutableStateOf(false)
@@ -143,10 +190,6 @@ class AppVm(app: Application) : AndroidViewModel(app) {
 
     private var searchJob: Job? = null
 
-    private val JUNK = listOf(
-        "魔改", "换脸", "ai换", "无删减", "未删减", "激情", "网红", "不雅", "流出",
-        "舔", "裸", "艳照", "私拍", "福利", "成人", "三级", "黄片", "约炮", "嫩妹"
-    )
 
     /**
      * 相关度：0 = 片名以搜索词开头，1 = 含搜索词，-1 = 不相关（严格模式下丢掉）。
@@ -242,14 +285,18 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             return
         }
         allResults = emptyList()
+        pickedSources = emptySet()
+        pickedTypes = emptySet()
+        pickedLangs = emptySet()
+        lineLatency = emptyMap()
         progressDone = 0
-        progressTotal = sources.size
+        progressTotal = visibleSources.count { it.enabled }
         searching = true
         searchJob = viewModelScope.launch {
             api.search(
                 q,
-                // 只搜启用的源，按 priority 排前面先出结果
-                sources.filter { it.enabled }.sortedBy { it.priority },
+                // 只搜「启用的 + 当前可见的」源；成人源未解锁不参与搜索
+                visibleSources.filter { it.enabled }.sortedBy { it.priority },
                 // 回调来自 IO 线程，状态更新统一回主线程
                 onVideos = { list ->
                     viewModelScope.launch {
@@ -296,10 +343,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         history = store.history()
         go(
             Route.Player(
-                // 片源 CDN 对手机端的裸请求回 403（同样地址服务器侧能拉），
-                // 所以点播统一走服务器的 HLS 代理：/api/iptv/stream?url=
-                // 它把清单里的子地址重写成 /api/iptv/stream?...，相对根路径，播放器能直接跟。
-                url = api.streamProxy(ep.url),
+                // 先直连；播不了由播放器按 proxyMode=auto 自动切服务器代理（同上游 VideoPlayer）
+                url = Net.abs(ep.url),
                 title = d.name,
                 subtitle = ep.name,
                 videoId = d.id,

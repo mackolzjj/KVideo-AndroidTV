@@ -81,11 +81,21 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var landscape by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
-    DisposableEffect(Unit) {
-        val item = MediaItem.Builder()
-            .setUri(route.url)
+    // 上游 VideoPlayer 的做法：proxyMode=auto 时先直连，出错再切 /api/iptv/stream 代理重试一次
+    var viaProxy by remember { mutableStateOf(vm.proxyMode == 2) }
+
+    fun mediaFor(useProxy: Boolean): MediaItem {
+        val url = if (useProxy) {
+            Net.abs("/api/iptv/stream?url=" + java.net.URLEncoder.encode(route.url, "UTF-8"))
+        } else route.url
+        return MediaItem.Builder()
+            .setUri(url)
             .apply { route.mime?.let { setMimeType(it) } }
             .build()
+    }
+
+    DisposableEffect(Unit) {
+        val item = mediaFor(viaProxy)
         exo.setMediaItem(item)
         exo.prepare()
         exo.playWhenReady = true
@@ -98,7 +108,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 if (state == Player.STATE_ENDED) playing = false
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // 带错误码和底层原因，方便下一轮直接定位（HTTP 403 / 404 / 解析失败）
+                // 自动模式：直连失败就切服务器代理再试一次（和上游 proxyMode=auto 一致）
+                if (vm.proxyMode == 0 && !viaProxy) {
+                    viaProxy = true
+                    runCatching {
+                        exo.setMediaItem(mediaFor(true))
+                        exo.prepare()
+                        exo.playWhenReady = true
+                    }
+                    return
+                }
                 val cause = error.cause?.message?.take(120).orEmpty()
                 errorText = error.errorCodeName + if (cause.isNotBlank()) " · " + cause else ""
             }

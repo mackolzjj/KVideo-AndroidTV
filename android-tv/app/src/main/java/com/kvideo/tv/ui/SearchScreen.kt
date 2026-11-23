@@ -3,6 +3,8 @@ package com.kvideo.tv.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -33,6 +35,23 @@ import androidx.compose.ui.unit.sp
 import com.kvideo.tv.data.VideoItem
 import com.kvideo.tv.vm.AppVm
 import com.kvideo.tv.vm.Route
+
+@Composable
+private fun BadgeRow(items: List<Pair<String, String>>, picked: Set<String>, onChange: (Set<String>) -> Unit) {
+    if (items.isEmpty()) return
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        modifier = Modifier.padding(bottom = 6.dp)
+    ) {
+        items(items, key = { it.first }) { (id, label) ->
+            val on = id in picked
+            KvChip(label, selected = on) {
+                onChange(if (on) picked - id else picked + id)
+            }
+        }
+    }
+}
 
 @Composable
 fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
@@ -108,17 +127,33 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             )
         }
 
-        // 相关度开关：122 个源里混着挂羊头卖狗肉的，默认只看片名真含搜索词的
+        // 上游那套：显示模式开关 + 源/类型/语言三排多选筛选，不做相关度过滤
         if (vm.allResults.isNotEmpty()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("相关 ${vm.results.size} 部 · 全部 ${vm.allResults.size} 条", style = Kv.Tiny)
+                Text("找到 ${vm.allResults.size} 条 · 当前 ${vm.results.size} 项", style = Kv.Tiny)
                 Spacer(Modifier.weight(1f))
-                KvChip(if (vm.strict) "只看相关" else "显示全部", selected = vm.strict) {
-                    vm.strict = !vm.strict
+                KvChip(if (vm.grouped) "已合并同名" else "合并同名", selected = vm.grouped) {
+                    vm.grouped = !vm.grouped
                 }
+            }
+            BadgeRow(
+                items = vm.sourceBadges.map { it.first to it.second },
+                picked = vm.pickedSources
+            ) { vm.pickedSources = it }
+            if (vm.typeBadges.isNotEmpty()) {
+                BadgeRow(
+                    items = vm.typeBadges.map { it to it },
+                    picked = vm.pickedTypes
+                ) { vm.pickedTypes = it }
+            }
+            if (vm.langBadges.isNotEmpty()) {
+                BadgeRow(
+                    items = vm.langBadges.map { it to it },
+                    picked = vm.pickedLangs
+                ) { vm.pickedLangs = it }
             }
         }
 

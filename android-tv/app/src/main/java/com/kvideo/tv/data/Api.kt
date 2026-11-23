@@ -89,6 +89,20 @@ class Api {
         }
     }
 
+    /** 高级内容密码校验：POST /api/auth {type:"premium", password} → {valid} */
+    suspend fun unlockPremium(password: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().put("type", "premium").put("password", password)
+            Net.client.newCall(Net.builder("/api/auth").post(Net.jsonBody(payload)).build()).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (text.isEmpty()) return@withContext false
+                JSONObject(text).optBoolean("valid", false)
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     /** 当前会话的账户（页面重开时确认自己是谁） */
     suspend fun session(): Account? = withContext(Dispatchers.IO) {
         try {
@@ -279,7 +293,12 @@ class Api {
                 remarks = o.optString("vod_remarks"),
                 year = o.optString("vod_year"),
                 sourceId = o.optString("source"),
-                sourceName = o.optString("sourceDisplayName", o.optString("source"))
+                sourceName = o.optString("sourceDisplayName", o.optString("source")),
+                typeName = o.optString("type_name").ifBlank {
+                    o.optString("vod_class").substringBefore(",")
+                },
+                lang = o.optString("vod_lang"),
+                area = o.optString("vod_area")
             )
         }
     }
