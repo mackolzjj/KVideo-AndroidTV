@@ -114,8 +114,13 @@ fun SettingsScreen(vm: AppVm) {
             }
             if (!vm.busy && vm.error == null && vm.serverUrl.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
+                val srcLine = if (vm.probing) {
+                    "正在探活 ${vm.sources.size} 个源…"
+                } else {
+                    "${vm.aliveSources.size}/${vm.visibleSources.size} 个源可搜"
+                }
                 Text(
-                    "已连接 · ${vm.accountName}（${vm.accountRole}）· ${vm.sources.size} 个源",
+                    "已连接 · ${vm.accountName}（${vm.accountRole}）· $srcLine",
                     style = Kv.Tiny.copy(color = Kv.Ink2)
                 )
             }
@@ -130,6 +135,24 @@ fun SettingsScreen(vm: AppVm) {
             }
             Spacer(Modifier.height(4.dp))
             Text("自动 = 先直连，失败再走服务器的 HLS 代理", style = Kv.Tiny)
+
+            if (vm.aliveSources.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "死源已自动跳过（实测一批订阅里只有少数真能返回内容）",
+                    style = Kv.Tiny
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Kv.Surface2)
+                        .clickable { vm.probeSources() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text("重新探活", fontSize = 12.sp, color = Kv.Ink)
+                }
+            }
 
             Spacer(Modifier.height(22.dp))
             Text("高级内容", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))

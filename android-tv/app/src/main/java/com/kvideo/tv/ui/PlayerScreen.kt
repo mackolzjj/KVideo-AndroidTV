@@ -108,8 +108,10 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 if (state == Player.STATE_ENDED) playing = false
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // 自动模式：直连失败就切服务器代理再试一次（和上游 proxyMode=auto 一致）
-                if (vm.proxyMode == 0 && !viaProxy) {
+                // 自动模式：直连失败就切服务器代理再试一次。
+                // 直播不做这个兜底 —— 直播中继会按「短时间内请求了 N 个不同频道」限流，
+                // 一失败就再打一次只会更快被判成批量探测。
+                if (vm.proxyMode == 0 && !route.isLive && !viaProxy) {
                     viaProxy = true
                     runCatching {
                         exo.setMediaItem(mediaFor(true))
@@ -321,7 +323,14 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("这条线路播不了", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(
+                    if (route.isLive) "这条线路播不了" else "这条线路播不了",
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White
+                )
+                if (route.isLive) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("直播线路多半是中继限流或临时 404，等 5 秒重试，或换个频道", fontSize = 11.sp, color = Kv.Ink3)
+                }
                 Spacer(Modifier.height(6.dp))
                 Text(errorText!!, fontSize = 11.5.sp, color = Kv.Ink2)
                 Spacer(Modifier.height(12.dp))

@@ -36,7 +36,9 @@ sealed interface Route {
         val episodeName: String = "",
         // 显式声明媒体类型：直播流走 /api/iptv/stream 代理，URI 路径里没有 .m3u8
         // 后缀，ExoPlayer 会猜成普通渐进媒体 → 直接 Source error。
-        val mime: String? = null
+        val mime: String? = null,
+        /** 直播流：不走代理兜底（服务端会限流），也不强制点播那套 mime 推断 */
+        val isLive: Boolean = false
     ) : Route
 }
 
@@ -76,6 +78,42 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     /** 搜索/详情只可见这些源：group=premium 的那 59 个成人源没解锁就不出现 */
     val visibleSources: List<Source>
         get() = sources.filter { canPremium || it.group != "premium" }
+
+    /** 探活结果：实测 63 个普通源里只有十来个真的能返回内容，其余是死源 */
+    var aliveSources by mutableStateOf<Set<String>>(emptySet())
+    var probing by mutableStateOf(false)
+
+    /** 真正参与搜索的源：可见 + 启用 + 探活通过（还没探过就先用全部可见的） */
+    val searchableSources: List<Source>
+        get() {
+            val base = visibleSources.filter { it.enabled }.sortedBy { it.priority }
+            return if (aliveSources.isEmpty()) base else base.filter { it.id in aliveSources }
+        }
+
+    fun probeSources() {
+        if (probing) return
+        val list = visibleSources.filter { it.enabled }
+        if (list.isEmpty()) return
+        probing = true
+        viewModelScope.launch {
+            val alive = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+            val lat = java.util.Collections.synchronizedMap(mutableMapOf<String, Long>())
+            list.chunked(8).forEach { chunk ->
+                chunk.map { src ->
+                    launch {
+                        val ms = api.ping(src.baseUrl)
+                        if (ms != null) {
+                            alive.add(src.id)
+                            lat[src.id] = ms
+                        }
+                    }
+                }.forEach { it.join() }
+            }
+            aliveSources = alive.toSet()
+            lineLatency = lineLatency + lat
+            probing = false
+        }
+    }
 
     fun unlockPremium(pw: String) {
         viewModelScope.launch {
@@ -265,6 +303,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 }
                 sources = api.sources()
                 recommend = api.recommend()
+                if (sources.isNotEmpty()) probeSources()
                 if (sources.isEmpty() && recommend.isEmpty()) {
                     error = "连上了，但没拿到内容：检查服务器地址"
                 }
@@ -290,13 +329,13 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         pickedLangs = emptySet()
         lineLatency = emptyMap()
         progressDone = 0
-        progressTotal = visibleSources.count { it.enabled }
+        progressTotal = searchableSources.size
         searching = true
         searchJob = viewModelScope.launch {
             api.search(
                 q,
-                // 只搜「启用的 + 当前可见的」源；成人源未解锁不参与搜索
-                visibleSources.filter { it.enabled }.sortedBy { it.priority },
+                // 只搜「可见 + 启用 + 探活通过」的源；成人源未解锁不参与
+                searchableSources,
                 // 回调来自 IO 线程，状态更新统一回主线程
                 onVideos = { list ->
                     viewModelScope.launch {
@@ -351,7 +390,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 sourceId = d.sourceId,
                 epIndex = ep.index,
                 episodeName = ep.name,
-                mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                mime = if (ep.url.contains(".m3u8", true))
+                    androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null
             )
         )
     }
@@ -375,7 +415,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 url = c.url,
                 title = c.name,
                 subtitle = "直播",
-                mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
+                isLive = true
             )
         )
     }
