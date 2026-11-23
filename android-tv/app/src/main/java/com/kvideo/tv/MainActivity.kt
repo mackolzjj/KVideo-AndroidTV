@@ -603,7 +603,9 @@ class MainActivity : ComponentActivity() {
       'position:fixed !important;' +
       'top:calc(env(safe-area-inset-top, 0px) + var(--kv-mini-top, 8px)) !important;' +
       'left:8px !important;right:8px !important;bottom:auto !important;' +
-      'height:32vh !important;max-height:32vh !important;min-height:0 !important;' +
+      // 三档高度：24 / 32 / 40vh，用右上角 ⇕ 循环，选择存 localStorage
+      'height:var(--kv-mini-h, 32vh) !important;max-height:var(--kv-mini-h, 32vh) !important;' +
+      'min-height:0 !important;' +
       'border-radius:18px !important;overflow:hidden !important;z-index:9998 !important;' +
       'border:1px solid rgba(255,255,255,.10) !important;' +
       'box-shadow:0 10px 28px rgba(0,0,0,.55) !important;}' +
@@ -2852,11 +2854,33 @@ class MainActivity : ComponentActivity() {
     }
     return null;
   }
+  var KV_MINI_H = [24, 32, 40];
+  function kvMiniHeightIdx() {
+    var v = 1;
+    try { v = parseInt(localStorage.getItem('kvMiniH') || '1', 10); } catch (e) { v = 1; }
+    if (!(v >= 0 && v < KV_MINI_H.length)) v = 1;
+    return v;
+  }
+  function kvMiniApplyHeight() {
+    var h = KV_MINI_H[kvMiniHeightIdx()] + 'vh';
+    try { document.documentElement.style.setProperty('--kv-mini-h', h); } catch (e) {}
+  }
   function kvMiniButtons() {
     var box = document.querySelector('[' + IPTV_MINI_BTNS_ATTR + ']');
     if (box) return box;
     box = document.createElement('div');
     box.setAttribute(IPTV_MINI_BTNS_ATTR, '1');
+    var size = document.createElement('button');
+    size.type = 'button';
+    size.setAttribute('aria-label', '切换高度');
+    size.textContent = '⇕';
+    size.addEventListener('click', function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var i = (kvMiniHeightIdx() + 1) % KV_MINI_H.length;
+      try { localStorage.setItem('kvMiniH', String(i)); } catch (e) {}
+      kvMiniApplyHeight();
+    });
+    box.appendChild(size);
     var full = document.createElement('button');
     full.type = 'button';
     full.setAttribute('aria-label', '全屏');
@@ -2905,6 +2929,7 @@ class MainActivity : ComponentActivity() {
     if (kvMiniOn) {
       if (host.getAttribute(IPTV_MINI_ATTR) !== '1') host.setAttribute(IPTV_MINI_ATTR, '1');
       kvMiniPlace(host);
+      kvMiniApplyHeight();
       kvMiniButtons();
       // 等一帧让 32vh 的高度落定，再把频道列表滚到迷你条正下方
       setTimeout(function () { kvScrollListUnderMini(host); }, 120);
