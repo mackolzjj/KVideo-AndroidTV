@@ -628,6 +628,16 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 没填直播源时用 App 里内置的那份（打包进去的 610 个频道） */
+    fun loadBundledChannels(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            runCatching { api.channelsFromText(text) }.getOrNull()?.let {
+                if (it.isNotEmpty()) channels = it
+            }
+        }
+    }
+
     fun toggleFavorite(id: String, name: String, poster: String, sourceId: String) {
         store.toggleFavorite(
             SavedItem(id = id, name = name, poster = poster, sourceId = sourceId)

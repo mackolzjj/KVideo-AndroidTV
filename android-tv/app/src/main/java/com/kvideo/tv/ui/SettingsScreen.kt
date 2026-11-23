@@ -92,7 +92,7 @@ fun SettingsScreen(vm: AppVm) {
             Spacer(Modifier.height(6.dp))
             Field("服务器地址", server, "http://192.168.1.250:81", { server = it })
             Field("访问密码", pw, "每个账户各自一个密码，服务器按密码识别身份", { pw = it }, password = true)
-            Field("直播源（M3U）", live, "http://…/playlist.m3u", { live = it })
+            Field("直播源 M3U 地址（留空用内置的 610 个频道）", live, "http://…/playlist.m3u", { live = it })
 
             Box(
                 Modifier

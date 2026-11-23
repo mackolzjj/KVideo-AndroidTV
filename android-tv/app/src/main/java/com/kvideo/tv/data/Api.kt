@@ -439,6 +439,9 @@ class Api {
         }
     }
 
+    /** 内置直播源：直接解析 ass 里的 M3U 文本，不走网络 */
+    fun channelsFromText(text: String): List<Channel> = parseM3u(text, "")
+
     /**
      * M3U 解析，按上游 lib/utils/m3u-parser.ts 的规则：
      * - #EXTINF 里读 group-title / http-user-agent / http-referrer（引号内的逗号不能当分隔符）

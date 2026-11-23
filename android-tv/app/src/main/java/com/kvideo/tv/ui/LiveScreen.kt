@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,6 +27,19 @@ import com.kvideo.tv.vm.AppVm
 
 @Composable
 fun LiveScreen(vm: AppVm) {
+    val ctx = LocalContext.current
+    // 没填直播源就用打包进 App 的那份（assets/live_default.m3u）
+    LaunchedEffect(vm.liveUrl) {
+        if (vm.liveUrl.isBlank()) {
+            val text = runCatching {
+                ctx.assets.open("live_default.m3u").bufferedReader().use { it.readText() }
+            }.getOrNull()
+            if (text != null) vm.loadBundledChannels(text)
+        } else if (vm.channels.isEmpty()) {
+            vm.loadChannels()
+        }
+    }
+
     var group by remember { mutableStateOf("全部") }
     val groups = remember(vm.channels) {
         listOf("全部") + vm.channels.map { it.group }.distinct()
@@ -33,8 +48,8 @@ fun LiveScreen(vm: AppVm) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "直播")
-        if (vm.liveUrl.isBlank()) {
-            KvEmpty("设置里填一个 M3U 直播源地址，频道就会出现在这里。")
+        if (vm.channels.isEmpty() && vm.liveUrl.isBlank()) {
+            KvEmpty("正在读取内置直播源…")
             return@Column
         }
         if (vm.channels.isEmpty()) {
