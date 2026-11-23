@@ -163,6 +163,16 @@ fun SettingsScreen(vm: AppVm) {
                 else "未解锁 · 订阅里 59 个 premium 源默认不参与搜索",
                 style = Kv.Body.copy(fontSize = 12.sp)
             )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Kv.Surface2)
+                    .clickable { vm.openPremium() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text("进入高级内容", fontSize = 12.sp, color = Kv.Ink)
+            }
             if (!vm.canPremium) {
                 Spacer(Modifier.height(8.dp))
                 Field("高级内容密码", premiumPw, "留空不解锁", { premiumPw = it }, password = true)

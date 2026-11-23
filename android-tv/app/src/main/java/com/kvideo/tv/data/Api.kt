@@ -89,6 +89,79 @@ class Api {
         }
     }
 
+    /** 源对象：服务端按 baseUrl + searchPath / detailPath 拼地址，缺一个就是 undefined */
+    private fun sourceJson(s: Source): JSONObject = JSONObject()
+        .put("id", s.id)
+        .put("name", s.name)
+        .put("baseUrl", s.baseUrl)
+        .put("group", s.group)
+        .put("enabled", s.enabled)
+        .put("priority", s.priority)
+        .put("searchPath", s.searchPath)
+        .put("detailPath", s.detailPath)
+        .put("headers", JSONObject())
+
+    /**
+     * 高级内容分类：POST /api/premium/types {sources} → {tags:[{id,label,value}]}
+     * value 形如 "源id:分类id,源id:分类id"，后面直接当 category 参数回传。
+     */
+    suspend fun premiumTags(srcs: List<Source>): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        try {
+            val arr = JSONArray()
+            srcs.forEach { s -> arr.put(sourceJson(s)) }
+            val body = Net.jsonBody(JSONObject().put("sources", arr))
+            Net.client.newCall(Net.builder("/api/premium/types").post(body).build()).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (text.isEmpty()) return@withContext emptyList()
+                val tags = JSONObject(text).optJSONArray("tags") ?: JSONArray()
+                (0 until tags.length()).mapNotNull { i ->
+                    val o = tags.optJSONObject(i) ?: return@mapNotNull null
+                    val label = o.optString("label")
+                    val value = o.optString("value")
+                    if (label.isBlank() || value.isBlank()) null else label to value
+                }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 高级内容列表：POST /api/premium/category {sources, category, page, limit} */
+    suspend fun premiumVideos(srcs: List<Source>, category: String, page: Int = 1): List<VideoItem> =
+        withContext(Dispatchers.IO) {
+            try {
+                val arr = JSONArray()
+                srcs.forEach { s -> arr.put(sourceJson(s)) }
+                val payload = JSONObject()
+                    .put("sources", arr)
+                    .put("category", category)
+                    .put("page", page.toString())
+                    .put("limit", "20")
+                Net.client.newCall(Net.builder("/api/premium/category").post(Net.jsonBody(payload)).build())
+                    .execute().use { r ->
+                        val text = r.body?.string().orEmpty()
+                        if (text.isEmpty()) return@withContext emptyList()
+                        val videos = JSONObject(text).optJSONArray("videos") ?: JSONArray()
+                        (0 until videos.length()).mapNotNull { i ->
+                            val o = videos.optJSONObject(i) ?: return@mapNotNull null
+                            val sid = o.optString("source")
+                            VideoItem(
+                                id = o.optString("vod_id"),
+                                name = o.optString("vod_name"),
+                                poster = Net.abs(o.optString("vod_pic")),
+                                remarks = o.optString("vod_remarks"),
+                                year = "",
+                                sourceId = sid,
+                                sourceName = srcs.firstOrNull { it.id == sid }?.name ?: sid,
+                                typeName = o.optString("type_name")
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
     /** 高级内容密码校验：POST /api/auth {type:"premium", password} → {valid} */
     suspend fun unlockPremium(password: String): Boolean = withContext(Dispatchers.IO) {
         try {

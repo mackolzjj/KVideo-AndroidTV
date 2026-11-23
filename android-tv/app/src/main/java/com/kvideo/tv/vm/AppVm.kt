@@ -25,6 +25,7 @@ sealed interface Route {
     data object Live : Route
     data object Saved : Route
     data object Settings : Route
+    data object Premium : Route
     data class Detail(val id: String, val sourceId: String) : Route
     data class Player(
         val url: String,
@@ -64,6 +65,38 @@ class AppVm(app: Application) : AndroidViewModel(app) {
 
     var sources by mutableStateOf<List<Source>>(emptyList())
 
+    /** 高级内容页（上游 /premium）：分类 tags 与列表都走 premium 的两个 POST 接口 */
+    var premiumTags by mutableStateOf<List<Pair<String, String>>>(emptyList())
+    var premiumVideos by mutableStateOf<List<VideoItem>>(emptyList())
+    var premiumLoading by mutableStateOf(false)
+    var premiumTagValue by mutableStateOf("")
+
+    val premiumSources: List<Source>
+        get() = sources.filter { it.group == "premium" && it.enabled }
+
+    fun openPremium() {
+        go(Route.Premium)
+        if (canPremium && premiumTags.isEmpty()) loadPremiumTags()
+    }
+
+    fun loadPremiumTags() {
+        premiumLoading = true
+        viewModelScope.launch {
+            premiumTags = api.premiumTags(premiumSources)
+            if (premiumTags.isNotEmpty()) loadPremiumCategory(premiumTags.first().second)
+            premiumLoading = false
+        }
+    }
+
+    fun loadPremiumCategory(value: String) {
+        premiumTagValue = value
+        premiumLoading = true
+        viewModelScope.launch {
+            premiumVideos = api.premiumVideos(premiumSources, value)
+            premiumLoading = false
+        }
+    }
+
     /** 高级内容（成人源）是否解锁；管理员角色默认就有权限 */
     private var premiumState by mutableStateOf(store.premiumUnlocked)
     var premiumUnlocked: Boolean
@@ -77,9 +110,9 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     val canPremium: Boolean
         get() = premiumUnlocked || accountRole == "super_admin" || accountRole == "admin"
 
-    /** 搜索/详情只可见这些源：group=premium 的那 59 个成人源没解锁就不出现 */
+    /** 搜索用全部启用的源（上游就是拿订阅全量去搜；premium 只是另一个浏览入口） */
     val visibleSources: List<Source>
-        get() = sources.filter { canPremium || it.group != "premium" }
+        get() = sources
 
     /** 探活结果：实测 63 个普通源里只有十来个真的能返回内容，其余是死源 */
     var aliveSources by mutableStateOf<Set<String>>(emptySet())
@@ -122,6 +155,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             if (api.unlockPremium(pw)) {
                 premiumUnlocked = true
                 error = null
+                loadPremiumTags()
             } else {
                 error = "高级内容密码不对"
             }
@@ -418,6 +452,12 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                     androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null
             )
         )
+    }
+
+    /** 从高级内容页直接进详情（不属于搜索分组） */
+    fun openVideo(v: VideoItem) {
+        currentGroup = null
+        go(Route.Detail(v.id, v.sourceId))
     }
 
     fun openGroup(g: ResultGroup, item: VideoItem) {
