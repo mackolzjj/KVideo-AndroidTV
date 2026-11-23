@@ -81,6 +81,35 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         if (canPremium && premiumTags.isEmpty()) loadPremiumTags()
     }
 
+    // 高级内容页自己的搜索（对应官方 usePremiumHomePage：只用 enabledPremiumSources 搜）
+    var premiumQuery by mutableStateOf("")
+    var premiumSearching by mutableStateOf(false)
+    var premiumResults by mutableStateOf<List<VideoItem>>(emptyList())
+
+    fun searchPremium(q: String) {
+        premiumQuery = q
+        premiumResults = emptyList()
+        if (q.isBlank()) {
+            premiumSearching = false
+            return
+        }
+        premiumSearching = true
+        viewModelScope.launch {
+            api.search(
+                q,
+                premiumSources.filter { it.enabled },
+                onVideos = { list ->
+                    viewModelScope.launch {
+                        val seen = premiumResults.map { it.id + "|" + it.sourceId }.toHashSet()
+                        premiumResults = premiumResults + list.filter { (it.id + "|" + it.sourceId) !in seen }
+                    }
+                },
+                onProgress = { _, _ -> }
+            )
+            premiumSearching = false
+        }
+    }
+
     fun loadPremiumTags() {
         premiumLoading = true
         viewModelScope.launch {

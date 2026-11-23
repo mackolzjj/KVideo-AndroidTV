@@ -94,6 +94,53 @@ fun PremiumScreen(vm: AppVm) {
                 }
             }
         } else {
+            // 官方 /premium 页同样有搜索框，且只用 premium 源搜（usePremiumHomePage → enabledPremiumSources）
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Kv.Surface)
+                    .padding(horizontal = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (vm.premiumQuery.isEmpty()) Text("在高级源里搜片名", fontSize = 13.sp, color = Kv.Ink3)
+                BasicTextField(
+                    value = vm.premiumQuery,
+                    onValueChange = { vm.searchPremium(it) },
+                    singleLine = true,
+                    textStyle = TextStyle(fontSize = 13.sp, color = Kv.Ink),
+                    cursorBrush = SolidColor(Kv.Red),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+
+            if (vm.premiumQuery.isNotBlank()) {
+                when {
+                    vm.premiumSearching && vm.premiumResults.isEmpty() -> KvEmpty("正在搜高级源…")
+                    vm.premiumResults.isEmpty() -> KvEmpty("高级源里没有结果")
+                    else -> LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(vm.premiumResults) { v: VideoItem ->
+                            Column(Modifier.clickable { vm.openVideo(v) }) {
+                                PosterArt(v.poster, ratio = 1.5f, modifier = Modifier.fillMaxWidth())
+                                Spacer(Modifier.height(6.dp))
+                                Text(v.name, fontSize = 11.sp, color = Kv.Ink, fontWeight = FontWeight.Medium, maxLines = 2, lineHeight = 15.sp)
+                                Text(v.sourceName, style = Kv.Tiny.copy(fontSize = 10.sp), maxLines = 1)
+                            }
+                        }
+                    }
+                }
+                return@Column
+            }
+
             if (vm.premiumTags.isNotEmpty()) {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
