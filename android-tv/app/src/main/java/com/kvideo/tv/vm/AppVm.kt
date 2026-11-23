@@ -73,6 +73,23 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     /** 当前点开的那一组（详情页据此给出「换源」） */
     var currentGroup by mutableStateOf<ResultGroup?>(null)
 
+    /** sourceId → 实测延迟(ms)，用来给同一部的多条线路排序（跟上游 SourceSelector 一致） */
+    var lineLatency by mutableStateOf<Map<String, Long>>(emptyMap())
+
+    fun pingGroup(g: ResultGroup) {
+        lineLatency = emptyMap()
+        viewModelScope.launch {
+            g.items.forEach { item ->
+                val base = sources.firstOrNull { it.id == item.sourceId }?.baseUrl ?: return@forEach
+                launch {
+                    api.ping(base)?.let { ms ->
+                        lineLatency = lineLatency + (item.sourceId to ms)
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * 界面用这个：
      * 1. 严格模式下先剔掉片名不含搜索词的，再剔掉魔改/AI换脸这类黑产标题；

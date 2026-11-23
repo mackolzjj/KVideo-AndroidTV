@@ -70,13 +70,18 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                 )
                 // 换源：同一部片在别的资源站的线路（搜索里同名合并的那一组）
                 val group = vm.currentGroup
+                androidx.compose.runtime.LaunchedEffect(group) {
+                    if (group != null && group.items.size > 1) vm.pingGroup(group)
+                }
                 if (group != null && group.items.size > 1) {
                     Spacer(Modifier.height(12.dp))
                     Row(
                         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        group.items.forEach { item ->
+                        group.items
+                            .sortedBy { vm.lineLatency[it.sourceId] ?: Long.MAX_VALUE }
+                            .forEach { item ->
                             val on = item.sourceId == d.sourceId
                             KvChip(
                                 item.sourceName.ifBlank { "源" },

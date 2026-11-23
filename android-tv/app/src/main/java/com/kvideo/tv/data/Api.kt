@@ -204,6 +204,23 @@ class Api {
         }
     }
 
+    /** 源延迟探测（上游 SourceSelector 就是按这个给线路排顺序的） */
+    suspend fun ping(baseUrl: String): Long? = withContext(Dispatchers.IO) {
+        try {
+            val body = Net.jsonBody(JSONObject().put("url", baseUrl))
+            Net.client.newCall(Net.builder("/api/ping").post(body).build()).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (text.isEmpty()) return@withContext null
+                val o = JSONObject(text)
+                // 上游返回 {latency, success, timeout}；失败也会带一个 latency，别当成测速结果
+                if (!o.optBoolean("success", false)) null
+                else o.optLong("latency", -1L).takeIf { it >= 0 }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun search(
         query: String,
         sources: List<Source>,

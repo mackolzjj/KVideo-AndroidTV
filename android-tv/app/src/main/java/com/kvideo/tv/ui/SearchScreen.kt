@@ -129,9 +129,10 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                 title = { Text(g.title, style = Kv.H2) },
                 text = {
                     Column {
-                        Text("${g.items.size} 个源，选一条线路", style = Kv.Tiny)
+                        Text("${g.items.size} 个源，按实测延迟排序", style = Kv.Tiny)
                         Spacer(Modifier.height(8.dp))
-                        g.items.forEach { item ->
+                        val ordered = g.items.sortedBy { vm.lineLatency[it.sourceId] ?: Long.MAX_VALUE }
+                        ordered.forEach { item ->
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -144,7 +145,11 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                             ) {
                                 Text(item.sourceName, fontSize = 13.sp, color = Kv.Ink)
                                 Spacer(Modifier.weight(1f))
-                                Text(item.remarks, style = Kv.Tiny)
+                                Text(
+                                    vm.lineLatency[item.sourceId]?.let { "${it}ms" }
+                                        ?: item.remarks.ifBlank { "测速中…" },
+                                    style = Kv.Tiny
+                                )
                             }
                         }
                     }
@@ -171,8 +176,12 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             items(vm.results) { g: ResultGroup ->
                 Column(
                     Modifier.clickable {
-                        if (g.items.size == 1) vm.openGroup(g, g.items.first())
-                        else pick = g
+                        if (g.items.size == 1) {
+                            vm.openGroup(g, g.items.first())
+                        } else {
+                            pick = g
+                            vm.pingGroup(g)
+                        }
                     }
                 ) {
                     PosterArt(g.poster, ratio = 1.5f, modifier = Modifier.fillMaxWidth())
