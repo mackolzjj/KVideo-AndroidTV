@@ -2857,7 +2857,7 @@ class MainActivity : ComponentActivity() {
     if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
   }
   function syncIptvMini() {
-    if (!iptvPlaying()) { kvMiniOn = true; kvMiniScrolled = false; kvMiniDrop(); return; }
+    if (!iptvPlaying()) { kvMiniOn = true; kvMiniScrolled = false; kvMiniDrop(); kvDropHeldClick(); return; }
     var host = kvMiniHost();
     if (!host) return;
     if (kvMiniOn) {
@@ -2873,6 +2873,7 @@ class MainActivity : ComponentActivity() {
   }
 
   function syncIptvPlayer() {
+    try { kvBindVideoClicks(); } catch (eB) {}
     // 已经离开 /iptv 就不再做补偿性 back()，否则会被退回直播页
     if (String(location.pathname || '').toLowerCase().indexOf('/iptv') < 0) {
       iptvPlayerPushed = false;
@@ -2963,12 +2964,49 @@ class MainActivity : ComponentActivity() {
       else if (!wantPaused && v.paused) v.play();
     } catch (e) {}
   }
-  document.addEventListener('click', function (ev) {
-    if (Date.now() < kvDblGuardUntil) {
-      ev.preventDefault();
-      ev.stopPropagation();
+  // 单击扣住 260ms：这 260ms 内来了第二下，就整对吞掉（双击完全不触发播放键，
+  // 也就没有「闪一下暂停」）；没来，才把这一下补发出去，播放/暂停会慢 260ms。
+  // 监听挂在 <video> 自己的捕获阶段 —— 点击必须在这里就停住，不能让它冒到
+  // 网页的播放层根节点（那里的 onClick 就是播放/暂停）。
+  var kvClickHold = null, kvReplaying = false, kvClickWindow = 260;
+  function kvOnVideoClick(ev) {
+    if (kvReplaying) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    // 刚处理完双击：随后那一批 click（第二下、以及浏览器补发的）一律吞掉，
+    // 不能再起一个新的「扣住再补发」，否则双击照样会切一次播放。
+    if (Date.now() < kvDblGuardUntil) return;
+    if (kvClickHold) return;
+    var target = ev.target, cx = ev.clientX, cy = ev.clientY;
+    var hold = { target: target, x: cx, y: cy };
+    hold.timer = setTimeout(function () {
+      if (kvClickHold !== hold) return;
+      kvClickHold = null;
+      kvReplaying = true;
+      try {
+        target.dispatchEvent(new MouseEvent('click', {
+          bubbles: true, cancelable: true, view: window,
+          clientX: hold.x, clientY: hold.y, detail: 1
+        }));
+      } catch (e) {}
+      kvReplaying = false;
+    }, kvClickWindow);
+    kvClickHold = hold;
+  }
+  function kvBindVideoClicks() {
+    var vids = document.querySelectorAll('video');
+    for (var i = 0; i < vids.length; i++) {
+      var v = vids[i];
+      if (v.getAttribute('data-kv-click') === '1') continue;
+      v.setAttribute('data-kv-click', '1');
+      v.addEventListener('click', kvOnVideoClick, true);
     }
-  }, true);
+  }
+  function kvDropHeldClick() {
+    if (!kvClickHold) return;
+    clearTimeout(kvClickHold.timer);
+    kvClickHold = null;
+  }
   document.addEventListener('touchstart', function (ev) {
     if (!ev.touches || ev.touches.length !== 1) { kvDblTs = 0; return; }
     var t = ev.touches[0], now = Date.now();
@@ -2980,12 +3018,11 @@ class MainActivity : ComponentActivity() {
       // 600ms 后把状态拨回双击之前 —— 否则双击进全屏会顺带暂停。
       kvDblGuardUntil = now + 450;
       kvLastDblAction = now;
+      // 第一下的 click 还扣在手里没发出去 —— 直接丢掉，播放/暂停一次都不会触发
+      kvDropHeldClick();
       var v = kvTapVideo, wantPaused = kvTapPaused;
-      // 第一下点击已经把播放切走了，这里**立刻**拨回去 —— 等 600ms 再拨，
-      // 那 600ms 就是肉眼看到的「短暂暂停」。450ms 后再拨一次，覆盖全屏过渡
-      // 期间可能又触发的一次暂停。
-      kvRestorePlay(v, wantPaused);
       kvToggleFullscreen();
+      // 兜底：全屏过渡个别情况下会让网页自己暂停，450ms 后对一次状态
       setTimeout(function () { kvRestorePlay(v, wantPaused); }, 450);
     } else {
       kvDblTs = now; kvDblX = t.clientX; kvDblY = t.clientY;
