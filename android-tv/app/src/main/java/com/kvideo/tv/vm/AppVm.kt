@@ -243,13 +243,17 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val next = recommendPage + 1
             val list = api.recommend(pageStart = next * 20, limit = 20)
-            // 豆瓣到底了会返回重复/空，那就绕回第一页
-            if (list.isEmpty()) {
-                recommendPage = 0
-                recommend = api.recommend(pageStart = 0, limit = 20)
-            } else {
+            if (list.isNotEmpty()) {
                 recommendPage = next
                 recommend = list
+            } else {
+                // 到底了绕回第一页；两次都拿不到（断网/服务端抽风）就保留现有内容，
+                // 别把首页刷成空白
+                val first = api.recommend(pageStart = 0, limit = 20)
+                if (first.isNotEmpty()) {
+                    recommendPage = 0
+                    recommend = first
+                }
             }
             refreshingHome = false
         }
@@ -789,10 +793,16 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun loadChannels() {
+    /** 当前 channels 对应的 M3U 地址：地址没变就不重复请求（切 tab 回来不闪） */
+    var channelsFor by mutableStateOf("")
+
+    fun loadChannels(force: Boolean = false) {
         if (liveUrl.isBlank()) return
+        if (!force && channelsFor == liveUrl && channels.isNotEmpty()) return
         viewModelScope.launch {
-            channels = api.channels(liveUrl)
+            val list = api.channels(liveUrl)
+            channels = list
+            if (list.isNotEmpty()) channelsFor = liveUrl
         }
     }
 

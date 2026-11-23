@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +49,10 @@ fun HomeScreen(vm: AppVm) {
     val recs = vm.recommend
     val heroItems = recs.take(3)
     val scroll = rememberScrollState()
+    // 直接用 scroll.value 判断会在每个滚动像素触发整页重组，用 derivedStateOf 只在跨阈值时变
+    val scrolled by androidx.compose.runtime.remember {
+        androidx.compose.runtime.derivedStateOf { scroll.value > 14 }
+    }
 
     Box(Modifier.fillMaxSize().background(Kv.Bg)) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
@@ -124,8 +129,8 @@ fun HomeScreen(vm: AppVm) {
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            if (scroll.value > 14) Color(0xF208090B) else Color(0x66000000),
-                            if (scroll.value > 14) Color(0xD908090B) else Color(0x22000000),
+                            if (scrolled) Color(0xF208090B) else Color(0x66000000),
+                            if (scrolled) Color(0xD908090B) else Color(0x22000000),
                             Color.Transparent
                         )
                     )

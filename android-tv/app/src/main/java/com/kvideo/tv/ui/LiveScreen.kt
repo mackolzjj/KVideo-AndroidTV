@@ -26,9 +26,9 @@ import com.kvideo.tv.vm.AppVm
 
 @Composable
 fun LiveScreen(vm: AppVm) {
-    // 直播源完全由用户自己填（高级设置里），App 不再内置任何频道清单
+    // 直播源完全由用户自己填（高级设置里），App 不再内置任何频道清单。
+    // 地址没变时 loadChannels() 内部会跳过，避免每次切回来都清空重拉。
     LaunchedEffect(vm.liveUrl) {
-        vm.channels = emptyList()
         if (vm.liveUrl.isNotBlank()) vm.loadChannels()
     }
 

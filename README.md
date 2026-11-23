@@ -1,8 +1,12 @@
 # KVideo Android
 
-KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Media3）。App 不含服务端，需要你自己的部署地址。
+**上游项目：[KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo)（MIT）** —— 本仓库是它的 Android 原生客户端，
+服务端接口、搜索规则、权限口径、播放器行为都以该仓库源码为准；App 本身不含服务端，需要你自己的 KVideo 部署地址。
 
-[下载 2.0.43](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
+- 客户端实现：[Kotlin](https://kotlinlang.org/) + [Jetpack Compose](https://developer.android.com/jetpack/compose) + [Media3](https://developer.android.com/media/media3)
+- 参考的源码：`lib/utils/search.ts`（检索过滤与打分）、`lib/hooks/useSubscriptionSync.ts`（源分流）、`lib/hooks/usePremiumHomePage.ts`（高级内容检索）、`app/api/*/route.ts`（接口契约）
+
+[下载 2.0.44](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv`
 
 ## 功能
 
@@ -49,3 +53,8 @@ cd android-tv
 ```
 
 推 `v*` 标签触发 GitHub Actions 建 Release，资产名 `KVideo-Android-<versionName>.apk`。
+
+## 许可
+
+上游 [KuekHaoYang/KVideo](https://github.com/KuekHaoYang/KVideo) 以 MIT 发布，本项目沿用同一许可，见 [LICENSE](LICENSE)。
+本仓库只包含客户端代码，不含上游服务端与任何影视内容。
