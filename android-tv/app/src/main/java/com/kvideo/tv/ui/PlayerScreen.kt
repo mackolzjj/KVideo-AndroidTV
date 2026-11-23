@@ -93,6 +93,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var epDialog by remember { mutableStateOf(false) }
     var subOff by remember { mutableStateOf(false) }
 
+    fun toggleSub() {
+        subOff = !subOff
+        runCatching {
+            exo.trackSelectionParameters = exo.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, subOff)
+                .build()
+        }
+    }
+
     // 线路顺序完全照上游：直播 = 代理(带 UA/Referer) → 直连（route.fallbacks）；
     // 点播 = 直连 → 代理（proxyMode=auto）。任何一条出错就换下一条，都试完才报错。
     var viaProxy by remember { mutableStateOf(vm.proxyMode == 2) }
@@ -283,106 +293,147 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     ),
                     modifier = Modifier.fillMaxWidth().height(24.dp)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = if (compact) 38 else 42) {
-                        exo.seekTo((position - 10_000).coerceAtLeast(0))
-                    }
-                    KvIconBtn(
-                        if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        if (playing) "暂停" else "播放",
-                        size = if (compact) 42 else 46
-                    ) {
-                        if (playing) exo.pause() else exo.play()
-                        playing = !playing
-                    }
-                    KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = if (compact) 38 else 42) {
-                        exo.seekTo(
-                            (position + 10_000).coerceAtMost(
-                                if (duration > 0) duration else position + 10_000
-                            )
-                        )
-                    }
-                    Spacer(Modifier.width(if (compact) 4.dp else 6.dp))
-                    Text(
-                        if (compact) "${fmt(position)}/${fmt(duration)}"
-                        else "${fmt(position)} / ${fmt(duration)}",
-                        fontSize = if (compact) 11.sp else 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        maxLines = 1
-                    )
-                    Spacer(Modifier.weight(1f))
 
-                    // 右侧组：竖屏窄屏只放图标/text，横屏才带文字，保证全屏键永远在屏幕内
-                    if (route.episodes.isNotEmpty()) {
-                        KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = if (compact) 38 else 42) {
-                            epDialog = true
+                if (compact) {
+                    // 竖屏窄屏：拆成两行。上面一行放功能键，下面一行只有 播放组 + 全屏，
+                    // 全屏键永远落在屏内（之前一行塞满 9 个控件，它被挤到屏幕外点不到）。
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (route.episodes.isNotEmpty()) {
+                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 36) { epDialog = true }
                         }
-                    }
-                    KvIconBtn(
-                        androidx.compose.material.icons.Icons.Filled.Subtitles,
-                        "字幕",
-                        size = if (compact) 38 else 42
-                    ) {
-                        subOff = !subOff
-                        runCatching {
-                            exo.trackSelectionParameters = exo.trackSelectionParameters
-                                .buildUpon()
-                                .setTrackTypeDisabled(
-                                    androidx.media3.common.C.TRACK_TYPE_TEXT, subOff
-                                )
-                                .build()
-                        }
-                    }
-                    Box {
+                        KvIconBtn(Icons.Filled.Subtitles, "字幕", size = 36) { toggleSub() }
                         Text(
-                            if (compact) "${"%.1f".format(speed)}X" else "倍速 ${"%.1f".format(speed)}X",
+                            "${"%.1f".format(speed)}X",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            maxLines = 1,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .clickable { speedOpen = !speedOpen }
-                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         )
-                        if (speedOpen) {
-                            Column(
-                                Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .offset(y = (-42).dp)
+                        KvIconBtn(Icons.Filled.Lock, "锁定", size = 36) {
+                            locked = true
+                            showControls = false
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "${fmt(position)}/${fmt(duration)}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 40) {
+                            exo.seekTo((position - 10_000).coerceAtLeast(0))
+                        }
+                        KvIconBtn(
+                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            if (playing) "暂停" else "播放",
+                            size = 44
+                        ) {
+                            if (playing) exo.pause() else exo.play()
+                            playing = !playing
+                        }
+                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 40) {
+                            exo.seekTo(
+                                (position + 10_000).coerceAtMost(
+                                    if (duration > 0) duration else position + 10_000
+                                )
+                            )
+                        }
+                        Spacer(Modifier.weight(1f))
+                        KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 44) {
+                            activity?.requestedOrientation = if (isLandscape)
+                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            else
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }
+                    }
+                    if (speedOpen) {
+                        SpeedList(
+                            speed = speed,
+                            onPick = { s ->
+                                speed = s
+                                exo.setPlaybackSpeed(s)
+                                speedOpen = false
+                            }
+                        )
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 42) {
+                            exo.seekTo((position - 10_000).coerceAtLeast(0))
+                        }
+                        KvIconBtn(
+                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            if (playing) "暂停" else "播放",
+                            size = 46
+                        ) {
+                            if (playing) exo.pause() else exo.play()
+                            playing = !playing
+                        }
+                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 42) {
+                            exo.seekTo(
+                                (position + 10_000).coerceAtMost(
+                                    if (duration > 0) duration else position + 10_000
+                                )
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "${fmt(position)} / ${fmt(duration)}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (route.episodes.isNotEmpty()) {
+                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 42) { epDialog = true }
+                        }
+                        KvIconBtn(Icons.Filled.Subtitles, "字幕", size = 42) { toggleSub() }
+                        Box {
+                            Text(
+                                "倍速 ${"%.1f".format(speed)}X",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(Kv.Surface)
-                                    .padding(6.dp)
-                            ) {
-                                listOf(0.5f, 1f, 1.25f, 1.5f, 2f).forEach { s ->
-                                    Text(
-                                        "${s}X",
-                                        fontSize = 12.sp,
-                                        fontWeight = if (s == speed) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (s == speed) Kv.Red else Color.White,
-                                        modifier = Modifier
-                                            .clickable {
-                                                speed = s
-                                                exo.setPlaybackSpeed(s)
-                                                speedOpen = false
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    .clickable { speedOpen = !speedOpen }
+                                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                            )
+                            if (speedOpen) {
+                                Column(
+                                    Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(y = (-42).dp)
+                                ) {
+                                    SpeedList(
+                                        speed = speed,
+                                        onPick = { s ->
+                                            speed = s
+                                            exo.setPlaybackSpeed(s)
+                                            speedOpen = false
+                                        }
                                     )
                                 }
                             }
                         }
-                    }
-                    KvIconBtn(Icons.Filled.Lock, "锁定", size = if (compact) 38 else 40) {
-                        locked = true
-                        showControls = false
-                    }
-                    // 按当前实际方向判断，不再用一个本地 boolean（那会和系统方向对不上）
-                    KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = if (compact) 38 else 40) {
-                        activity?.requestedOrientation = if (isLandscape)
-                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                        else
-                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        KvIconBtn(Icons.Filled.Lock, "锁定", size = 40) {
+                            locked = true
+                            showControls = false
+                        }
+                        KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 40) {
+                            activity?.requestedOrientation = if (isLandscape)
+                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            else
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }
                     }
                 }
             }
@@ -490,6 +541,29 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     )
                 }
             }
+        }
+    }
+}
+
+/** 倍速列表：竖屏弹在控制条上方，横屏弹在按钮上方 */
+@Composable
+private fun SpeedList(speed: Float, onPick: (Float) -> Unit) {
+    Column(
+        Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(Kv.Surface)
+            .padding(6.dp)
+    ) {
+        listOf(0.5f, 1f, 1.25f, 1.5f, 2f).forEach { s ->
+            Text(
+                "${s}X",
+                fontSize = 12.sp,
+                fontWeight = if (s == speed) FontWeight.Bold else FontWeight.Normal,
+                color = if (s == speed) Kv.Red else Color.White,
+                modifier = Modifier
+                    .clickable { onPick(s) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            )
         }
     }
 }
