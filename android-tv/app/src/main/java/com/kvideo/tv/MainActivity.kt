@@ -723,11 +723,24 @@ class MainActivity : ComponentActivity() {
     return root;
   }
 
-  // 直接用路由跳转兜底（播放页没有网页导航链接时用）
+  // 顶栏图标 → 页面。有的页面（播放页、收藏页）没有网页自己的导航链接，
+  // 只点原生入口会出现「点了没反应」。这里先点原生入口（保住 SPA 不重载），
+  // 350ms 后路径没变就直接跳路由。
   function kvGo(path) {
     try { location.href = path; } catch (e) {}
   }
-  function kvGoIptv() { kvGo('/iptv'); }
+  function kvAtPath(path) {
+    var p = String(location.pathname || '').toLowerCase();
+    return path === '/iptv' ? p.indexOf('/iptv') >= 0 : p === path;
+  }
+  function kvNav(sel, path) {
+    if (kvAtPath(path)) return;
+    var before = String(location.pathname || '');
+    var ok = sel ? clickNative(sel) : false;
+    setTimeout(function () {
+      if (String(location.pathname || '') === before) kvGo(path);
+    }, ok ? 350 : 0);
+  }
   function clickNative(sel) {
     var el = q(sel);
     if (!el) return false;
@@ -856,17 +869,16 @@ class MainActivity : ComponentActivity() {
       togglePopover(); return;
     }
     closePopover();
-    if (act === 'live') {
-      // 播放页没有网页的「直播」导航链接（顶栏被壳接管），点了没反应。
-      // 找不到原生入口就直接跳路由。
-      if (!clickNative('a[aria-label="直播"]')) kvGoIptv();
-    }
+    if (act === 'live') kvNav('a[aria-label="直播"]', '/iptv');
     else if (act === 'favorites') {
-      if (!clickNative('a[aria-label="我的收藏"]') &&
-          !clickNative('button[aria-label*="收藏"]') &&
-          !clickByText('收藏这个视频')) clickByText('收藏');
+      // 三种场景：有导航链接（首页/直播页）→ 直接点；播放页 → 收藏当前视频；
+      // 都没有（收藏页自己的头部把导航挡掉时）→ 跳 /favorites。
+      if (clickNative('a[aria-label="我的收藏"]')) {}
+      else if (clickNative('button[aria-label*="收藏"]') || clickByText('收藏这个视频') ||
+               clickByText('收藏')) {}
+      else kvGo('/favorites');
     }
-    else if (act === 'history') { if (!clickNative(history[0])) kvGo('/history'); }
+    else if (act === 'history') clickNative(history[0]);
     else if (act === 'logout') clickNative('button[aria-label="退出登录"]');
     else if (act === 'websettings') clickNative('a[aria-label="设置"]');
     else if (act === 'appsettings') {
