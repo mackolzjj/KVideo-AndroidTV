@@ -2883,8 +2883,17 @@ class MainActivity : ComponentActivity() {
     var mine = document.querySelector('[' + IPTV_CLOSE_ATTR + ']');
     if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
   }
+  function kvFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
   function syncIptvMini() {
     if (!iptvPlaying()) { kvMiniOn = true; kvMiniScrolled = false; kvMiniDrop(); kvDropHeldClick(); return; }
+    // 进（网页或原生）全屏时必须把迷你态的尺寸规则摘掉，否则 32vh/圆角那套
+    // !important 会把全屏画面又按回一张小卡片 —— 表现就是「横屏按了没反应」。
+    if (kvFullscreenElement()) {
+      kvMiniDrop();
+      return;
+    }
     var host = kvMiniHost();
     if (!host) return;
     if (kvMiniOn) {
@@ -3073,6 +3082,12 @@ class MainActivity : ComponentActivity() {
     var host = kvMiniHost();
     if (host && host.getAttribute(IPTV_MINI_ATTR) === '1') kvMiniPlace(host);
   }, { passive: true });
+  document.addEventListener('fullscreenchange', function () {
+    try { syncIptvMini(); } catch (e) {}
+  });
+  document.addEventListener('webkitfullscreenchange', function () {
+    try { syncIptvMini(); } catch (e) {}
+  });
 
   var lastRun = 0;
   var tail = null;
@@ -3692,8 +3707,9 @@ class MainActivity : ComponentActivity() {
                     loadProgress.visibility = View.GONE
                     webView.visibility = View.GONE
                     setupContainer.visibility = View.GONE
-                    // 全屏不再强制横屏：跟随手机当前方向（横着拿就横屏、竖着拿就竖屏）。
-                    // 之前写死 SENSOR_LANDSCAPE，双击进全屏会突然转屏，观感突兀。
+                    // 全屏仍转横屏：竖屏全屏时 16:9 画面只剩中间一条，黑边太大。
+                    // 已经是横屏时设这个标志等于无操作，不会二次旋转。
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     applySystemBars(true)
                 }
 
