@@ -2802,6 +2802,22 @@ class MainActivity : ComponentActivity() {
     return false;
   }
   // 自己数双击：WebView 对合成的 dblclick 不一定可靠，touchstart 最稳。
+  var kvDblGuardUntil = 0;     // 双击后的极短时间内吞掉 click（网页靠 click 切播放/暂停）
+  var kvLastDblAction = 0;     // 上一次由 touch 触发的全屏切换时刻，用来给 dblclick 去重
+  var kvTapVideo = null, kvTapPaused = false;
+  function kvRestorePlay(v, wantPaused) {
+    if (!v) return;
+    try {
+      if (wantPaused && !v.paused) v.pause();
+      else if (!wantPaused && v.paused) v.play();
+    } catch (e) {}
+  }
+  document.addEventListener('click', function (ev) {
+    if (Date.now() < kvDblGuardUntil) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
   document.addEventListener('touchstart', function (ev) {
     if (!ev.touches || ev.touches.length !== 1) { kvDblTs = 0; return; }
     var t = ev.touches[0], now = Date.now();
@@ -2809,14 +2825,27 @@ class MainActivity : ComponentActivity() {
     if (now - kvDblTs < 320 &&
         Math.abs(t.clientX - kvDblX) < 40 && Math.abs(t.clientY - kvDblY) < 40) {
       kvDblTs = 0;
+      // 第一下点击已经让网页切过一次播放/暂停，第二下的 click 吞掉，
+      // 600ms 后把状态拨回双击之前 —— 否则双击进全屏会顺带暂停。
+      kvDblGuardUntil = now + 450;
+      kvLastDblAction = now;
+      var v = kvTapVideo, wantPaused = kvTapPaused;
       kvToggleFullscreen();
+      setTimeout(function () { kvRestorePlay(v, wantPaused); }, 600);
     } else {
       kvDblTs = now; kvDblX = t.clientX; kvDblY = t.clientY;
+      kvTapVideo = kvPlayingVideo();
+      kvTapPaused = kvTapVideo ? !!kvTapVideo.paused : false;
     }
   }, { capture: true, passive: true });
   document.addEventListener('dblclick', function (ev) {
     var v = ev.target && ev.target.closest ? ev.target.closest('video') : null;
-    if (v) { ev.preventDefault(); kvToggleFullscreen(); }
+    if (!v) return;
+    ev.preventDefault();
+    // touch 那条已经切过了就不再切，否则会「进去又出来」
+    if (Date.now() - kvLastDblAction < 800) return;
+    kvLastDblAction = Date.now();
+    kvToggleFullscreen();
   }, true);
 
   var lastRun = 0;
