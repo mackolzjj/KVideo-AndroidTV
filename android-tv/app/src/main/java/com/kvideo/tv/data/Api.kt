@@ -81,16 +81,53 @@ class Api {
         }
     }
 
-    /** 订阅源列表：/api/config 把 JSON 塞在 subscriptionSources 字符串字段里 */
+    /**
+     * 源列表。注意 /api/config 里的 subscriptionSources **不是源本身**，是一串订阅地址
+     * （形如 {name, url}），真正的源要再去 GET 那个 url 取数组 —— 老的网页客户端也是这么两级拉的。
+     * 两种形状都要认：带 baseUrl 的直接用，带 url 的当订阅继续展开（只展开一层，防环）。
+     */
     suspend fun sources(): List<Source> = withContext(Dispatchers.IO) {
+        val out = LinkedHashMap<String, Source>()
+        fun addAll(list: List<Source>) {
+            list.forEach { s -> out[s.id + "@" + s.baseUrl] = s }
+        }
         try {
             Net.client.newCall(Net.builder("/api/config").build()).execute().use { r ->
                 val text = r.body?.string().orEmpty()
-                if (text.isEmpty()) return@withContext emptyList()
-                val root = JSONObject(text)
-                val raw = root.optString("subscriptionSources", "")
-                if (raw.isBlank()) return@withContext emptyList()
-                val arr = JSONArray(raw)
+                if (text.isNotEmpty()) {
+                    val raw = JSONObject(text).optString("subscriptionSources", "")
+                    if (raw.isNotBlank()) {
+                        val arr = JSONArray(raw)
+                        val direct = mutableListOf<Source>()
+                        val subUrls = mutableListOf<String>()
+                        for (i in 0 until arr.length()) {
+                            val o = arr.optJSONObject(i) ?: continue
+                            val s = sourceOf(o)
+                            if (s != null) direct.add(s) else {
+                                val u = o.optString("url", "")
+                                if (u.isNotBlank()) subUrls.add(u)
+                            }
+                        }
+                        addAll(direct)
+                        subUrls.forEach { u -> addAll(fetchSubscription(u)) }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // 拉不到就返回已解析到的部分
+        }
+        out.values.toList()
+    }
+
+    /** 订阅文件就是一串源对象，直接 GET（局域网地址，不带服务器 cookie） */
+    private fun fetchSubscription(url: String): List<Source> {
+        return try {
+            Net.client.newCall(
+                Request.Builder().url(url).header("User-Agent", "KVideo-Android/2.0").build()
+            ).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (text.isBlank()) return emptyList()
+                val arr = JSONArray(text)
                 (0 until arr.length()).mapNotNull { i -> sourceOf(arr.optJSONObject(i)) }
             }
         } catch (e: Exception) {

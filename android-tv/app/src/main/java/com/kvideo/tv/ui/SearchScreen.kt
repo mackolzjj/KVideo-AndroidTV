@@ -93,7 +93,10 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
         } else if (vm.results.isEmpty()) {
-            KvEmpty("没有结果。换个片名，或检查服务器能不能连上资源站。")
+            KvEmpty(
+                if (vm.sources.isEmpty()) "没有可用片源：订阅没拉到（设置页「已连接」后面应该是 122 个源，不是 0）"
+                else "没有结果。换个片名试试。"
+            )
         }
 
         LazyVerticalGrid(
