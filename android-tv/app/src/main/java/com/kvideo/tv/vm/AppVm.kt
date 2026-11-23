@@ -112,9 +112,15 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     val canPremium: Boolean
         get() = premiumUnlocked || accountRole == "super_admin" || accountRole == "admin"
 
-    /** 搜索用全部启用的源（上游就是拿订阅全量去搜；premium 只是另一个浏览入口） */
+    /**
+     * 官方逻辑（lib/hooks/useSubscriptionSync.ts）：
+     * 同步订阅时就把返回的源**分成两份** —— group==='premium' 进 premiumSources，
+     * 其余进普通 sources；而搜索只用普通 sources（useSearchAction 读 settings.sources）。
+     *
+     * 所以成人 / 伦理那批源永远不进搜索，只能从高级内容页（密码门）里看。
+     */
     val visibleSources: List<Source>
-        get() = sources
+        get() = sources.filter { it.group != "premium" }
 
     /** 探活结果：实测 63 个普通源里只有十来个真的能返回内容，其余是死源 */
     var aliveSources by mutableStateOf<Set<String>>(emptySet())
