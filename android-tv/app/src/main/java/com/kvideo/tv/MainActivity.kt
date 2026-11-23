@@ -88,7 +88,9 @@ class MainActivity : ComponentActivity() {
          *    「节流立即扫 + 尾部补扫」，syncMenu() 稳态不产生 DOM 变更。
          * 8. 播放页左右快退/快进圆钮按 aria-label 打标后缩小，保留 44px 热区。
          */
-        private const val CHROME_INJECT_JS_A = """
+        // A 段已经顶到 JVM 单字符串 65535 字节上限（1.1.143 加 CSS 后超了），
+        // 改成普通 val：非 const 的大字面量 kotlinc 会拆块，不再进常量池。
+        private val CHROME_INJECT_JS_A = """
 (function () {
   if (window.KVideoChrome) { window.KVideoChrome.sync(); return; }
 
@@ -466,6 +468,47 @@ class MainActivity : ComponentActivity() {
       'zoom:0.82 !important;width:max-content !important;min-width:0 !important;' +
       'max-width:300px !important;box-sizing:border-box !important;}';
 
+  // ---------- Netflix 皮肤层（1.1.143） ----------
+  // 参照 Netflix：纯黑、零装饰，唯一强调色 #e50914 只用在进度条。
+  // 只改「外观 + 间距」，不动 DOM 结构、不动按钮顺序，也不接管任何行为，
+  // 这样播放/拖进度/倍速菜单这些已有逻辑一条都不用碰。
+  var NETFLIX_CSS =
+    // 底栏：抹掉玻璃胶囊（模糊/描边/圆角/投影），换成贴着屏幕底边的黑渐变。
+    // 竖屏内嵌播放器与横屏全屏共用同一套类名，一处生效两处都跟着变。
+    '.player-controls-glass{' +
+      'background:linear-gradient(to top,rgba(0,0,0,.92),rgba(0,0,0,.30) 62%,transparent) !important;' +
+      '-webkit-backdrop-filter:none !important;backdrop-filter:none !important;' +
+      'border:0 !important;border-radius:0 !important;box-shadow:none !important;' +
+      'padding:30px 16px 10px !important;}' +
+    '.player-controls-bar{padding:0 !important;}' +
+    // 行内间距收到 2px：Netflix 的图标是挨着的，靠 46px 点击区撑开，不靠 gap。
+    '.player-controls-row{gap:2px !important;}' +
+    '.player-controls-left,.player-controls-right{gap:2px !important;}' +
+    // 所有图标钮：去掉圆底/描边/模糊，白图标 + 4px 方角，按下给 10% 白。
+    '.player-controls-left button,.player-controls-right button{' +
+      'border-radius:4px !important;background:transparent !important;border:0 !important;' +
+      'box-shadow:none !important;color:#FFFFFF !important;' +
+      '-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}' +
+    '.player-controls-left button:hover,.player-controls-right button:hover,' +
+    '.player-controls-left button:active,.player-controls-right button:active{' +
+      'background:rgba(255,255,255,.10) !important;}' +
+    // 进度条：4px 细线（原 8px），已播 #e50914，缓冲半透白；拖点常态隐藏，
+    // 悬停或按住才冒出来 —— 这是 Netflix 的手感，也避免小屏上一直杵一个白点。
+    '.slider-track{height:4px !important;border-radius:2px !important;' +
+      'background:rgba(255,255,255,.28) !important;}' +
+    '.slider-range{background:#e50914 !important;border-radius:2px !important;}' +
+    '.slider-buffer{background:rgba(255,255,255,.40) !important;border-radius:2px !important;}' +
+    '.slider-thumb{width:14px !important;height:14px !important;background:#e50914 !important;' +
+      'box-shadow:none !important;transform:translate(-50%,-50%) scale(0) !important;' +
+      'transition:transform .16s ease !important;}' +
+    '.slider-track:hover .slider-thumb,.slider-track:active .slider-thumb{' +
+      'transform:translate(-50%,-50%) scale(1) !important;}' +
+    // 时间：等宽数字，播放中位宽不跳。
+    '.player-time-display,.player-duration-display{' +
+      'font-variant-numeric:tabular-nums !important;font-feature-settings:"tnum" 1 !important;' +
+      'font-size:12.5px !important;font-weight:600 !important;letter-spacing:.01em !important;' +
+      'color:rgba(255,255,255,.92) !important;}';
+
   // 手势提示浮层：跟手拖进度时显示目标时间/偏移/进度条，音量亮度时显示百分比。
   // 自建 DOM 挂在 body 上，不受 React 管理，也不吃网页的 CSS 变量。
   // 1.1.33 起与原生音量/亮度/锁定提示统一：45% 半透底、12% 白细描边、10px 圆角、蓝色进度条，
@@ -671,7 +714,7 @@ class MainActivity : ComponentActivity() {
     favorites.join(',') + ',' + history.join(',') + '{display:none !important;}' +
     prefixed('html.' + FAIL_CLS + ' ', history) + '{display:block !important;}' +
     MENU_CSS + SEEK_CSS + RATE_CSS + SPEED_MENU_CSS + SPEED_MENU_ANIM + MORE_CSS + MORE_MENU_CSS +
-    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS + IPTV_CSS;
+    THEME_HINT_CSS + DOCK_CSS + HUD_CSS + LOGO_CSS + IPTV_CSS + NETFLIX_CSS;
 
   function btn(act, label, icon) {
     return '<button type="button" data-kvideo-act="' + act + '" ' +
