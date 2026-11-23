@@ -2,7 +2,7 @@
 
 KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Media3）。App 不含服务端，需要你自己的部署地址。
 
-[下载 2.0.35](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
+[下载 2.0.36](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv` · 上游 MIT
 
 ## 功能
 
@@ -24,11 +24,9 @@ KVideo 服务端的**原生 Android 客户端**（Kotlin + Jetpack Compose + Med
 **首页**
 - 半屏 hero，可横滑 3 张（TOP 角标 + 豆瓣分 + 翻页圆点）
 - 继续观看：16:9 宽卡，带集数、剩余时长、红色进度
-- 今日热播：两行六张，带豆瓣评分角标；「全部 ›」进热播列表页
+- 今日热播：两行六张，带豆瓣评分角标；右上「换一批 ↻」原地换一屏（page_start 加 20，不多开页面）
 - 骨架屏占位、顶栏滚动渐变、底栏选中态上浮
 
-**热播列表页**
-- 电影 / 剧集 × 热门 / 最新 / 经典，滚到底自动加 20 部
 
 **内容与权限**
 - 首页豆瓣推荐、继续观看（真实进度）、今日热播

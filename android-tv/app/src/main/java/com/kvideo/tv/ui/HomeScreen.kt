@@ -90,7 +90,10 @@ fun HomeScreen(vm: AppVm) {
                 }
 
                 if (recs.isNotEmpty()) {
-                    SectionHeader("今日热播", action = "全部 ›") { vm.openFeed() }
+                    SectionHeader(
+                        "今日热播",
+                        action = if (vm.refreshingHome) "换一批中…" else "换一批 ↻"
+                    ) { vm.refreshRecommend() }
                     // 两行六张：去掉「正在直播」后腾出来的高度拿来把它铺满
                     listOf(recs.take(3), recs.drop(3).take(3))
                         .filter { it.isNotEmpty() }

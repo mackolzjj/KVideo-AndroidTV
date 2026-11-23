@@ -45,7 +45,6 @@ fun KvApp(vm: AppVm = viewModel()) {
                 is Route.Settings -> SettingsScreen(vm)
                 is Route.Premium -> PremiumScreen(vm)
                 is Route.Advanced -> AdvancedScreen(vm)
-                is Route.Feed -> FeedScreen(vm)
                 is Route.Detail -> DetailScreen(vm, route)
                 is Route.Player -> PlayerScreen(vm, route)
             }

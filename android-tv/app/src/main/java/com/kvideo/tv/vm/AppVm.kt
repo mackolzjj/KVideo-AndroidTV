@@ -27,8 +27,6 @@ sealed interface Route {
     data object Settings : Route
     data object Premium : Route
     data object Advanced : Route
-    /** 豆瓣热播列表（首页「全部 ›」的去处，不再是空搜索框） */
-    data object Feed : Route
     data class Detail(val id: String, val sourceId: String) : Route
     data class Player(
         val url: String,
@@ -235,50 +233,26 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     }
     var recommend by mutableStateOf<List<DoubanItem>>(emptyList())
 
-    // ---- 热播列表页（电影/剧集 × 热门/最新/经典，每次 20 部）----
-    var feedType by mutableStateOf("movie")
-    var feedTag by mutableStateOf("热门")
-    var feedItems by mutableStateOf<List<DoubanItem>>(emptyList())
-    var feedLoading by mutableStateOf(false)
-    var feedHasMore by mutableStateOf(true)
-    private var feedPage = 0
-    private var feedJob: Job? = null
+    // ---- 首页「换一批 ↻」：page_start +20 原地换一屏，不多开页面 ----
+    private var recommendPage = 0
+    var refreshingHome by mutableStateOf(false)
 
-    fun openFeed() {
-        go(Route.Feed)
-        if (feedItems.isEmpty()) loadFeed(reset = true)
-    }
-
-    fun setFeedFilter(type: String = feedType, tag: String = feedTag) {
-        if (type == feedType && tag == feedTag && feedItems.isNotEmpty()) return
-        feedType = type
-        feedTag = tag
-        loadFeed(reset = true)
-    }
-
-    fun loadFeed(reset: Boolean) {
-        if (feedLoading && !reset) return
-        feedJob?.cancel()
-        if (reset) {
-            feedItems = emptyList()
-            feedPage = 0
-            feedHasMore = true
+    fun refreshRecommend() {
+        if (refreshingHome) return
+        refreshingHome = true
+        viewModelScope.launch {
+            val next = recommendPage + 1
+            val list = api.recommend(pageStart = next * 20, limit = 20)
+            // 豆瓣到底了会返回重复/空，那就绕回第一页
+            if (list.isEmpty()) {
+                recommendPage = 0
+                recommend = api.recommend(pageStart = 0, limit = 20)
+            } else {
+                recommendPage = next
+                recommend = list
+            }
+            refreshingHome = false
         }
-        if (!feedHasMore) return
-        feedLoading = true
-        feedJob = viewModelScope.launch {
-            val list = api.recommend(feedTag, feedType, pageStart = feedPage * 20, limit = 20)
-            // 去重：豆瓣同一部片在不同页偶尔会重复
-            val seen = feedItems.map { it.id }.toHashSet()
-            feedItems = feedItems + list.filter { it.id !in seen }
-            feedHasMore = list.size >= 20
-            if (feedHasMore) feedPage += 1
-            feedLoading = false
-        }
-    }
-
-    fun loadMoreFeed() {
-        if (!feedLoading && feedHasMore) loadFeed(reset = false)
     }
     var history by mutableStateOf(store.history())
     var favorites by mutableStateOf(store.favorites())
@@ -535,6 +509,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
 
     fun boot() {
         if (serverUrl.isBlank()) return
+        recommendPage = 0
         Net.base = serverUrl
         viewModelScope.launch {
             busy = true
