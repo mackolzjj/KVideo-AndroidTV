@@ -1,5 +1,7 @@
 package com.kvideo.tv.ui
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -158,7 +160,8 @@ fun HomeScreen(vm: AppVm) {
     }
 }
 
-/** 半屏 hero：可横滑 3 张，角标 + 翻页圆点 */
+/** 半屏 hero：可横滑 3 张，角标 + 翻页圆点（Pager 在 Compose 1.6 仍是实验 API） */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HeroPager(items: List<DoubanItem>, onPlay: (String) -> Unit) {
     val pager = rememberPagerState(pageCount = { if (items.isEmpty()) 1 else items.size })
