@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -80,6 +81,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var speedOpen by remember { mutableStateOf(false) }
     var landscape by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    var epDialog by remember { mutableStateOf(false) }
+    var subOff by remember { mutableStateOf(false) }
 
     // 线路顺序完全照上游：直播 = 代理(带 UA/Referer) → 直连（route.fallbacks）；
     // 点播 = 直连 → 代理（proxyMode=auto）。任何一条出错就换下一条，都试完才报错。
@@ -119,7 +122,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         errorText = reason
     }
 
-    DisposableEffect(Unit) {
+    // key 用 URL：换集时重新准备播放器（exo 实例本身仍复用）
+    DisposableEffect(route.url) {
+        fbIndex = 0
+        viaProxy = vm.proxyMode == 2
+        errorText = null
         play(if (viaProxy) proxyUrlOf(route.url) else route.url)
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -274,6 +281,38 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         color = Color.White
                     )
                     Spacer(Modifier.weight(1f))
+                    if (route.episodes.isNotEmpty()) {
+                        Text(
+                            "剧集",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { epDialog = true }
+                                .padding(horizontal = 9.dp, vertical = 8.dp)
+                        )
+                    }
+                    Text(
+                        if (subOff) "字幕关" else "字幕",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (subOff) Kv.Ink3 else Color.White,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                subOff = !subOff
+                                runCatching {
+                                    exo.trackSelectionParameters = exo.trackSelectionParameters
+                                        .buildUpon()
+                                        .setTrackTypeDisabled(
+                                            androidx.media3.common.C.TRACK_TYPE_TEXT, subOff
+                                        )
+                                        .build()
+                                }
+                            }
+                            .padding(horizontal = 9.dp, vertical = 8.dp)
+                    )
                     Box {
                         Text(
                             "倍速 ${"%.1f".format(speed)}X",
@@ -342,6 +381,48 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             ) {
                 Icon(Icons.Filled.LockOpen, "解锁", tint = Color.White, modifier = Modifier.size(20.dp))
             }
+        }
+
+        if (epDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { epDialog = false },
+                title = { Text(route.title, fontSize = 15.sp, fontWeight = FontWeight.Bold) },
+                text = {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.heightIn(max = 360.dp)
+                    ) {
+                        items(route.episodes) { ep ->
+                            Text(
+                                ep.name,
+                                fontSize = 13.sp,
+                                color = if (ep.index == route.epIndex) Kv.Red else Color.White,
+                                fontWeight = if (ep.index == route.epIndex) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        epDialog = false
+                                        val det = vm.detail
+                                        if (det != null) {
+                                            vm.switchEpisode(
+                                                route.videoId, route.sourceId, ep, det, route.title
+                                            )
+                                        }
+                                    }
+                                    .padding(vertical = 10.dp)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Text(
+                        "关闭",
+                        fontSize = 13.sp,
+                        color = Kv.Ink2,
+                        modifier = Modifier.clickable { epDialog = false }.padding(8.dp)
+                    )
+                },
+                containerColor = Kv.Surface
+            )
         }
 
         if (errorText != null) {

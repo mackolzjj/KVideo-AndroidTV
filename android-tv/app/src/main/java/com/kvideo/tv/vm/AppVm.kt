@@ -41,7 +41,9 @@ sealed interface Route {
         /** 直播流 */
         val isLive: Boolean = false,
         /** 备用线路：主线路出错后依次重试（上游 IPTVPlayer 是「代理失败再试直连」） */
-        val fallbacks: List<String> = emptyList()
+        val fallbacks: List<String> = emptyList(),
+        /** 播放器里的「剧集」面板用 */
+        val episodes: List<com.kvideo.tv.data.Episode> = emptyList()
     ) : Route
 }
 
@@ -466,8 +468,37 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 epIndex = ep.index,
                 episodeName = ep.name,
                 mime = if (ep.url.contains(".m3u8", true))
-                    androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null
+                    androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null,
+                episodes = d.episodes
             )
+        )
+    }
+
+    /** 播放器里换集：用同一部片的另一集替换当前播放 */
+    fun switchEpisode(videoId: String, sourceId: String, ep: com.kvideo.tv.data.Episode, detail: Detail, title: String) {
+        store.pushHistory(
+            SavedItem(
+                id = detail.id,
+                name = detail.name,
+                poster = detail.poster,
+                sourceId = detail.sourceId,
+                episodeIndex = ep.index,
+                episodeName = ep.name
+            )
+        )
+        history = store.history()
+        backStack = backStack.dropLast(1)
+        route = Route.Player(
+            url = Net.abs(ep.url),
+            title = title,
+            subtitle = ep.name,
+            videoId = videoId,
+            sourceId = sourceId,
+            epIndex = ep.index,
+            episodeName = ep.name,
+            mime = if (ep.url.contains(".m3u8", true))
+                androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null,
+            episodes = detail.episodes
         )
     }
 
