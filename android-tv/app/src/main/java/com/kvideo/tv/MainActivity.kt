@@ -541,6 +541,8 @@ class MainActivity : ComponentActivity() {
   var IPTV_OPEN_ATTR = 'data-kv-iptv-open';
   var IPTV_BTN_ATTR = 'data-kv-iptv-btn';
   var IPTV_CLOSE_ATTR = 'data-kv-iptv-close';
+  var IPTV_MINI_ATTR = 'data-kv-iptv-mini';
+  var IPTV_MINI_BTNS_ATTR = 'data-kv-iptv-mini-btns';
   var IPTV_CSS =
     '[' + IPTV_CHIPS_ATTR + ']{display:none !important;}' +
     '[' + IPTV_BAR_ATTR + '][' + IPTV_OPEN_ATTR + '="1"]{' +
@@ -590,7 +592,28 @@ class MainActivity : ComponentActivity() {
     // 播放器底部控制条原本贴着屏幕下沿，全面屏手势上滑很容易误触到它。
     // 加一点底部留白：env() 在没有 viewport-fit=cover 时是 0，所以固定补 10px 兜底。
     '[data-controls][class*="bottom-0"]{' +
-      'padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)) !important;}';
+      'padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)) !important;}' +
+    // 迷你播放器：直播页把全屏浮层收成顶部一条，下面的频道列表露出来可以直接换台。
+    '[' + IPTV_MINI_ATTR + '="1"]{' +
+      'position:fixed !important;top:calc(env(safe-area-inset-top, 0px) + 8px) !important;' +
+      'left:8px !important;right:8px !important;bottom:auto !important;' +
+      'height:32vh !important;max-height:32vh !important;min-height:0 !important;' +
+      'border-radius:18px !important;overflow:hidden !important;z-index:9998 !important;' +
+      'border:1px solid rgba(255,255,255,.10) !important;' +
+      'box-shadow:0 10px 28px rgba(0,0,0,.55) !important;}' +
+    '[' + IPTV_MINI_ATTR + '="1"] > div:first-child{width:100% !important;flex:1 1 100% !important;}' +
+    '[' + IPTV_MINI_ATTR + '="1"] [data-controls],' +
+    '[' + IPTV_MINI_ATTR + '="1"] [data-sidebar]{display:none !important;}' +
+    '[' + IPTV_MINI_ATTR + '="1"] video{object-fit:contain !important;}' +
+    '[' + IPTV_MINI_BTNS_ATTR + ']{position:fixed !important;z-index:9999 !important;' +
+      'top:calc(env(safe-area-inset-top, 0px) + 14px) !important;right:16px !important;' +
+      'display:flex !important;gap:8px !important;align-items:center !important;}' +
+    '[' + IPTV_MINI_BTNS_ATTR + '] button{width:34px !important;height:34px !important;' +
+      'border-radius:50% !important;border:1px solid rgba(255,255,255,.18) !important;' +
+      'background:rgba(0,0,0,.55) !important;color:#fff !important;font-size:15px !important;' +
+      'line-height:1 !important;display:flex !important;align-items:center !important;' +
+      'justify-content:center !important;padding:0 !important;' +
+      '-webkit-tap-highlight-color:transparent;}';
 
   // 收起时必须包含注入菜单自己：ATTR 是「顶栏行」的属性（data-kvideo-topbar），
   // 只藏行的话菜单还浮在原处 —— 这就是「上滑后栏还在、只剩图标」的原因。
@@ -2748,6 +2771,107 @@ class MainActivity : ComponentActivity() {
     }, 240);
   }
 
+  // ---- 直播页迷你播放器 ----------------------------------------------------
+  // 网页的播放层是 fixed inset-0 的浮层：一开播整页被盖住，换台要先退出。
+  // 这里把浮层本身收成顶部一条（32vh），下面的频道列表露出来，点一下就是换台
+  // （点的是网页自己的列表，直接走它的 setActiveChannel）。右上角保留两枚钮：
+  // 收起成迷你 / 放大回全屏。
+  var kvMiniOn = true;
+  var kvMiniScrolled = false;   // 本轮播放是否已把列表滚到迷你条下方
+  function kvScrollListUnderMini(host) {
+    if (kvMiniScrolled || !host) return;
+    try {
+      var g = document.querySelector('div[class*="grid-cols-2"]');
+      if (!g) {
+        // 上游改 class 时的兜底：迷你条下方第一枚「够大」的按钮，其父节点就是频道网格
+        var hostBottom = host.getBoundingClientRect().bottom;
+        var all = document.querySelectorAll('button');
+        for (var i = 0; i < all.length; i++) {
+          var b = all[i];
+          if (host.contains(b) || document.querySelector('[' + IPTV_MINI_BTNS_ATTR + ']').contains(b)) continue;
+          var br = b.getBoundingClientRect();
+          if (br.width < 80 || br.height < 32) continue;
+          if (br.top < hostBottom) continue;
+          g = b.parentElement; break;
+        }
+      }
+      if (!g) return;
+      var sy = window.scrollY || document.documentElement.scrollTop || 0;
+      var gridTop = g.getBoundingClientRect().top + sy;
+      var want = host.getBoundingClientRect().bottom + 12;
+      if (Math.abs(gridTop - want) < 24) { kvMiniScrolled = true; return; }
+      window.scrollTo(0, Math.max(0, gridTop - want));
+      kvMiniScrolled = true;
+    } catch (e) {}
+  }
+  function kvMiniHost() {
+    var v = iptvPlaying();
+    if (!v) return null;
+    var vw = window.innerWidth || 0, el = v, hops = 0;
+    while (el && el !== document.body && hops < 6) {
+      var cs = null;
+      try { cs = window.getComputedStyle(el); } catch (e) { cs = null; }
+      if (cs && cs.position === 'fixed') {
+        var r = el.getBoundingClientRect();
+        if (r.width >= vw * 0.9) return el;
+      }
+      el = el.parentElement; hops++;
+    }
+    return null;
+  }
+  function kvMiniButtons() {
+    var box = document.querySelector('[' + IPTV_MINI_BTNS_ATTR + ']');
+    if (box) return box;
+    box = document.createElement('div');
+    box.setAttribute(IPTV_MINI_BTNS_ATTR, '1');
+    var full = document.createElement('button');
+    full.type = 'button';
+    full.setAttribute('aria-label', '全屏');
+    full.textContent = '⤢';
+    full.addEventListener('click', function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      kvMiniOn = false;
+      syncIptvMini();
+    });
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label', '关闭');
+    close.textContent = '✕';
+    close.addEventListener('click', function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      iptvClosePlayer();
+    });
+    box.appendChild(full);
+    box.appendChild(close);
+    (document.body || document.documentElement).appendChild(box);
+    return box;
+  }
+  function kvMiniDrop() {
+    var hosts = document.querySelectorAll('[' + IPTV_MINI_ATTR + ']');
+    for (var i = 0; i < hosts.length; i++) hosts[i].removeAttribute(IPTV_MINI_ATTR);
+    var box = document.querySelector('[' + IPTV_MINI_BTNS_ATTR + ']');
+    if (box && box.parentNode) box.parentNode.removeChild(box);
+  }
+  function kvMiniDropClose() {
+    var mine = document.querySelector('[' + IPTV_CLOSE_ATTR + ']');
+    if (mine && mine.parentNode) mine.parentNode.removeChild(mine);
+  }
+  function syncIptvMini() {
+    if (!iptvPlaying()) { kvMiniOn = true; kvMiniScrolled = false; kvMiniDrop(); return; }
+    var host = kvMiniHost();
+    if (!host) return;
+    if (kvMiniOn) {
+      if (host.getAttribute(IPTV_MINI_ATTR) !== '1') host.setAttribute(IPTV_MINI_ATTR, '1');
+      kvMiniButtons();
+      // 等一帧让 32vh 的高度落定，再把频道列表滚到迷你条正下方
+      setTimeout(function () { kvScrollListUnderMini(host); }, 120);
+    } else {
+      if (host.getAttribute(IPTV_MINI_ATTR) === '1') host.removeAttribute(IPTV_MINI_ATTR);
+      var box = document.querySelector('[' + IPTV_MINI_BTNS_ATTR + ']');
+      if (box && box.parentNode) box.parentNode.removeChild(box);
+    }
+  }
+
   function syncIptvPlayer() {
     // 已经离开 /iptv 就不再做补偿性 back()，否则会被退回直播页
     if (String(location.pathname || '').toLowerCase().indexOf('/iptv') < 0) {
@@ -2762,7 +2886,8 @@ class MainActivity : ComponentActivity() {
           iptvPlayerPushed = true;
         } catch (e) { iptvPlayerPushed = false; }
       }
-      iptvEnsureClose();
+      if (kvMiniOn) kvMiniDropClose();
+      else iptvEnsureClose();
       return;
     }
     if (iptvPlayerPushed) {
@@ -2882,10 +3007,10 @@ class MainActivity : ComponentActivity() {
   var tail = null;
   function schedule() {
     var now = Date.now();
-    if (now - lastRun >= 120) { lastRun = now; syncIptvFilter(); syncIptvPlayer(); mark(); syncMenu(); }
+    if (now - lastRun >= 120) { lastRun = now; syncIptvFilter(); syncIptvPlayer(); syncIptvMini(); mark(); syncMenu(); }
     if (tail) clearTimeout(tail);
     tail = setTimeout(function () {
-      tail = null; lastRun = Date.now(); syncIptvFilter(); syncIptvPlayer(); mark(); syncMenu();
+      tail = null; lastRun = Date.now(); syncIptvFilter(); syncIptvPlayer(); syncIptvMini(); mark(); syncMenu();
     }, 200);
   }
 
@@ -3117,6 +3242,7 @@ class MainActivity : ComponentActivity() {
   syncMenu();
   try { syncIptvFilter(); } catch (eIptv) {}
   try { syncIptvPlayer(); } catch (eIptvP) {}
+  try { syncIptvMini(); } catch (eIptvM) {}
   // 播放器由 React 挂载/重渲染：监听 class / aria-label / style 三种变化
   // （自己的写入靠 forceStyle「值相同不写」+ fadeRunning 闸门收尾，不会自触发），
   // 再补一个 1s 低频全量扫描，覆盖注入早于 hydrate、Portal 挂载等漏掉的情况。
