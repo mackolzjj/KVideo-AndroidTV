@@ -99,6 +99,18 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 画面比例档位（双击画面中间循环切换，记住上次选择） */
+    var ratioMode: Int
+        get() = store.ratioMode
+        set(v) {
+            store.ratioMode = v
+            ratioTick++
+        }
+
+    /** 只是为了让 Compose 感知 ratioMode 变了（store 不是 state） */
+    var ratioTick by mutableStateOf(0)
+        private set
+
     /** 播放倍速：播放页改动后记住，下一集/下次进来沿用 */
     var playSpeed: Float
         get() = store.playSpeed

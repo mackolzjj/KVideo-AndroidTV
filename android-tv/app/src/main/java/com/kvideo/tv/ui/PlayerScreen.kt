@@ -94,6 +94,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var locked by remember { mutableStateOf(false) }
     var speed by remember { mutableStateOf(vm.playSpeed) }
     var speedOpen by remember { mutableStateOf(false) }
+    // 画面比例档位：0 适应 / 1 填充 / 2 16:9 / 3 4:3（双击画面中间循环）
+    var ratio by remember { mutableStateOf(vm.ratioMode) }
     // 长按 2 倍速：按住时临时改播放速度，松手回落到原速度
     var holdFast by remember { mutableStateOf(false) }
     var speedBeforeHold by remember { mutableStateOf(1f) }
@@ -357,11 +359,12 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 PlayerView(c).apply {
                     player = exo
                     useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     keepScreenOn = true
                     setBackgroundColor(android.graphics.Color.BLACK)
+                    applyRatio(this, vm.ratioMode)
                 }
             },
+            update = { view -> applyRatio(view, ratio) },
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(locked) {
@@ -394,12 +397,19 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         },
                         onDoubleTap = { off ->
                             if (!locked) {
-                                if (off.x < size.width / 2f) {
+                                val third = size.width / 3f
+                                if (off.x < third) {
                                     exo.seekTo((exo.currentPosition - 10_000).coerceAtLeast(0))
                                     doubleHint = "« 10s"
-                                } else {
+                                } else if (off.x > third * 2f) {
                                     exo.seekTo(exo.currentPosition + 10_000)
                                     doubleHint = "10s »"
+                                } else {
+                                    // 中间 1/3：循环切画面比例，中央闪一下档位名
+                                    val next = (ratio + 1) % RATIO_NAMES.size
+                                    ratio = next
+                                    vm.ratioMode = next
+                                    hudText = RATIO_NAMES[next]
                                 }
                                 showControls = true
                             }
@@ -841,6 +851,22 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 }
             }
         }
+    }
+}
+
+/** 画面比例档位名（双击画面中间循环切换时中央提示用） */
+private val RATIO_NAMES = listOf("适应", "填充", "拉伸")
+
+/**
+ * 把档位应用到 PlayerView：
+ * 适应 = FIT（完整、留黑边）；填充 = ZOOM（铺满、裁边）；
+ * 16:9 / 4:3 = 先按固定比例再裁/容，用于片源标错比例时手动纠正。
+ */
+private fun applyRatio(view: PlayerView, mode: Int) {
+    view.resizeMode = when (mode) {
+        1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM   // 填充：铺满，超出部分裁掉
+        2 -> AspectRatioFrameLayout.RESIZE_MODE_FILL   // 拉伸：铺满，画面变形
+        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT // 适应：完整显示，留黑边
     }
 }
 
