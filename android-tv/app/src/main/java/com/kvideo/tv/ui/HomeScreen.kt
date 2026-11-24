@@ -112,6 +112,10 @@ fun HomeScreen(vm: AppVm) {
                         action = if (vm.refreshingHome) "换一批中…" else "换一批 ↻"
                     ) { vm.refreshRecommend() }
 
+                    // 3 张一行按屏宽均分：以前写死 104dp，3 张只占 330dp，
+                    // 左边留 16dp、右边空 47dp，看着就是「两边黑边不对称」
+                    val cfgHome = androidx.compose.ui.platform.LocalConfiguration.current
+                    val cardW = ((cfgHome.screenWidthDp - 32 - 18) / 3).coerceAtLeast(80)
                     listOf(recs.take(3), recs.drop(3).take(3))
                         .filter { it.isNotEmpty() }
                         .forEach { row ->
@@ -123,7 +127,7 @@ fun HomeScreen(vm: AppVm) {
                                 items(row) { d: DoubanItem ->
                                     PosterCard(
                                         item = d,
-                                        width = 104,
+                                        width = cardW,
                                         meta = if (d.rate.isNotBlank()) "豆瓣 ${d.rate}" else ""
                                     ) { vm.searchTitle(d.title) }
                                 }
