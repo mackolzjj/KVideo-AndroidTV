@@ -12,7 +12,7 @@ import kotlin.math.abs
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -92,7 +92,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var position by remember { mutableStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
-    var speed by remember { mutableStateOf(1f) }
+    var speed by remember { mutableStateOf(vm.playSpeed) }
     var speedOpen by remember { mutableStateOf(false) }
     // 长按 2 倍速：按住时临时改播放速度，松手回落到原速度
     var holdFast by remember { mutableStateOf(false) }
@@ -221,7 +221,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
 
             override fun onPlaybackStateChanged(state: Int) {
                 duration = exo.duration.coerceAtLeast(0L)
-                if (state == Player.STATE_READY) ready = true
+                if (state == Player.STATE_READY) {
+                    ready = true
+                    // 记住的倍速要在这里应用：只改 state 不会作用到已经 prepare 的 exo
+                    exo.setPlaybackSpeed(speed)
+                }
                 if (state == Player.STATE_ENDED) {
                     playing = false
                     armAutoNext()
@@ -496,7 +500,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                KvIconBtn(Icons.Filled.ArrowBack, "返回", size = 40) { vm.back() }
+                KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { vm.back() }
                 Column(Modifier.weight(1f)) {
                     Text(route.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                     if (route.subtitle.isNotBlank()) {
@@ -567,10 +571,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         )
                         Spacer(Modifier.weight(1f))
                         if (route.episodes.isNotEmpty()) {
-                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 34) { epDialog = true }
+                            KvIconBtn(Icons.AutoMirrored.Filled.PlaylistPlay, "剧集", size = 34) { epDialog = true }
                         }
                         SpeedChip(speed, true, speedOpen, { speedOpen = !speedOpen }) { s ->
                             speed = s
+                            vm.playSpeed = s
                             exo.setPlaybackSpeed(s)
                             speedOpen = false
                         }
@@ -611,10 +616,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         )
                         Spacer(Modifier.weight(1f))
                         if (route.episodes.isNotEmpty()) {
-                            KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 42) { epDialog = true }
+                            KvIconBtn(Icons.AutoMirrored.Filled.PlaylistPlay, "剧集", size = 42) { epDialog = true }
                         }
                         SpeedChip(speed, false, speedOpen, { speedOpen = !speedOpen }) { s ->
                             speed = s
+                            vm.playSpeed = s
                             exo.setPlaybackSpeed(s)
                             speedOpen = false
                         }

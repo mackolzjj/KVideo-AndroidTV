@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -127,6 +128,7 @@ fun PosterArt(url: String, ratio: Float = 1.5f, modifier: Modifier = Modifier) {
             AsyncImage(
                 model = url,
                 contentDescription = null,
+                placeholder = ColorPainter(Color(0xFF1B1D21)),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
@@ -159,6 +161,7 @@ fun WideCard(
                 AsyncImage(
                     model = poster,
                     contentDescription = null,
+                    placeholder = ColorPainter(Color(0xFF1B1D21)),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )

@@ -67,6 +67,11 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var accountRole by mutableStateOf("")
     var liveUrl by mutableStateOf(store.liveUrl)
 
+    /** 播放倍速：播放页改动后记住，下一集/下次进来沿用 */
+    var playSpeed: Float
+        get() = store.playSpeed
+        set(v) = { store.playSpeed = v }()
+
     var busy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
 
@@ -115,8 +120,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 q,
                 premiumSources.filter { it.enabled },
                 onVideos = { list ->
-                    viewModelScope.launch {
-                        if (gen != premiumGeneration) return@launch
+                    viewModelScope.launch inner@{
+                        if (gen != premiumGeneration) return@inner
                         val seen = premiumResults.map { it.id + "|" + it.sourceId }.toHashSet()
                         premiumResults = premiumResults + list.filter { (it.id + "|" + it.sourceId) !in seen }
                     }
@@ -607,16 +612,16 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 searchableSources,
                 // 回调来自 IO 线程，状态更新统一回主线程
                 onVideos = { list ->
-                    viewModelScope.launch {
+                    viewModelScope.launch inner@{
                         // 关键：旧关键词的回调不许往新结果里追加
-                        if (gen != searchGeneration) return@launch
+                        if (gen != searchGeneration) return@inner
                         val seen = allResults.map { it.id + "|" + it.sourceId }.toHashSet()
                         allResults = allResults + list.filter { (it.id + "|" + it.sourceId) !in seen }
                     }
                 },
                 onProgress = { d, t ->
-                    viewModelScope.launch {
-                        if (gen != searchGeneration) return@launch
+                    viewModelScope.launch inner@{
+                        if (gen != searchGeneration) return@inner
                         progressDone = d
                         progressTotal = t
                     }

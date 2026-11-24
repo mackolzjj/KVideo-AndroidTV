@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -186,6 +187,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                         coil.compose.AsyncImage(
                             model = h.cover,
                             contentDescription = null,
+                            placeholder = ColorPainter(Color(0xFF1B1D21)),
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                             alpha = 0.34f

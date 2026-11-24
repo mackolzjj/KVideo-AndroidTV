@@ -10,13 +10,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -30,6 +35,7 @@ import com.kvideo.tv.vm.Route
 @Composable
 fun DetailScreen(vm: AppVm, route: Route.Detail) {
     val d = vm.detail
+    var introOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Kv.Bg).verticalScroll(rememberScrollState())) {
 
         Box(Modifier.fillMaxWidth().height(236.dp)) {
@@ -37,6 +43,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                 coil.compose.AsyncImage(
                     model = d.poster,
                     contentDescription = null,
+                    placeholder = ColorPainter(Color(0xFF1B1D21)),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     alpha = 0.5f,
                     modifier = Modifier.fillMaxSize()
@@ -47,7 +54,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                     Brush.verticalGradient(0.3f to Color.Transparent, 1f to Kv.Bg)
                 )
             )
-            KvIconBtn(Icons.Filled.ArrowBack, "返回", size = 44) { vm.back() }
+            KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 44) { vm.back() }
         }
 
         Column(Modifier.offset(y = (-40).dp).padding(horizontal = 18.dp)) {
@@ -94,7 +101,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
 
                 Spacer(Modifier.height(14.dp))
                 // 有观看记录就用「继续播放 · 集名」，没有就纯「播放」
-                val resume = vm.resumeInfo(d.id, d.sourceId)
+                val resume = vm.resumeInfo(route.id, route.sourceId)
                 val resumeEp = resume?.let { s ->
                     d.episodes.firstOrNull { it.index == s.episodeIndex }?.name ?: s.episodeName
                 }.orEmpty()
@@ -143,13 +150,24 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                     }
                 }
                 if (d.intro.isNotBlank()) {
+                    val introText = d.intro.replace(Regex("<[^>]+>"), "").trim()
                     Spacer(Modifier.height(14.dp))
                     Text(
-                        d.intro.replace(Regex("<[^>]+>"), "").trim(),
+                        introText,
                         style = Kv.Body,
-                        maxLines = 4,
+                        maxLines = if (introOpen) Int.MAX_VALUE else 4,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (introText.length > 80) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (introOpen) "收起" else "展开",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Kv.Ink3,
+                            modifier = Modifier.clickable { introOpen = !introOpen }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(22.dp))

@@ -35,6 +35,11 @@ class Store(ctx: Context) {
         get() = sp.getStringSet("blocked_categories", setOf("伦理"))?.toSet() ?: setOf("伦理")
         set(v) = sp.edit().putStringSet("blocked_categories", v).apply()
 
+    /** 上次用的播放倍速（1.0 / 1.25 / 1.5 / 2.0 …），下次进播放页沿用 */
+    var playSpeed: Float
+        get() = sp.getFloat("play_speed", 1f)
+        set(v) = sp.edit().putFloat("play_speed", v).apply()
+
     /** 搜索是否只留片名真的含关键词的条目（源站会串味，默认开） */
     var onlyRelevant: Boolean
         get() = sp.getBoolean("only_relevant", true)
