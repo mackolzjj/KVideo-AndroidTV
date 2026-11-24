@@ -114,6 +114,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var seekPreview by remember { mutableStateOf<Long?>(null) }
     var doubleHint by remember { mutableStateOf<String?>(null) }
     var lockChipVisible by remember { mutableStateOf(false) }
+    // 视频真实分辨率：用来算左右黑边，把叠加控件贴到画面边缘（而不是屏幕边缘）
+    var videoW by remember { mutableStateOf(0) }
+    var videoH by remember { mutableStateOf(0) }
     // 播完自动下一集：倒计时秒数（-1 = 不显示）、下一集
     var autoNextSec by remember(route.url) { mutableStateOf(-1) }
     var autoNextEp by remember(route.url) { mutableStateOf<com.kvideo.tv.data.Episode?>(null) }
@@ -222,6 +225,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 playing = isPlaying
             }
 
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                videoW = videoSize.width
+                videoH = videoSize.height
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
                 duration = exo.duration.coerceAtLeast(0L)
                 if (state == Player.STATE_READY) {
@@ -295,6 +303,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 }
             }
             delay(400)
+        }
+    }
+
+    // 左右黑边宽度（dp）：视频比例比屏幕窄时才有值，用来把控件贴到画面边缘
+    val cfgNow = androidx.compose.ui.platform.LocalConfiguration.current
+    val barDp = remember(videoW, videoH, cfgNow.screenWidthDp, cfgNow.screenHeightDp) {
+        if (videoW <= 0 || videoH <= 0) 0f else {
+            val vAspect = videoW.toFloat() / videoH
+            val sAspect = cfgNow.screenWidthDp.toFloat() / cfgNow.screenHeightDp
+            if (vAspect < sAspect) ((cfgNow.screenWidthDp - cfgNow.screenHeightDp * vAspect) / 2f) else 0f
         }
     }
 
@@ -515,17 +533,21 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
 
         val visible = (showControls || !playing) && !inPip
         if (visible && !locked) {
-            // 顶栏（横屏避开挖孔，否则返回键压在摄像头上）
-            Row(
+            // 顶栏：返回键贴「画面」左缘（有黑边时跟着内缩），标题居中
+            Box(
                 Modifier
                     .windowInsetsPadding(WindowInsets.displayCutout)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color(0xC7000000), Color.Transparent)))
-                    .padding(horizontal = KvSpace.s, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = barDp.dp + KvSpace.s, end = barDp.dp + KvSpace.s, top = 10.dp, bottom = 10.dp)
             ) {
-                KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { vm.back() }
-                Column(Modifier.weight(1f)) {
+                Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
+                    KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { vm.back() }
+                }
+                Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(route.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                     if (route.subtitle.isNotBlank()) {
                         Text(route.subtitle, fontSize = 11.sp, color = Kv.Ink2, maxLines = 1)
@@ -539,7 +561,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
-                    .padding(start = KvSpace.m, end = KvSpace.m, top = 40.dp, bottom = 10.dp)
+                    .padding(start = barDp.dp + KvSpace.m, end = barDp.dp + KvSpace.m, top = 40.dp, bottom = 10.dp)
             ) {
                 Slider(
                     value = if (duration > 0) {
@@ -751,7 +773,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 Modifier
                     .align(Alignment.CenterStart)
                     .windowInsetsPadding(WindowInsets.displayCutout)
-                    .padding(start = 10.dp)
+                    .padding(start = barDp.dp + 10.dp)
                     .size(if (locked) 40.dp else 36.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(if (locked) 0xB3000000 else 0x66000000))
