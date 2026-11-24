@@ -36,6 +36,7 @@ fun AdvancedScreen(vm: AppVm) {
     var server by remember { mutableStateOf(vm.serverUrl) }
     var pw by remember { mutableStateOf(vm.password) }
     var live by remember { mutableStateOf(vm.liveUrl) }
+    var epgUrlText by remember { mutableStateOf(vm.epgUrl) }
     var premiumPw by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
     var pinMsg by remember { mutableStateOf<String?>(null) }
@@ -53,6 +54,12 @@ fun AdvancedScreen(vm: AppVm) {
             Field("服务器地址", server, "http://192.168.1.2:81", { server = it })
             Field("访问密码", pw, "每个账户各自一个密码，服务器按密码识别身份", { pw = it }, password = true)
             Field("直播源 M3U 地址（不填则直播页只显示提示）", live, "http://…/playlist.m3u", { live = it })
+            Field(
+                "节目单 EPG 地址（XMLTV，选填）",
+                epgUrlText,
+                "http://…/playback.xml",
+                { epgUrlText = it; vm.saveEpgUrl(it) }
+            )
 
             Box(
                 Modifier

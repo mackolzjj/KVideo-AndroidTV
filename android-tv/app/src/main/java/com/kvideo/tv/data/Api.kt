@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import org.xmlpull.v1.XmlPullParser
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -487,10 +488,11 @@ class Api {
         var group = ""
         var ua = ""
         var ref = ""
+        var tvg = ""
         val base = runCatching { java.net.URI(playlistUrl) }.getOrNull()
 
         fun reset() {
-            name = ""; group = ""; ua = ""; ref = ""
+            name = ""; group = ""; ua = ""; ref = ""; tvg = ""
         }
 
         text.lineSequence().forEach { raw ->
@@ -507,6 +509,8 @@ class Api {
                     ua = Regex("http-user-agent=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
                         .find(line)?.groupValues?.get(1) ?: ""
                     ref = Regex("http-referrer=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1) ?: ""
+                    tvg = Regex("tvg-id=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
                         .find(line)?.groupValues?.get(1) ?: ""
                 }
                 line.startsWith("#EXTVLCOPT", true) -> {
@@ -529,6 +533,7 @@ class Api {
                                 name = name,
                                 url = url,
                                 group = group.ifBlank { "其他" },
+                                tvgId = tvg,
                                 userAgent = ua,
                                 referrer = ref
                             )
@@ -539,6 +544,96 @@ class Api {
             }
         }
         return out
+    }
+
+    /** EPG 单条节目 */
+    data class EpgItem(val startMs: Long, val stopMs: Long, val title: String)
+
+    /**
+     * 拉 XMLTV 节目单，只保留 [wanted] 里出现的频道，并且每个频道只留「正在播 + 下一档」。
+     * 用 android.util.Xml 的 Pull 解析（2.4MB 的 xml 不能整个读进字符串再正则）。
+     * key 同时放 channel id 和 display-name，M3U 里 tvg-id 缺失时还能按台名对上。
+     */
+    suspend fun epg(xmlUrl: String, wanted: Set<String>): Map<String, List<EpgItem>> =
+        withContext(Dispatchers.IO) {
+            if (xmlUrl.isBlank() || wanted.isEmpty()) return@withContext emptyMap()
+            val raw = HashMap<String, MutableList<EpgItem>>()
+            try {
+                val req = Request.Builder().url(xmlUrl)
+                    .header("User-Agent", "KVideo-Android/2.0").build()
+                Net.client.newCall(req).execute().use { r ->
+                    val body = r.body ?: return@withContext emptyMap()
+                    val p = android.util.Xml.newPullParser()
+                    p.setInput(body.charStream())
+                    var ev = p.eventType
+                    var chId: String? = null
+                    var displayName: String? = null
+                    var inChannel = false
+                    var curChannel: String? = null
+                    var start = 0L
+                    var stop = 0L
+                    var title: StringBuilder? = null
+                    while (ev != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                        when (ev) {
+                            org.xmlpull.v1.XmlPullParser.START_TAG -> when (p.name) {
+                                "channel" -> { chId = p.getAttributeValue(null, "id"); displayName = null; inChannel = true }
+                                "display-name" -> if (inChannel) title = StringBuilder()
+                                "programme" -> {
+                                    curChannel = p.getAttributeValue(null, "channel")
+                                    start = parseXmltvTime(p.getAttributeValue(null, "start"))
+                                    stop = parseXmltvTime(p.getAttributeValue(null, "stop"))
+                                    title = null
+                                }
+                                "title" -> if (!inChannel) title = StringBuilder()
+                            }
+                            org.xmlpull.v1.XmlPullParser.TEXT -> title?.append(p.text)
+                            org.xmlpull.v1.XmlPullParser.END_TAG -> when (p.name) {
+                                "display-name" -> if (inChannel) { displayName = title?.toString()?.trim(); title = null }
+                                "channel" -> {
+                                    val cid = chId
+                                    if (cid != null && (cid in wanted || (displayName != null && displayName in wanted))) {
+                                        raw.getOrPut(cid) { mutableListOf() }
+                                        val dn = displayName
+                                        if (dn != null) raw.getOrPut(dn) { mutableListOf() }
+                                    }
+                                    inChannel = false
+                                }
+                                "title" -> title = null
+                                "programme" -> {
+                                    val c = curChannel
+                                    val t = title?.toString()?.trim()
+                                    if (c != null && c in wanted && stop > start && !t.isNullOrBlank()) {
+                                        raw.getOrPut(c) { mutableListOf() }.add(EpgItem(start, stop, t))
+                                    }
+                                    curChannel = null
+                                }
+                            }
+                        }
+                        ev = p.next()
+                    }
+                }
+            } catch (e: Exception) {
+                return@withContext emptyMap()
+            }
+            // 只留「正在播 / 下一档」，并按开始时间排好
+            val now = System.currentTimeMillis()
+            raw.mapValues { (_, list) ->
+                list.sortedBy { it.startMs }.filter { it.stopMs > now }.take(2)
+            }
+        }
+
+    /** XMLTV 时间：20261124120000 +0800 */
+    private fun parseXmltvTime(s: String?): Long {
+        if (s.isNullOrBlank()) return 0L
+        return try {
+            val t = s.trim()
+            val zone = java.time.ZoneOffset.of(t.substring(14).trim().ifBlank { "+0000" })
+            java.time.LocalDateTime
+                .parse(t.substring(0, 14), java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                .toInstant(zone).toEpochMilli()
+        } catch (e: Exception) {
+            0L
+        }
     }
 
     /**

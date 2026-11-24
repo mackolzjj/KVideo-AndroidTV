@@ -28,6 +28,9 @@ sealed interface Route {
     data object Premium : Route
     data object Advanced : Route
     data class Detail(val id: String, val sourceId: String) : Route
+
+    /** 分类浏览页（首页的分类入口）：kind = 电影 / 剧集 / 综艺 / 动漫 / 纪录片 */
+    data class Category(val kind: String) : Route
     data class Player(
         val url: String,
         val title: String,
@@ -66,6 +69,35 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var accountName by mutableStateOf("")
     var accountRole by mutableStateOf("")
     var liveUrl by mutableStateOf(store.liveUrl)
+
+    /** EPG（XMLTV）地址与解析结果：tvg-id / 台名 → 正在播 + 下一档 */
+    var epgUrl by mutableStateOf(store.epgUrl)
+    var epg by mutableStateOf<Map<String, List<Api.EpgItem>>>(emptyMap())
+    private var epgLoadingFor by mutableStateOf("")
+
+    fun saveEpgUrl(v: String) {
+        store.epgUrl = v
+        epgUrl = v.trim()
+        epg = emptyMap()
+        if (epgUrl.isNotBlank()) loadEpg(force = true)
+    }
+
+    fun loadEpg(force: Boolean = false) {
+        val url = store.epgUrl
+        if (url.isBlank() || channels.isEmpty()) return
+        if (!force && epgLoadingFor == url && epg.isNotEmpty()) return
+        epgLoadingFor = url
+        val wanted = buildSet {
+            channels.forEach { c ->
+                if (c.tvgId.isNotBlank()) add(c.tvgId)
+                add(c.name)
+            }
+        }
+        viewModelScope.launch {
+            val m = api.epg(url, wanted)
+            if (epgLoadingFor == url) epg = m
+        }
+    }
 
     /** 播放倍速：播放页改动后记住，下一集/下次进来沿用 */
     var playSpeed: Float
@@ -254,6 +286,51 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         }
     }
     var recommend by mutableStateOf<List<DoubanItem>>(emptyList())
+
+    // ---- 分类浏览（首页分类入口）：豆瓣 tag/type 组合，实测这些能返回内容 ----
+    var categoryKind by mutableStateOf("电影")
+    var categoryItems by mutableStateOf<List<DoubanItem>>(emptyList())
+    var categoryLoading by mutableStateOf(false)
+    private var categoryPage = 0
+    private var categoryJob: Job? = null
+
+    /** kind → 豆瓣 (tag, type)。「动漫」只有 type=movie 有内容，「综艺」走 tag=综艺&type=tv */
+    private fun categoryQuery(kind: String): Pair<String, String> = when (kind) {
+        "电影" -> "热门" to "movie"
+        "剧集" -> "热门" to "tv"
+        "综艺" -> "综艺" to "tv"
+        "动漫" -> "动漫" to "movie"
+        "纪录片" -> "纪录片" to "movie"
+        else -> "热门" to "movie"
+    }
+
+    fun openCategory(kind: String) {
+        categoryJob?.cancel()
+        categoryKind = kind
+        categoryItems = emptyList()
+        categoryPage = 0
+        go(Route.Category(kind))
+        loadMoreCategory()
+    }
+
+    fun loadMoreCategory() {
+        if (categoryLoading) return
+        categoryLoading = true
+        val (tag, type) = categoryQuery(categoryKind)
+        val page = categoryPage
+        categoryJob = viewModelScope.launch {
+            val list = api.recommend(tag, type, page * 20, 20)
+            if (categoryKind.isNotEmpty()) {
+                val seen = categoryItems.map { it.id }.toHashSet()
+                val fresh = list.filter { it.id !in seen }
+                if (fresh.isNotEmpty()) {
+                    categoryItems = categoryItems + fresh
+                    categoryPage = page + 1
+                }
+            }
+            categoryLoading = false
+        }
+    }
 
     // ---- 首页「换一批 ↻」：page_start +20 原地换一屏，不多开页面 ----
     private var recommendPage = 0
@@ -805,7 +882,16 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         loadDetail(item.id, item.sourceId)
     }
 
+    /** 上次看的台（直播页顶部「继续看」用） */
+    val lastChannelName: String
+        get() = store.lastChannelName
+
+    val lastChannelUrl: String
+        get() = store.lastChannelUrl
+
     fun playChannel(c: Channel) {
+        store.lastChannelUrl = c.url
+        store.lastChannelName = c.name
         go(
             Route.Player(
                 // 上游 IPTVPlayer 的顺序：先 /api/iptv/stream（带该频道的 UA/Referer），

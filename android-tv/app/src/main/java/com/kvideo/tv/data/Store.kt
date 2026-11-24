@@ -35,6 +35,20 @@ class Store(ctx: Context) {
         get() = sp.getStringSet("blocked_categories", setOf("伦理"))?.toSet() ?: setOf("伦理")
         set(v) = sp.edit().putStringSet("blocked_categories", v).apply()
 
+    /** EPG（XMLTV）地址，选填：填了直播列表会显示「正在播 / 下一档」 */
+    var epgUrl: String
+        get() = sp.getString("epg_url", "") ?: ""
+        set(v) = sp.edit().putString("epg_url", v.trim()).apply()
+
+    /** 上次看的直播频道（url + 名称），直播页顶部给一个「继续看」入口 */
+    var lastChannelUrl: String
+        get() = sp.getString("last_channel_url", "") ?: ""
+        set(v) = sp.edit().putString("last_channel_url", v).apply()
+
+    var lastChannelName: String
+        get() = sp.getString("last_channel_name", "") ?: ""
+        set(v) = sp.edit().putString("last_channel_name", v).apply()
+
     /** 上次用的播放倍速（1.0 / 1.25 / 1.5 / 2.0 …），下次进播放页沿用 */
     var playSpeed: Float
         get() = sp.getFloat("play_speed", 1f)

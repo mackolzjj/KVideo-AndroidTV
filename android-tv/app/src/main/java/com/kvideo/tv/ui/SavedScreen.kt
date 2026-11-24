@@ -6,13 +6,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,19 +30,32 @@ private fun clock(ms: Long): String {
     else "%02d:%02d".format(total / 60, total % 60)
 }
 
+/** 一部剧 + 它在几个源里出现过（同一部片换过源不再占两格） */
+private data class SavedGroup(val head: SavedItem, val sources: Int)
+
+private fun groupByTitle(list: List<SavedItem>): List<SavedGroup> =
+    list.groupBy { it.name.trim().lowercase() }
+        .values
+        .mapNotNull { rows ->
+            val head = rows.maxByOrNull { it.updatedAt } ?: rows.firstOrNull() ?: return@mapNotNull null
+            SavedGroup(head, rows.size)
+        }
+        .sortedByDescending { it.head.updatedAt }
+
 @Composable
 fun SavedScreen(vm: AppVm) {
     var tab by remember { mutableStateOf(0) }
-    val list = if (tab == 0) vm.favorites else vm.history
+    val raw = if (tab == 0) vm.favorites else vm.history
+    val groups = remember(raw, tab) { groupByTitle(raw) }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "片单")
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            KvChip("收藏 ${vm.favorites.size}", selected = tab == 0) { tab = 0 }
-            KvChip("历史 ${vm.history.size}", selected = tab == 1) { tab = 1 }
+            KvChip("收藏 ${if (tab == 0) groups.size else groupByTitle(vm.favorites).size}", selected = tab == 0) { tab = 0 }
+            KvChip("历史 ${if (tab == 1) groups.size else groupByTitle(vm.history).size}", selected = tab == 1) { tab = 1 }
         }
         Spacer(Modifier.height(10.dp))
-        if (list.isEmpty()) {
+        if (raw.isEmpty()) {
             KvEmpty(if (tab == 0) "还没有收藏。详情页右上角那个 + 就是收藏。" else "还没有播放记录。")
             Spacer(Modifier.weight(1f))
         } else {
@@ -49,9 +66,26 @@ fun SavedScreen(vm: AppVm) {
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                items(list) { s: SavedItem ->
+                items(groups) { g: SavedGroup ->
+                    val s = g.head
                     Column(Modifier.clickable { vm.go(Route.Detail(s.id, s.sourceId)) }) {
-                        PosterArt(s.poster, ratio = 1.5f, modifier = Modifier.fillMaxWidth())
+                        Box {
+                            PosterArt(s.poster, ratio = 1.5f, modifier = Modifier.fillMaxWidth())
+                            if (g.sources > 1) {
+                                Text(
+                                    "${g.sources} 个源",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(Color(0xCC000000))
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(6.dp))
                         Text(s.name, fontSize = 11.sp, color = Kv.Ink, fontWeight = FontWeight.Medium, maxLines = 2, lineHeight = 15.sp)
                         if (s.episodeName.isNotBlank()) {

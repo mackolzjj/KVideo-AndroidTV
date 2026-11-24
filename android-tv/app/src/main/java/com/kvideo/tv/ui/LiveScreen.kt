@@ -31,6 +31,10 @@ fun LiveScreen(vm: AppVm) {
     LaunchedEffect(vm.liveUrl) {
         if (vm.liveUrl.isNotBlank()) vm.loadChannels()
     }
+    // 频道加载完再拉节目单（EPG 地址是选填的，没填就什么都不做）
+    LaunchedEffect(vm.channels.size, vm.epgUrl) {
+        if (vm.channels.isNotEmpty() && vm.epgUrl.isNotBlank()) vm.loadEpg()
+    }
 
     var group by remember { mutableStateOf("全部") }
     val groups = remember(vm.channels) {
@@ -46,6 +50,34 @@ fun LiveScreen(vm: AppVm) {
         } else if (vm.channels.isEmpty()) {
             KvEmpty("没拿到频道。检查 M3U 地址是否可访问。")
         } else {
+        // 上次看的台：直接给一个继续入口，不用在 800 个频道里翻回去
+        val last = vm.channels.firstOrNull { it.url == vm.lastChannelUrl && it.url.isNotBlank() }
+        if (last != null) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Kv.Surface2)
+                    .clickable { vm.playChannel(last) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("上次", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Kv.Red)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    last.name,
+                    fontSize = 13.sp,
+                    color = Kv.Ink,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("继续看 ›", fontSize = 11.5.sp, color = Kv.Ink3)
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp)
@@ -79,7 +111,19 @@ fun LiveScreen(vm: AppVm) {
                         Text("LIVE", fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                     }
                     Spacer(Modifier.width(10.dp))
-                    Text(c.name, fontSize = 13.sp, color = Kv.Ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        Text(c.name, fontSize = 13.sp, color = Kv.Ink, fontWeight = FontWeight.Medium, maxLines = 1)
+                        val nowMs = System.currentTimeMillis()
+                        val prog = vm.epg[c.tvgId.ifBlank { c.name }]
+                            ?.firstOrNull { it.startMs <= nowMs && nowMs < it.stopMs }
+                        if (prog != null) {
+                            Text(
+                                "正在播 · ${prog.title}",
+                                style = Kv.Tiny.copy(fontSize = 10.sp),
+                                maxLines = 1
+                            )
+                        }
+                    }
                     Text(c.group, style = Kv.Tiny)
                 }
             }

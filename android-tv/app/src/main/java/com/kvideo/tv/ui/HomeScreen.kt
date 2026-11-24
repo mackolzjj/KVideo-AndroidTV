@@ -60,6 +60,17 @@ fun HomeScreen(vm: AppVm) {
 
             HeroRow(heroItems) { title -> vm.searchTitle(title) }
 
+            // 分类入口：点进各自的豆瓣片单（电影/剧集/综艺/动漫/纪录片）
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)
+            ) {
+                items(listOf("电影", "剧集", "综艺", "动漫", "纪录片")) { k ->
+                    KvChip(k) { vm.openCategory(k) }
+                }
+            }
+
             if (recs.isEmpty() && vm.busy) {
                 StaticSkeleton()
             } else {
