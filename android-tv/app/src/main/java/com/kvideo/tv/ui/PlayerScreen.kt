@@ -773,7 +773,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 Modifier
                     .align(Alignment.CenterStart)
                     .windowInsetsPadding(WindowInsets.displayCutout)
-                    .padding(start = barDp.dp + 10.dp)
+                    // 锁只避开摄像头，不跟着黑边内缩：黑边 78dp 宽，锁放 8dp 处仍在黑边里
+                    .padding(start = KvSpace.s)
                     .size(if (locked) 40.dp else 36.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(if (locked) 0xB3000000 else 0x66000000))
