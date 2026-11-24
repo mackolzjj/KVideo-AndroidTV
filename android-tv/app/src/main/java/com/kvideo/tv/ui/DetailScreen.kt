@@ -93,6 +93,11 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                 }
 
                 Spacer(Modifier.height(14.dp))
+                // 有观看记录就用「继续播放 · 集名」，没有就纯「播放」
+                val resume = vm.resumeInfo(d.id, d.sourceId)
+                val resumeEp = resume?.let { s ->
+                    d.episodes.firstOrNull { it.index == s.episodeIndex }?.name ?: s.episodeName
+                }.orEmpty()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier
@@ -106,7 +111,14 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("播放", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            Text(
+                                if (resume != null && resumeEp.isNotBlank()) "继续播放 · $resumeEp" else "播放",
+                                fontSize = if (resume != null && resumeEp.isNotBlank()) 13.5.sp else 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                     Spacer(Modifier.width(9.dp))

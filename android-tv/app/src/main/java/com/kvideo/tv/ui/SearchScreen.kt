@@ -120,8 +120,30 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
         }
 
         if (vm.query.isBlank()) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text("试试搜片名，例如「庆余年」", style = Kv.Body)
+            // 空搜索框时给两样东西：最近搜过的词 + 常搜的片名，点一下就搜
+            val hot = listOf("庆余年", "狂飙", "甄嬛传", "三体", "繁花", "漫长的季节", "韩剧", "动漫")
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                if (vm.searchHistory.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("最近搜索", style = Kv.Meta)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "清空",
+                            style = Kv.Tiny,
+                            modifier = Modifier.clickable { vm.clearSearchHistory() }
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        items(vm.searchHistory) { w -> KvChip(w) { vm.search(w) } }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+                Text("猜你想搜", style = Kv.Meta)
+                Spacer(Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    items(hot) { w -> KvChip(w) { vm.search(w) } }
+                }
             }
         } else if (vm.searching && vm.progressTotal > 0) {
             Text(

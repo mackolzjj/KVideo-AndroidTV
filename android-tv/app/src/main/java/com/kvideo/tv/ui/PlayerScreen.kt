@@ -111,6 +111,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var seekPreview by remember { mutableStateOf<Long?>(null) }
     var doubleHint by remember { mutableStateOf<String?>(null) }
     var lockChipVisible by remember { mutableStateOf(false) }
+    // 播完自动下一集：倒计时秒数（-1 = 不显示）、下一集
+    var autoNextSec by remember(route.url) { mutableStateOf(-1) }
+    var autoNextEp by remember(route.url) { mutableStateOf<com.kvideo.tv.data.Episode?>(null) }
 
     LaunchedEffect(doubleHint) {
         if (doubleHint != null) {
@@ -138,6 +141,28 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var viaProxy by remember { mutableStateOf(vm.proxyMode == 2) }
     var fbIndex by remember { mutableStateOf(0) }
     var ready by remember { mutableStateOf(false) }
+
+    /** 换到某一集：有 detail 走 switchEpisode，没有（从收藏/历史进的）走 switchEpisodeRaw */
+    fun goEpisode(ep: com.kvideo.tv.data.Episode) {
+        autoNextSec = -1
+        autoNextEp = null
+        val det = vm.detail
+        if (det != null && det.id == route.videoId) {
+            vm.switchEpisode(route.videoId, route.sourceId, ep, det, route.title)
+        } else {
+            vm.switchEpisodeRaw(route, ep)
+        }
+    }
+
+    /** 播完时判断有没有下一集：有就起 5 秒倒计时（直播/电影/最后一集不触发） */
+    fun armAutoNext() {
+        val eps = route.episodes
+        if (eps.isEmpty()) return
+        val i = eps.indexOfFirst { it.index == route.epIndex }
+        if (i < 0 || i >= eps.size - 1) return
+        autoNextEp = eps[i + 1]
+        autoNextSec = 5
+    }
 
     fun play(rawUrl: String) {
         val item = MediaItem.Builder()
@@ -197,7 +222,10 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             override fun onPlaybackStateChanged(state: Int) {
                 duration = exo.duration.coerceAtLeast(0L)
                 if (state == Player.STATE_READY) ready = true
-                if (state == Player.STATE_ENDED) playing = false
+                if (state == Player.STATE_ENDED) {
+                    playing = false
+                    armAutoNext()
+                }
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -275,6 +303,18 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             controller?.show(WindowInsetsCompat.Type.systemBars())
             if (win != null) WindowCompat.setDecorFitsSystemWindows(win, true)
         }
+    }
+
+    // 自动下一集倒计时：每秒 -1，到 0 就换集
+    LaunchedEffect(autoNextSec) {
+        val sec = autoNextSec
+        if (sec < 0) return@LaunchedEffect
+        if (sec == 0) {
+            autoNextEp?.let { goEpisode(it) }
+            return@LaunchedEffect
+        }
+        delay(1000)
+        autoNextSec = sec - 1
     }
 
     // 画中画：进 PiP 时收起控制层，回到前台再恢复
@@ -656,6 +696,47 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+
+        if (autoNextSec >= 0) {
+            val ep = autoNextEp
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 92.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xE6000000))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Column {
+                    Text(
+                        if (ep != null) "${autoNextSec} 秒后播放 ${ep.name}" else "${autoNextSec} 秒后播放下一集",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(9.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "取消",
+                            fontSize = 12.sp,
+                            color = Kv.Ink2,
+                            modifier = Modifier.clickable {
+                                autoNextSec = -1
+                                autoNextEp = null
+                            }
+                        )
+                        Spacer(Modifier.width(18.dp))
+                        Text(
+                            "立即播放",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.clickable { ep?.let { goEpisode(it) } }
+                        )
+                    }
+                }
             }
         }
 

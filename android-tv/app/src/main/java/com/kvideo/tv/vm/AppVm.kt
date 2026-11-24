@@ -277,6 +277,13 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     }
     var history by mutableStateOf(store.history())
     var favorites by mutableStateOf(store.favorites())
+    /** 搜索历史（最近 12 个关键词） */
+    var searchHistory by mutableStateOf(store.searchHistory())
+
+    fun clearSearchHistory() {
+        store.clearSearchHistory()
+        searchHistory = emptyList()
+    }
 
     var query by mutableStateOf("")
     var searching by mutableStateOf(false)
@@ -615,7 +622,14 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                     }
                 }
             )
-            if (gen == searchGeneration) searching = false
+            if (gen == searchGeneration) {
+                searching = false
+                // 有结果才记进历史：只记「搜出来东西的词」，避免草稿式半截词占位
+                if (allResults.isNotEmpty()) {
+                    store.pushSearch(q)
+                    searchHistory = store.searchHistory()
+                }
+            }
         }
     }
 
@@ -624,6 +638,12 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         if (route.videoId.isBlank() || ms <= 0) return
         store.updateProgress(route.videoId, route.sourceId, ms, durationMs)
         history = store.history()
+    }
+
+    /** 这部片上次看到哪一集、什么位置（没有记录返回 null） */
+    fun resumeInfo(id: String, sourceId: String): SavedItem? {
+        val s = store.history().firstOrNull { it.id == id && it.sourceId == sourceId } ?: return null
+        return if (s.positionMs > 3000 || s.episodeIndex > 0) s else null
     }
 
     /** 详情页「播放」：上次看到哪一集就接着播哪一集（没有记录才从第 1 集） */

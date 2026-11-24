@@ -126,6 +126,29 @@ class Store(ctx: Context) {
 
     fun clearHistory() = write("history", emptyList())
 
+    /** 搜索历史：最近搜过的关键词，最多 12 条（对齐上游 search-history-store 的思路） */
+    fun searchHistory(): List<String> {
+        val raw = sp.getString("search_history", "[]") ?: "[]"
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i -> arr.optString(i, "").takeIf { it.isNotBlank() } }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun pushSearch(q: String) {
+        val k = q.trim()
+        if (k.isBlank()) return
+        val list = searchHistory().filterNot { it.equals(k, ignoreCase = true) }.toMutableList()
+        list.add(0, k)
+        val arr = JSONArray()
+        list.take(12).forEach { arr.put(it) }
+        sp.edit().putString("search_history", arr.toString()).apply()
+    }
+
+    fun clearSearchHistory() = sp.edit().putString("search_history", "[]").apply()
+
     private fun read(key: String): List<SavedItem> {
         val raw = sp.getString(key, "[]") ?: "[]"
         return try {
