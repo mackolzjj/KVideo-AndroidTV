@@ -327,6 +327,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     val cutEndDp = cutPad.calculateRightPadding(ltr).value
     val topPadStart = maxOf(barDp + KvSpace.m.value, cutStartDp + KvSpace.s.value)
     val topPadEnd = maxOf(barDp + KvSpace.m.value, cutEndDp + KvSpace.s.value)
+    // 竖屏时挖孔在顶部正中，标题正好压在摄像头下面：顶边也要让开
+    val topPadTop = maxOf(KvSpace.s.value, cutPad.calculateTopPadding().value + 4f)
 
     // 播放页=沉浸式：藏掉状态栏/导航栏，滑一下才临时出现；离开播放页恢复
     DisposableEffect(Unit) {
@@ -550,6 +552,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 subtitle = route.subtitle,
                 startPad = topPadStart,
                 endPad = topPadEnd,
+                topPad = topPadTop,
                 onBack = { vm.back() }
             )
 

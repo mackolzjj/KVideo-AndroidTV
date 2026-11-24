@@ -44,13 +44,14 @@ internal fun PlayerTopBar(
     subtitle: String,
     startPad: Float,
     endPad: Float,
+    topPad: Float,
     onBack: () -> Unit
 ) {
     Box(
         Modifier
             .fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color(0xC7000000), Color.Transparent)))
-            .padding(start = startPad.dp, end = endPad.dp, top = 8.dp, bottom = 6.dp)
+            .padding(start = startPad.dp, end = endPad.dp, top = topPad.dp, bottom = 6.dp)
     ) {
         Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
             KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { onBack() }
