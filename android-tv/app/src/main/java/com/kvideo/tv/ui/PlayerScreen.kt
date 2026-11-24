@@ -7,9 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.abs
 import androidx.compose.foundation.lazy.items
@@ -306,28 +303,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         controller?.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller?.hide(WindowInsetsCompat.Type.systemBars())
-        // 横屏时挖孔/刘海会被系统当成「不可用区域」，默认模式（DEFAULT）会把整个窗口
-        // 往一侧让开 → 画面左右黑边不对称。SHORT_EDGES 允许画进挖孔区，黑边才居中。
-        val prevCutout = if (android.os.Build.VERSION.SDK_INT >= 28) {
-            val a = win?.attributes
-            val p = a?.layoutInDisplayCutoutMode
-            if (a != null) {
-                a.layoutInDisplayCutoutMode =
-                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                win.attributes = a
-            }
-            p
-        } else null
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
             if (win != null) WindowCompat.setDecorFitsSystemWindows(win, true)
-            if (android.os.Build.VERSION.SDK_INT >= 28 && prevCutout != null) {
-                val a = win?.attributes
-                if (a != null) {
-                    a.layoutInDisplayCutoutMode = prevCutout
-                    win.attributes = a
-                }
-            }
         }
     }
 
@@ -514,10 +492,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
 
         val visible = (showControls || !playing) && !inPip
         if (visible && !locked) {
-            // 顶栏（横屏时避开挖孔区，否则返回键会压在摄像头上）
+            // 顶栏
             Row(
                 Modifier
-                    .windowInsetsPadding(WindowInsets.displayCutout)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color(0xC7000000), Color.Transparent)))
                     .padding(horizontal = KvSpace.s, vertical = 10.dp),
@@ -532,11 +509,10 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 }
             }
 
-            // 底栏（同样避开挖孔）
+            // 底栏
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.displayCutout)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
                     .padding(start = KvSpace.m, end = KvSpace.m, top = 40.dp, bottom = 10.dp)
