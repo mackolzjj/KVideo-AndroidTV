@@ -318,6 +318,16 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         }
     }
 
+    // 顶栏左右内边距：黑边宽度和挖孔宽度取「较大的那个」，别相加。
+    // 旧写法是 windowInsetsPadding(displayCutout) + barDp 两层叠加，
+    // 横屏实测返回键被推到 x≈475px（应为 ~360px），和底部进度条左端对不齐。
+    val cutPad = androidx.compose.foundation.layout.WindowInsets.displayCutout.asPaddingValues()
+    val ltr = androidx.compose.ui.unit.LayoutDirection.Ltr
+    val cutStartDp = cutPad.calculateLeftPadding(ltr).value
+    val cutEndDp = cutPad.calculateRightPadding(ltr).value
+    val topPadStart = maxOf(barDp + KvSpace.m.value, cutStartDp + KvSpace.s.value)
+    val topPadEnd = maxOf(barDp + KvSpace.m.value, cutEndDp + KvSpace.s.value)
+
     // 播放页=沉浸式：藏掉状态栏/导航栏，滑一下才临时出现；离开播放页恢复
     DisposableEffect(Unit) {
         val win = activity?.window
@@ -538,7 +548,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             PlayerTopBar(
                 title = route.title,
                 subtitle = route.subtitle,
-                barDp = barDp,
+                startPad = topPadStart,
+                endPad = topPadEnd,
                 onBack = { vm.back() }
             )
 

@@ -42,15 +42,15 @@ internal data class PlayerBarSpec(val icon: Int, val play: Int)
 internal fun PlayerTopBar(
     title: String,
     subtitle: String,
-    barDp: Float,
+    startPad: Float,
+    endPad: Float,
     onBack: () -> Unit
 ) {
     Box(
         Modifier
-            .windowInsetsPadding(WindowInsets.displayCutout)
             .fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color(0xC7000000), Color.Transparent)))
-            .padding(start = barDp.dp + KvSpace.s, end = barDp.dp + KvSpace.s, top = 10.dp, bottom = 10.dp)
+            .padding(start = startPad.dp, end = endPad.dp, top = 8.dp, bottom = 6.dp)
     ) {
         Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
             KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { onBack() }
