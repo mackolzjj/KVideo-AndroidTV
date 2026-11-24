@@ -223,6 +223,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
 
     var resumed by remember { mutableStateOf(false) }
 
+    // 换集或重播当前集时 route.url 会变（同集重播 startMs 也变），续播标记要重置
+    LaunchedEffect(route.url, route.startMs) { resumed = false }
+
     LaunchedEffect(Unit) {
         var lastSave = 0L
         while (true) {

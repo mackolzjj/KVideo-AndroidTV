@@ -169,6 +169,7 @@ fun PremiumScreen(vm: AppVm) {
                 vm.premiumVideos.isEmpty() -> KvEmpty(
                     when {
                         vm.premiumSources.isEmpty() -> "订阅里没有 group=premium 的源"
+                        !vm.premiumTagsOk -> "分类接口没返回：服务器这会儿连不上海外 premium 源，稍后再进"
                         // 官方 types 的第一条「今日推荐」value=''，代表所有 premium 源一起取
                         vm.premiumTagValue.isEmpty() -> "今日推荐没返回内容：这些源这会儿可能都不可达"
                         else -> "这个分类没返回内容，换个分类试试"

@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -119,8 +120,11 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        // 用内存里的 favorites 判断，别在重组里再读一次 SharedPreferences
+                        val fav = vm.favorites.any { it.id == d.id && it.sourceId == d.sourceId }
                         Icon(
-                            Icons.Filled.Add, "收藏",
+                            if (fav) Icons.Filled.Bookmark else Icons.Filled.Add,
+                            if (fav) "已收藏（点一下取消）" else "收藏",
                             tint = if (vm.isFav(d.id, d.sourceId)) Kv.Red else Kv.Ink,
                             modifier = Modifier.size(20.dp)
                         )

@@ -97,6 +97,16 @@ class Store(ctx: Context) {
         write("history", list)
     }
 
+    /** 换源：同一部片换到别的资源站，把历史记录跟着迁过去，别丢掉进度 */
+    fun migrateSource(id: String, fromSource: String, toSource: String) {
+        if (fromSource == toSource) return
+        val list = history().toMutableList()
+        val i = list.indexOfFirst { it.id == id && it.sourceId == fromSource }
+        if (i < 0) return
+        list[i] = list[i].copy(sourceId = toSource)
+        write("history", list)
+    }
+
     fun progressOf(id: String, sourceId: String): Long =
         history().firstOrNull { it.id == id && it.sourceId == sourceId }?.positionMs ?: 0L
 

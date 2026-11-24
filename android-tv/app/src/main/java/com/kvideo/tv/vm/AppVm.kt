@@ -93,34 +93,48 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var premiumSearching by mutableStateOf(false)
     var premiumResults by mutableStateOf<List<VideoItem>>(emptyList())
 
+    private var premiumJob: Job? = null
+    private var premiumGeneration = 0
+
+    /**
+     * 高级内容页的搜索。和主搜索同一条纪律：先取消上一个、带代次号，
+     * 否则旧关键词的 SSE 回调会往新结果里追加（主搜索踩过这个坑）。
+     */
     fun searchPremium(q: String) {
         premiumQuery = q
         premiumResults = emptyList()
+        premiumJob?.cancel()
+        val gen = ++premiumGeneration
         if (q.isBlank()) {
             premiumSearching = false
             return
         }
         premiumSearching = true
-        viewModelScope.launch {
+        premiumJob = viewModelScope.launch {
             api.search(
                 q,
                 premiumSources.filter { it.enabled },
                 onVideos = { list ->
                     viewModelScope.launch {
+                        if (gen != premiumGeneration) return@launch
                         val seen = premiumResults.map { it.id + "|" + it.sourceId }.toHashSet()
                         premiumResults = premiumResults + list.filter { (it.id + "|" + it.sourceId) !in seen }
                     }
                 },
                 onProgress = { _, _ -> }
             )
-            premiumSearching = false
+            if (gen == premiumGeneration) premiumSearching = false
         }
     }
+
+    /** false = 分类接口还没成功过（区别于「分类拿到了但没内容」） */
+    var premiumTagsOk by mutableStateOf(false)
 
     fun loadPremiumTags() {
         premiumLoading = true
         viewModelScope.launch {
             premiumTags = api.premiumTags(premiumSources)
+            premiumTagsOk = premiumTags.isNotEmpty()
             if (premiumTags.isNotEmpty()) loadPremiumCategory(premiumTags.first().second)
             premiumLoading = false
         }
@@ -754,8 +768,13 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         go(Route.Detail(item.id, item.sourceId))
     }
 
-    /** 详情页换源：同一组的另一条资源 */
+    /** 详情页换源：同一组的另一条资源（历史记录跟着迁到新源，续播不丢） */
     fun switchSource(item: VideoItem) {
+        val old = detail
+        if (old != null) {
+            store.migrateSource(old.id, old.sourceId, item.sourceId)
+            history = store.history()
+        }
         detail = null
         loadDetail(item.id, item.sourceId)
     }
@@ -785,13 +804,15 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         val next = channels.drop(idx + 1)
             .firstOrNull { it.url != currentUrl && it.url.isNotBlank() }
             ?: return
+        // 和 playChannel 保持一致：走 /api/iptv/stream 代理并带该频道的 UA/Referer。
+        // 之前这里用的是裸地址，自动跳台后的台基本都会 403。
         route = Route.Player(
-            url = next.url,
+            url = api.streamProxy(next.url, next.userAgent, next.referrer),
             title = next.name,
             subtitle = next.group.ifBlank { "直播" },
             mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
             isLive = true,
-            fallbacks = next.routes.filter { it != next.url },
+            fallbacks = listOf(next.url) + next.routes.filter { it != next.url },
             liveTries = tries
         )
     }

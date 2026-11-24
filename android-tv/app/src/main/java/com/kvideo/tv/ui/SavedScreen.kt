@@ -41,16 +41,6 @@ fun SavedScreen(vm: AppVm) {
         if (list.isEmpty()) {
             KvEmpty(if (tab == 0) "还没有收藏。详情页右上角那个 + 就是收藏。" else "还没有播放记录。")
             Spacer(Modifier.weight(1f))
-            if (tab == 1 && vm.history.isNotEmpty()) {
-                Text(
-                    "清空历史",
-                    fontSize = 12.sp,
-                    color = Kv.Ink3,
-                    modifier = Modifier
-                        .clickable { vm.clearHistory() }
-                        .padding(16.dp)
-                )
-            }
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
@@ -69,6 +59,16 @@ fun SavedScreen(vm: AppVm) {
                             Text(s.episodeName + seen, style = Kv.Tiny.copy(fontSize = 10.sp), maxLines = 1)
                         }
                     }
+                }
+            }
+            // 清空历史：历史 tab 且有记录时一直在底部（之前错放进了「列表为空」的分支，
+            // 结果这个按钮只在收藏为空时才会出现）
+            if (tab == 1) {
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.clearHistory() }.padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text("清空观看历史", fontSize = 12.sp, color = Kv.Ink3)
                 }
             }
         }
