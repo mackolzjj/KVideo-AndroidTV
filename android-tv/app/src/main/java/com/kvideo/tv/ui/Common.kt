@@ -92,7 +92,6 @@ fun PosterCard(
     item: DoubanItem,
     width: Int = 104,
     meta: String = "",
-    isNew: Boolean = false,
     onClick: () -> Unit
 ) {
     Column(Modifier.width(width.dp).clickable(onClick = onClick)) {
@@ -107,19 +106,6 @@ fun PosterCard(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .background(Kv.Red)
-                        .padding(horizontal = 5.dp, vertical = 1.5.dp)
-                )
-            }
-            if (isNew) {
-                Text(
-                    "新",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .background(Color(0x99000000))
                         .padding(horizontal = 5.dp, vertical = 1.5.dp)
                 )
             }

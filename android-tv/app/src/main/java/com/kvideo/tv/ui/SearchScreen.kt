@@ -174,8 +174,9 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             }
         }
 
-        if (pick != null) {
-            val g = pick!!
+        val picked = pick
+        if (picked != null) {
+            val g = picked
             AlertDialog(
                 onDismissRequest = { pick = null },
                 title = { Text(g.title, style = Kv.H2) },
@@ -226,10 +227,13 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             modifier = Modifier.weight(1f)
         ) {
             items(vm.results) { g: ResultGroup ->
+                // 空组的代表条目拿不到就没法点开，直接不画（正常数据流不会出现，属于防御）
+                val only = g.items.firstOrNull()
+                if (only != null) {
                 Column(
                     Modifier.clickable {
                         if (g.items.size == 1) {
-                            vm.openGroup(g, g.items.first())
+                            vm.openGroup(g, only)
                         } else {
                             pick = g
                             vm.pingGroup(g)
@@ -249,12 +253,13 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                     Text(
                         if (g.items.size > 1) "${g.items.size} 个源 · 点选线路"
                         else listOfNotNull(
-                            g.items.first().sourceName.ifBlank { null },
-                            g.items.first().remarks.ifBlank { null }
+                            only.sourceName.ifBlank { null },
+                            only.remarks.ifBlank { null }
                         ).joinToString(" · "),
                         style = Kv.Tiny.copy(fontSize = 10.sp),
                         maxLines = 1
                     )
+                }
                 }
             }
         }
