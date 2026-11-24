@@ -6,7 +6,7 @@
 - 客户端实现：[Kotlin](https://kotlinlang.org/) + [Jetpack Compose](https://developer.android.com/jetpack/compose) + [Media3](https://developer.android.com/media/media3)
 - 参考的源码：`lib/utils/search.ts`（检索过滤与打分）、`lib/hooks/useSubscriptionSync.ts`（源分流）、`lib/hooks/usePremiumHomePage.ts`（高级内容检索）、`app/api/*/route.ts`（接口契约）
 
-[下载 2.0.50](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv`
+[下载 2.0.51](https://github.com/mackolzjj/KVideo-AndroidTV/releases/latest) · Android 8.0 (API 26)+ · 包名 `com.kvideo.tv`
 
 ## 功能
 
