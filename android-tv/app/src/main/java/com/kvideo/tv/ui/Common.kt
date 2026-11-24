@@ -44,12 +44,12 @@ fun KvTopBar(
     trailing: @Composable RowScope.() -> Unit = {}
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = KvSpace.l, vertical = KvSpace.s),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (title == null) {
             Box(Modifier.size(11.dp).clip(RoundedCornerShape(2.dp)).background(Kv.Red))
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(KvSpace.s))
             Text("KVideo", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = Kv.Ink, letterSpacing = (-0.4).sp)
         } else {
             Text(title, style = Kv.H2, fontSize = 17.sp)
@@ -65,12 +65,12 @@ fun KvTopBar(
 @Composable
 fun SectionHeader(title: String, count: String? = null, action: String? = null, onAction: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 20.dp, bottom = 10.dp),
+        Modifier.fillMaxWidth().padding(horizontal = KvSpace.l).padding(top = 20.dp, bottom = 10.dp),
         verticalAlignment = Alignment.Bottom
     ) {
         Text(title, style = Kv.H2)
         if (count != null) {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(KvSpace.s))
             Text(count, style = Kv.Tiny)
         }
         Spacer(Modifier.weight(1f))
@@ -122,7 +122,7 @@ fun PosterCard(
 
 @Composable
 fun PosterArt(url: String, ratio: Float = 1.5f, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(3.dp)
+    val shape = RoundedCornerShape(KvRadius.s)
     Box(modifier.aspectRatio(1f / ratio).clip(shape).background(Kv.Surface2)) {
         if (url.isNotBlank()) {
             AsyncImage(
@@ -155,7 +155,7 @@ fun WideCard(
     onClick: () -> Unit
 ) {
     Column(Modifier.width(width.dp).clickable(onClick = onClick)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(3.dp)).background(Kv.Surface2)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(KvRadius.s)).background(Kv.Surface2)) {
             if (poster.isNotBlank()) {
                 AsyncImage(
                     model = poster,
@@ -174,7 +174,7 @@ fun WideCard(
                     color = Color.White,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(start = 8.dp, top = 7.dp)
+                        .padding(start = KvSpace.s, top = 7.dp)
                         .background(Color(0xA6000000))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
@@ -186,7 +186,7 @@ fun WideCard(
                     color = Color(0xE6FFFFFF),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(end = 8.dp, top = 7.dp)
+                        .padding(end = KvSpace.s, top = 7.dp)
                         .background(Color(0xA6000000))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
@@ -281,7 +281,7 @@ fun KvState(
                         .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface)
                         .clickable(onClick = onAction)
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(horizontal = 14.dp, vertical = KvSpace.s)
                 )
             }
         }

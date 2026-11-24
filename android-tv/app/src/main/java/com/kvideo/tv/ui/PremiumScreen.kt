@@ -43,7 +43,7 @@ fun PremiumScreen(vm: AppVm) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = KvSpace.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
             KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 42) { vm.back() }
@@ -55,16 +55,16 @@ fun PremiumScreen(vm: AppVm) {
         if (!vm.canPremium) {
             Column(Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
                 Text("这个页面需要高级内容密码", style = Kv.H2)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(KvSpace.s))
                 Text("密码只用于解锁 premium 源，与登录密码无关。", style = Kv.Body)
                 Spacer(Modifier.height(18.dp))
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface)
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = KvSpace.m),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     if (pw.isEmpty()) Text("高级内容密码", fontSize = 13.sp, color = Kv.Ink3)
@@ -77,12 +77,12 @@ fun PremiumScreen(vm: AppVm) {
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(KvSpace.m))
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Ink)
                         .clickable { vm.unlockPremium(pw) },
                     contentAlignment = Alignment.Center
@@ -109,9 +109,9 @@ fun PremiumScreen(vm: AppVm) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .padding(horizontal = KvSpace.l, vertical = 6.dp)
                     .height(38.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(KvRadius.s))
                     .background(Kv.Surface)
                     .padding(horizontal = 11.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -204,7 +204,7 @@ fun PremiumScreen(vm: AppVm) {
                                 Modifier
                                     .fillMaxWidth()
                                     .height(44.dp)
-                                    .clip(RoundedCornerShape(3.dp))
+                                    .clip(RoundedCornerShape(KvRadius.s))
                                     .background(Kv.Surface2)
                                     .clickable { vm.loadMorePremium() },
                                 contentAlignment = Alignment.Center

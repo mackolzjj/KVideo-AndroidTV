@@ -83,7 +83,7 @@ private fun CrashScreen(text: String, onContinue: () -> Unit) {
         Text("上次运行时崩了", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Kv.Ink)
         Spacer(Modifier.height(6.dp))
         Text("下面是堆栈（也可以从 /Android/data/com.kvideo.tv/files/last_crash.txt 拷出来）", fontSize = 11.5.sp, color = Kv.Ink3)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(KvSpace.m))
         Box(
             Modifier
                 .weight(1f)
@@ -91,11 +91,11 @@ private fun CrashScreen(text: String, onContinue: () -> Unit) {
                 .clip(RoundedCornerShape(4.dp))
                 .background(Kv.Surface)
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp)
+                .padding(KvSpace.m)
         ) {
             Text(text.trim(), fontSize = 10.5.sp, lineHeight = 15.sp, color = Kv.Ink2)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(KvSpace.m))
         Box(
             Modifier
                 .fillMaxWidth()

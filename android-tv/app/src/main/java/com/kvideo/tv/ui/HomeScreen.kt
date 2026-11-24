@@ -63,8 +63,8 @@ fun HomeScreen(vm: AppVm) {
             // 分类入口：点进各自的豆瓣片单（电影/剧集/综艺/动漫/纪录片）
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)
+                horizontalArrangement = Arrangement.spacedBy(KvSpace.s),
+                modifier = Modifier.padding(top = KvSpace.m, bottom = KvSpace.l)
             ) {
                 items(listOf("电影", "剧集", "综艺", "动漫", "纪录片")) { k ->
                     KvChip(k) { vm.openCategory(k) }
@@ -75,7 +75,7 @@ fun HomeScreen(vm: AppVm) {
                 StaticSkeleton()
             } else {
                 if (recs.isEmpty()) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(KvSpace.m))
                     KvEmpty(vm.error ?: "服务器没返回内容。检查地址和访问密码。")
                 }
 
@@ -118,7 +118,7 @@ fun HomeScreen(vm: AppVm) {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(9.dp),
-                                modifier = Modifier.padding(bottom = 12.dp)
+                                modifier = Modifier.padding(bottom = KvSpace.m)
                             ) {
                                 items(row) { d: DoubanItem ->
                                     PosterCard(
@@ -147,11 +147,11 @@ fun HomeScreen(vm: AppVm) {
                         )
                     )
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = KvSpace.l, vertical = KvSpace.m),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(Modifier.size(11.dp).clip(RoundedCornerShape(2.dp)).background(Kv.Red))
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(KvSpace.s))
             Text("KVideo", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, letterSpacing = (-0.4).sp)
             Spacer(Modifier.width(14.dp))
             Row(
@@ -168,7 +168,7 @@ fun HomeScreen(vm: AppVm) {
                 Spacer(Modifier.width(7.dp))
                 Text("搜片名、演员", fontSize = 12.sp, color = Color(0x99FFFFFF))
             }
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(KvSpace.xs))
             KvIconBtn(Icons.Filled.Settings, "设置") { vm.go(Route.Settings) }
         }
     }
@@ -188,7 +188,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
             )
             Column(Modifier.align(Alignment.BottomStart).padding(18.dp)) {
                 Text("连接你的 KVideo", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(KvSpace.s))
                 Text("设置里填服务器地址与访问密码", style = Kv.Meta)
             }
         } else {
@@ -225,7 +225,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(3.dp))
+                                        .clip(RoundedCornerShape(KvRadius.s))
                                         .background(Kv.Red)
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
@@ -237,7 +237,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(3.dp))
+                                            .clip(RoundedCornerShape(KvRadius.s))
                                             .background(Color(0x33FFFFFF))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
@@ -253,7 +253,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(KvSpace.s))
                             Text("随时可看 · 多源可选", style = Kv.Meta)
                             Spacer(Modifier.height(13.dp))
                             Row(
@@ -261,7 +261,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                                     .clip(RoundedCornerShape(4.dp))
                                     .background(Color.White)
                                     .clickable { onPlay(h.title) }
-                                    .padding(horizontal = 16.dp, vertical = 9.dp),
+                                    .padding(horizontal = KvSpace.l, vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
@@ -274,7 +274,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
             }
 
             Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+                Modifier.align(Alignment.BottomCenter).padding(bottom = KvSpace.m),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 repeat(items.size) { i ->
@@ -283,7 +283,7 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
                         Modifier
                             .height(5.dp)
                             .width(if (on) 16.dp else 5.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(KvRadius.s))
                             .background(if (on) Color.White else Color(0x42FFFFFF))
                     )
                 }
@@ -297,16 +297,16 @@ private fun HeroRow(items: List<DoubanItem>, onPlay: (String) -> Unit) {
 private fun StaticSkeleton() {
     Column {
         Box(Modifier.fillMaxWidth().height(110.dp).background(Color(0xFF14171A)))
-        Spacer(Modifier.height(16.dp))
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(KvSpace.l))
+        Row(Modifier.padding(horizontal = KvSpace.l), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             repeat(2) {
-                Box(Modifier.width(200.dp).height(112.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF14171A)))
+                Box(Modifier.width(200.dp).height(112.dp).clip(RoundedCornerShape(KvSpace.xs)).background(Color(0xFF14171A)))
             }
         }
-        Spacer(Modifier.height(16.dp))
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Spacer(Modifier.height(KvSpace.l))
+        Row(Modifier.padding(horizontal = KvSpace.l), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             repeat(3) {
-                Box(Modifier.width(104.dp).height(156.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF14171A)))
+                Box(Modifier.width(104.dp).height(156.dp).clip(RoundedCornerShape(KvSpace.xs)).background(Color(0xFF14171A)))
             }
         }
     }

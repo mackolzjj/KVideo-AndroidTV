@@ -85,7 +85,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                     if (group != null && group.items.size > 1) vm.pingGroup(group)
                 }
                 if (group != null && group.items.size > 1) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(KvSpace.m))
                     Row(
                         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(7.dp)
@@ -173,11 +173,11 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                     }
                 }
 
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(KvSpace.xl))
                 Text("选集 · 共 ${d.episodes.size} 集", style = Kv.H2)
                 Spacer(Modifier.height(10.dp))
                 d.episodes.chunked(6).forEachIndexed { rowIdx, row ->
-                    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = KvSpace.s), horizontalArrangement = Arrangement.spacedBy(KvSpace.s)) {
                         row.forEachIndexed { i, ep ->
                             // 用行号算下标：indexOf 在两集内容相同时会把两集都指到第一个
                             val idx = rowIdx * 6 + i
@@ -185,7 +185,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                                 Modifier
                                     .weight(1f)
                                     .height(46.dp)
-                                    .clip(RoundedCornerShape(3.dp))
+                                    .clip(RoundedCornerShape(KvRadius.s))
                                     .background(Kv.Surface)
                                     .clickable { vm.playDetail(idx) },
                                 contentAlignment = Alignment.Center

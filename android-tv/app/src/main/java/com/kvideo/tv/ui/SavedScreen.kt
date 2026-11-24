@@ -50,7 +50,7 @@ fun SavedScreen(vm: AppVm) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "片单")
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.padding(horizontal = KvSpace.l), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             KvChip("收藏 ${if (tab == 0) groups.size else groupByTitle(vm.favorites).size}", selected = tab == 0) { tab = 0 }
             KvChip("历史 ${if (tab == 1) groups.size else groupByTitle(vm.history).size}", selected = tab == 1) { tab = 1 }
         }
@@ -79,10 +79,10 @@ fun SavedScreen(vm: AppVm) {
                                     color = Color.White,
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .clip(RoundedCornerShape(3.dp))
+                                        .padding(KvSpace.xs)
+                                        .clip(RoundedCornerShape(KvRadius.s))
                                         .background(Color(0xCC000000))
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        .padding(horizontal = KvSpace.xs, vertical = 2.dp)
                                 )
                             }
                         }
@@ -99,7 +99,7 @@ fun SavedScreen(vm: AppVm) {
             // 结果这个按钮只在收藏为空时才会出现）
             if (tab == 1) {
                 Row(
-                    Modifier.fillMaxWidth().clickable { vm.clearHistory() }.padding(vertical = 12.dp),
+                    Modifier.fillMaxWidth().clickable { vm.clearHistory() }.padding(vertical = KvSpace.m),
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text("清空观看历史", fontSize = 12.sp, color = Kv.Ink3)

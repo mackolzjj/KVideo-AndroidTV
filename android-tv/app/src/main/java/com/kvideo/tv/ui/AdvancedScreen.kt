@@ -67,7 +67,7 @@ fun AdvancedScreen(vm: AppVm) {
                 Modifier
                     .fillMaxWidth()
                     .height(44.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(KvRadius.s))
                     .background(Kv.Ink)
                     .clickable { vm.saveServer(server, pw, live) },
                 contentAlignment = Alignment.Center
@@ -96,24 +96,24 @@ fun AdvancedScreen(vm: AppVm) {
                 )
             }
 
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(KvSpace.xl))
             Text("播放代理", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(KvSpace.s))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf(0 to "自动", 1 to "直连", 2 to "代理").forEach { (mode, label) ->
                     KvChip(label, selected = vm.proxyMode == mode) { vm.proxyMode = mode }
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(KvSpace.xs))
             Text("自动 = 先直连，失败再走服务器的 HLS 代理", style = Kv.Tiny)
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(KvSpace.m))
             Box(
                 Modifier
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(KvRadius.s))
                     .background(Kv.Surface2)
                     .clickable { vm.probeSources() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = KvSpace.m, vertical = KvSpace.s)
             ) {
                 Text(if (vm.probing) "正在探活…" else "重新探活源", fontSize = 12.sp, color = Kv.Ink)
             }
@@ -130,7 +130,7 @@ fun AdvancedScreen(vm: AppVm) {
                             loader.diskCache?.clear()
                             cacheMsg = "已清除"
                         }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = KvSpace.m, vertical = KvSpace.s)
                 ) {
                     Text("清除图片缓存", fontSize = 12.sp, color = Kv.Ink)
                 }
@@ -144,12 +144,12 @@ fun AdvancedScreen(vm: AppVm) {
             Text("屏蔽分类", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
             Spacer(Modifier.height(6.dp))
             Text("命中分类关键词的搜索结果直接隐藏（官方 blockedCategories，用「、」分隔）", style = Kv.Tiny)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(KvSpace.s))
             Field("分类关键词", blockedText, "伦理、福利", { blockedText = it })
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface2)
                         .clickable {
                             vm.blockedCategories = blockedText
@@ -159,19 +159,19 @@ fun AdvancedScreen(vm: AppVm) {
                                 .toSet()
                             blockedMsg = "已保存（${vm.blockedCategories.size} 个词）"
                         }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = KvSpace.m, vertical = KvSpace.s)
                 ) {
                     Text("保存屏蔽词", fontSize = 12.sp, color = Kv.Ink)
                 }
                 blockedMsg?.let {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(KvSpace.s))
                     Text(it, style = Kv.Tiny.copy(color = Kv.Ink2))
                 }
             }
 
             Spacer(Modifier.height(26.dp))
             Text("高级内容", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(KvSpace.s))
             if (vm.canPremium) {
                 Row(
                     Modifier.fillMaxWidth().height(44.dp).clickable { vm.openPremium() },
@@ -185,10 +185,10 @@ fun AdvancedScreen(vm: AppVm) {
                 Field("高级内容密码", premiumPw, "管理员账号可直接进", { premiumPw = it }, password = true)
                 Box(
                     Modifier
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface2)
                         .clickable { vm.unlockPremium(premiumPw) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = KvSpace.m, vertical = KvSpace.s)
                 ) {
                     Text("解锁", fontSize = 12.sp, color = Kv.Ink)
                 }
@@ -207,7 +207,7 @@ fun AdvancedScreen(vm: AppVm) {
                     color = Kv.Ink2,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface)
                         .padding(10.dp)
                 )
@@ -215,41 +215,41 @@ fun AdvancedScreen(vm: AppVm) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(KvRadius.s))
                             .background(Kv.Surface2)
                             .clickable { crash = com.kvideo.tv.KvApplication.lastCrash(ctx) }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = KvSpace.m, vertical = KvSpace.s)
                     ) { Text("刷新", fontSize = 12.sp, color = Kv.Ink) }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(KvSpace.s))
                     Box(
                         Modifier
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(KvRadius.s))
                             .background(Kv.Surface2)
                             .clickable {
                                 com.kvideo.tv.KvApplication.clearCrash(ctx)
                                 crash = ""
                             }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = KvSpace.m, vertical = KvSpace.s)
                     ) { Text("清空", fontSize = 12.sp, color = Kv.Ink) }
                 }
             }
 
             Spacer(Modifier.height(26.dp))
             Text("访问 PIN", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(KvSpace.xs))
             Text(
                 if (vm.hasPin) "已设置。改一个就换新的（4–8 位数字）" else "还没设置：设了以后进这个页面要输它",
                 style = Kv.Tiny
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(KvSpace.s))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .weight(1f)
                         .height(44.dp)
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface)
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = KvSpace.m),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     if (pin.isEmpty()) Text("4–8 位数字", fontSize = 13.sp, color = Kv.Ink3)
@@ -262,10 +262,10 @@ fun AdvancedScreen(vm: AppVm) {
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(KvSpace.s))
                 Box(
                     Modifier
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface2)
                         .clickable {
                             when {
@@ -277,7 +277,7 @@ fun AdvancedScreen(vm: AppVm) {
                                 }
                             }
                         }
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .padding(horizontal = KvSpace.m, vertical = 10.dp)
                 ) {
                     Text("保存 PIN", fontSize = 12.sp, color = Kv.Ink)
                 }

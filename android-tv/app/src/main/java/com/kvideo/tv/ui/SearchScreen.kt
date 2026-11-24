@@ -73,20 +73,20 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = KvSpace.m, vertical = KvSpace.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 Modifier
                     .weight(1f)
                     .height(38.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(KvRadius.s))
                     .background(Kv.Surface)
                     .padding(horizontal = 11.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Filled.Search, null, tint = Kv.Ink3, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(KvSpace.s))
                 Box(Modifier.weight(1f)) {
                     if (vm.query.isEmpty()) {
                         Text("剧集、电影、频道", fontSize = 13.sp, color = Kv.Ink3)
@@ -122,7 +122,7 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
         if (vm.query.isBlank()) {
             // 空搜索框时给两样东西：最近搜过的词 + 常搜的片名，点一下就搜
             val hot = listOf("庆余年", "狂飙", "甄嬛传", "三体", "繁花", "漫长的季节", "韩剧", "动漫")
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = KvSpace.l, vertical = 10.dp)) {
                 if (vm.searchHistory.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("最近搜索", style = Kv.Meta)
@@ -133,14 +133,14 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                             modifier = Modifier.clickable { vm.clearSearchHistory() }
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(KvSpace.s))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         items(vm.searchHistory) { w -> KvChip(w) { vm.search(w) } }
                     }
                     Spacer(Modifier.height(18.dp))
                 }
                 Text("猜你想搜", style = Kv.Meta)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(KvSpace.s))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     items(hot) { w -> KvChip(w) { vm.search(w) } }
                 }
@@ -149,7 +149,7 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
             Text(
                 "已搜 ${vm.progressDone}/${vm.progressTotal} 个源 · 找到 ${vm.allResults.size} 条",
                 style = Kv.Tiny,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                modifier = Modifier.padding(horizontal = KvSpace.l, vertical = 6.dp)
             )
         } else if (vm.results.isEmpty()) {
             KvEmpty(
@@ -164,7 +164,7 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
         // 上游那套：显示模式开关 + 源/类型/语言三排多选筛选，不做相关度过滤
         if (vm.allResults.isNotEmpty()) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().padding(horizontal = KvSpace.l, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -205,7 +205,7 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                 text = {
                     Column {
                         Text("${g.items.size} 个源，按实测延迟排序", style = Kv.Tiny)
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(KvSpace.s))
                         val ordered = g.items.sortedBy { vm.lineLatency[it.sourceId] ?: Long.MAX_VALUE }
                         ordered.forEach { item ->
                             Row(
@@ -234,7 +234,7 @@ fun SearchScreen(vm: AppVm, autofocus: Boolean = true) {
                         "取消",
                         fontSize = 13.sp,
                         color = Kv.Ink2,
-                        modifier = Modifier.clickable { pick = null }.padding(8.dp)
+                        modifier = Modifier.clickable { pick = null }.padding(KvSpace.s)
                     )
                 },
                 containerColor = Kv.Surface

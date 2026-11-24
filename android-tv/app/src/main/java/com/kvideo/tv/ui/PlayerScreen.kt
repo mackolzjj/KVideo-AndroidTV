@@ -497,7 +497,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 Modifier
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color(0xC7000000), Color.Transparent)))
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = KvSpace.s, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { vm.back() }
@@ -515,7 +515,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
-                    .padding(start = 12.dp, end = 12.dp, top = 40.dp, bottom = 10.dp)
+                    .padding(start = KvSpace.m, end = KvSpace.m, top = 40.dp, bottom = 10.dp)
             ) {
                 Slider(
                     value = if (duration > 0) {
@@ -596,7 +596,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .align(Alignment.Center)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xCC000000))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = KvSpace.l, vertical = 10.dp)
             ) {
                 Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
@@ -612,13 +612,13 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .padding(horizontal = 34.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xB3000000))
-                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                    .padding(horizontal = KvSpace.m, vertical = KvSpace.m)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         Modifier
                             .size(width = 6.dp, height = 74.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(KvRadius.s))
                             .background(Color(0x4DFFFFFF))
                     ) {
                         Box(
@@ -626,7 +626,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
                                 .fillMaxHeight(pct.coerceIn(0, 100) / 100f)
-                                .clip(RoundedCornerShape(3.dp))
+                                .clip(RoundedCornerShape(KvRadius.s))
                                 .background(Color.White)
                         )
                     }
@@ -665,7 +665,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 92.dp)
+                    .padding(end = KvSpace.l, bottom = 92.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xE6000000))
                     .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -708,7 +708,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     .padding(top = 56.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(0xCC000000))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(horizontal = KvSpace.m, vertical = 6.dp)
             ) {
                 Text(
                     "2.0X 快放中",
@@ -790,7 +790,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         "关闭",
                         fontSize = 13.sp,
                         color = Kv.Ink2,
-                        modifier = Modifier.clickable { epDialog = false }.padding(8.dp)
+                        modifier = Modifier.clickable { epDialog = false }.padding(KvSpace.s)
                     )
                 },
                 containerColor = Kv.Surface
@@ -808,12 +808,12 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White
                 )
                 if (route.isLive) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(KvSpace.xs))
                     Text("直播线路多半是中继限流或临时 404，等 5 秒重试，或换个频道", fontSize = 11.sp, color = Kv.Ink3)
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(err, fontSize = 11.5.sp, color = Kv.Ink2)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(KvSpace.m))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "重试",
@@ -828,15 +828,15 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                     exo.play()
                                 }
                             }
-                            .padding(8.dp)
+                            .padding(KvSpace.s)
                     )
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(KvSpace.l))
                     Text(
                         "返回换个源",
                         fontSize = 13.sp,
                         color = Kv.Red,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { vm.back() }.padding(8.dp)
+                        modifier = Modifier.clickable { vm.back() }.padding(KvSpace.s)
                     )
                 }
             }
@@ -866,7 +866,7 @@ private fun SpeedChip(
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
                 .clickable { onToggle() }
-                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .padding(horizontal = KvSpace.s, vertical = KvSpace.s)
         )
         if (open) {
             Column(
@@ -897,7 +897,7 @@ private fun SpeedList(speed: Float, onPick: (Float) -> Unit) {
                 color = if (s == speed) Kv.Red else Color.White,
                 modifier = Modifier
                     .clickable { onPick(s) }
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                    .padding(horizontal = KvSpace.m, vertical = 7.dp)
             )
         }
     }

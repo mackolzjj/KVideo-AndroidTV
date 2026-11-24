@@ -47,11 +47,11 @@ fun CategoryScreen(vm: AppVm, route: Route.Category) {
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = KvSpace.s, vertical = KvSpace.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
             KvIconBtn(Icons.AutoMirrored.Filled.ArrowBack, "返回", size = 40) { vm.back() }
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(KvSpace.xs))
             Column(Modifier.weight(1f)) {
                 Text(
                     route.kind,
@@ -72,7 +72,7 @@ fun CategoryScreen(vm: AppVm, route: Route.Category) {
                 color = Kv.Ink2,
                 modifier = Modifier
                     .clickable { if (!vm.categoryLoading) vm.refreshCategory() }
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .padding(horizontal = 10.dp, vertical = KvSpace.s)
             )
         }
 

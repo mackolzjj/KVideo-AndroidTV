@@ -67,15 +67,15 @@ fun LiveScreen(vm: AppVm) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .padding(horizontal = KvSpace.l, vertical = 2.dp)
+                    .clip(RoundedCornerShape(KvRadius.s))
                     .background(Kv.Surface2)
                     .clickable { vm.playChannel(last) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = KvSpace.m, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("上次", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Kv.Red)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(KvSpace.s))
                 Text(
                     last.name,
                     fontSize = 13.sp,
@@ -100,24 +100,24 @@ fun LiveScreen(vm: AppVm) {
         Spacer(Modifier.height(10.dp))
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(KvSpace.s),
             modifier = Modifier.weight(1f)
         ) {
             items(shown) { c: Channel ->
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(KvRadius.s))
                         .background(Kv.Surface)
                         .clickable { vm.playChannel(c) }
-                        .padding(horizontal = 12.dp, vertical = 13.dp),
+                        .padding(horizontal = KvSpace.m, vertical = 13.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(2.dp))
                             .background(Kv.Red)
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .padding(horizontal = KvSpace.xs, vertical = 2.dp)
                     ) {
                         Text("LIVE", fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                     }
@@ -145,7 +145,7 @@ fun LiveScreen(vm: AppVm) {
                         }
                     }
                     Text(c.group, style = Kv.Tiny)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(KvSpace.s))
                     val fav = c.url in vm.favChannels
                     Text(
                         if (fav) "★" else "☆",

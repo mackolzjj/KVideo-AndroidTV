@@ -42,9 +42,9 @@ internal fun Field(
             Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .clip(RoundedCornerShape(3.dp))
+                .clip(RoundedCornerShape(KvRadius.s))
                 .background(Kv.Surface)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = KvSpace.m),
             contentAlignment = Alignment.CenterStart
         ) {
             if (value.isEmpty()) {
@@ -85,7 +85,7 @@ fun SettingsScreen(vm: AppVm) {
                     color = Kv.Red,
                     modifier = Modifier
                         .clickable { vm.back() }
-                        .padding(8.dp)
+                        .padding(KvSpace.s)
                 )
             })
 
@@ -111,9 +111,9 @@ fun SettingsScreen(vm: AppVm) {
                 Text(it, fontSize = 12.sp, color = Kv.Red)
             }
 
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(KvSpace.xl))
             Text("其他", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(KvSpace.xs))
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -174,7 +174,7 @@ fun SettingsScreen(vm: AppVm) {
                     Spacer(Modifier.height(10.dp))
                     PinBox(pinInput) { pinInput = it.filter { c -> c.isDigit() }.take(8) }
                     if (firstTime) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(KvSpace.s))
                         PinBox(pinAgain) { pinAgain = it.filter { c -> c.isDigit() }.take(8) }
                     }
                     pinErr?.let {
@@ -206,7 +206,7 @@ fun SettingsScreen(vm: AppVm) {
                                 else -> pinErr = "PIN 不对"
                             }
                         }
-                        .padding(8.dp)
+                        .padding(KvSpace.s)
                 )
             },
             dismissButton = {
@@ -214,7 +214,7 @@ fun SettingsScreen(vm: AppVm) {
                     "取消",
                     fontSize = 13.sp,
                     color = Kv.Ink2,
-                    modifier = Modifier.clickable { pinDialog = false }.padding(8.dp)
+                    modifier = Modifier.clickable { pinDialog = false }.padding(KvSpace.s)
                 )
             },
             containerColor = Kv.Surface
@@ -228,9 +228,9 @@ private fun PinBox(value: String, onChange: (String) -> Unit) {
         Modifier
             .fillMaxWidth()
             .height(44.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RoundedCornerShape(KvRadius.s))
             .background(Kv.Surface2)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = KvSpace.m),
         contentAlignment = Alignment.CenterStart
     ) {
         if (value.isEmpty()) Text("••••", fontSize = 15.sp, color = Kv.Ink3)
@@ -251,13 +251,13 @@ fun SetupScreen(vm: AppVm) {
     var pw by remember { mutableStateOf(vm.password) }
 
     Column(
-        Modifier.fillMaxSize().background(Kv.Bg).padding(horizontal = 22.dp),
+        Modifier.fillMaxSize().background(Kv.Bg).padding(horizontal = KvSpace.xl),
         verticalArrangement = Arrangement.Center
     ) {
         Box(Modifier.size(13.dp).clip(RoundedCornerShape(2.dp)).background(Kv.Red))
         Spacer(Modifier.height(14.dp))
         Text("连接你的 KVideo", style = Kv.Title.copy(fontSize = 26.sp))
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(KvSpace.s))
         Text("填写服务器地址和访问密码，App 会直接读服务端的接口，不再套网页。", style = Kv.Body)
         Spacer(Modifier.height(24.dp))
         Field("服务器地址", server, "http://192.168.1.2:81", { server = it })
@@ -266,7 +266,7 @@ fun SetupScreen(vm: AppVm) {
             Modifier
                 .fillMaxWidth()
                 .height(46.dp)
-                .clip(RoundedCornerShape(3.dp))
+                .clip(RoundedCornerShape(KvRadius.s))
                 .background(Kv.Ink)
                 .clickable { vm.saveServer(server, pw, vm.liveUrl) },
             contentAlignment = Alignment.Center
@@ -274,11 +274,11 @@ fun SetupScreen(vm: AppVm) {
             Text("连接", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
         vm.error?.let {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(KvSpace.m))
             Text(it, fontSize = 12.sp, color = Kv.Red)
         }
         if (vm.busy) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(KvSpace.m))
             Text("正在连接…", style = Kv.Tiny)
         }
     }
