@@ -496,14 +496,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     modifier = Modifier.fillMaxWidth().height(24.dp)
                 )
 
-                // 按钮组：横屏单行（锁在最左，离全屏最远，避免误触全屏）；竖屏 390dp 塞不下 8 个，拆两行
+                // 按钮组：横竖屏都是单行。锁已移到右缘中部，底部只留播放相关 + 剧集/倍速/全屏
                 if (compact) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        KvIconBtn(Icons.Filled.Lock, "锁定", size = 34) {
-                            locked = true
-                            lockChipVisible = true
-                            showControls = false
-                        }
                         KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 34) {
                             exo.seekTo((position - 10_000).coerceAtLeast(0))
                         }
@@ -522,7 +517,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                 )
                             )
                         }
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             "${fmt(position)} / ${fmt(duration)}",
                             fontSize = 12.sp,
@@ -530,12 +525,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                             color = Color.White,
                             maxLines = 1
                         )
-                    }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                        Spacer(Modifier.weight(1f))
                         if (route.episodes.isNotEmpty()) {
                             KvIconBtn(Icons.Filled.PlaylistPlay, "剧集", size = 34) { epDialog = true }
                         }
@@ -553,11 +543,6 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        KvIconBtn(Icons.Filled.Lock, "锁定", size = 40) {
-                            locked = true
-                            lockChipVisible = true
-                            showControls = false
-                        }
                         KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 42) {
                             exo.seekTo((position - 10_000).coerceAtLeast(0))
                         }
@@ -692,24 +677,36 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             }
         }
 
-        if (locked && lockChipVisible) {
-            // 锁定时显示的是「已锁定」的锁图标（之前用了开锁图标，语义反了）
-            // 只闪 2.5 秒：锁着的时候不该一直有个按钮挂在那儿
+        // 锁定键固定在右缘中部（拇指自然落点，离全屏最远）：
+        // 未锁时跟控制层一起显隐，锁定时同位置浮出实心锁 2.5 秒后淡掉。
+        val lockEdgeVisible = (visible && !inPip && hudKind.isEmpty()) || (locked && lockChipVisible)
+        if (lockEdgeVisible) {
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp)
-                    .size(44.dp)
+                    .padding(end = 10.dp)
+                    .size(if (locked) 40.dp else 36.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0x66000000))
+                    .background(Color(if (locked) 0xB3000000 else 0x66000000))
                     .clickable {
-                        locked = false
-                        lockChipVisible = false
-                        showControls = true
+                        if (locked) {
+                            locked = false
+                            lockChipVisible = false
+                            showControls = true
+                        } else {
+                            locked = true
+                            lockChipVisible = true
+                            showControls = false
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.Lock, "解锁", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(
+                    if (locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                    if (locked) "解锁" else "锁定",
+                    tint = Color.White.copy(alpha = if (locked) 1f else 0.55f),
+                    modifier = Modifier.size(if (locked) 19.dp else 17.dp)
+                )
             }
         }
 
