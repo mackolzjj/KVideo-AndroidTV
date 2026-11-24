@@ -67,6 +67,16 @@ object Net {
     fun jsonBody(obj: JSONObject) = obj.toString().toRequestBody("application/json".toMediaType())
 }
 
+
+/**
+ * JSONObject.optString 对 JSON 里的 null 会返回字符串 "null"（JSONObject.NULL.toString()），
+ * 订阅清单里 `"searchPath": null` / `"detailPath": null` 很常见 —— 直接拼进 URL 就成了
+ * `${baseUrl}null`，实测 /api/search-parallel 会因此对每个源都返回 0 条。
+ * 所有取字符串的地方都走这个函数。
+ */
+internal fun jsStr(o: JSONObject, key: String, def: String = ""): String =
+    if (o.isNull(key)) def else o.optString(key, def)
+
 data class Account(val username: String = "", val name: String = "", val role: String = "")
 
 class Api {
@@ -119,11 +129,11 @@ class Api {
                 val tags = JSONObject(text).optJSONArray("tags") ?: JSONArray()
                 (0 until tags.length()).mapNotNull { i ->
                     val o = tags.optJSONObject(i) ?: return@mapNotNull null
-                    val label = o.optString("label")
+                    val label = jsStr(o, "label")
                     // 官方 types/route.ts 的第一条固定是 {id:'recommend', label:'今日推荐', value:''}，
                     // value 为空代表「所有 premium 源、不带 t 参数」。之前把空 value 丢掉，
                     // 等于永远不会走这条「全部源」的路径，只能点开某个具体分类（覆盖的源很少）。
-                    val value = o.optString("value", "")
+                    val value = jsStr(o, "value", "")
                     if (label.isBlank()) null else label to value
                 }
             }
@@ -150,16 +160,16 @@ class Api {
                         val videos = JSONObject(text).optJSONArray("videos") ?: JSONArray()
                         (0 until videos.length()).mapNotNull { i ->
                             val o = videos.optJSONObject(i) ?: return@mapNotNull null
-                            val sid = o.optString("source")
+                            val sid = jsStr(o, "source")
                             VideoItem(
-                                id = o.optString("vod_id"),
-                                name = o.optString("vod_name"),
-                                poster = Net.abs(o.optString("vod_pic")),
-                                remarks = o.optString("vod_remarks"),
+                                id = jsStr(o, "vod_id"),
+                                name = jsStr(o, "vod_name"),
+                                poster = Net.abs(jsStr(o, "vod_pic")),
+                                remarks = jsStr(o, "vod_remarks"),
                                 year = "",
                                 sourceId = sid,
                                 sourceName = srcs.firstOrNull { it.id == sid }?.name ?: sid,
-                                typeName = o.optString("type_name")
+                                typeName = jsStr(o, "type_name")
                             )
                         }
                     }
@@ -198,9 +208,9 @@ class Api {
     private fun accountOf(s: JSONObject?): Account? {
         if (s == null) return null
         return Account(
-            username = s.optString("username"),
-            name = s.optString("name"),
-            role = s.optString("role")
+            username = jsStr(s, "username"),
+            name = jsStr(s, "name"),
+            role = jsStr(s, "role")
         )
     }
 
@@ -218,7 +228,9 @@ class Api {
             Net.client.newCall(Net.builder("/api/config").build()).execute().use { r ->
                 val text = r.body?.string().orEmpty()
                 if (text.isNotEmpty()) {
-                    val raw = JSONObject(text).optString("subscriptionSources", "")
+                    val cfgObj = JSONObject(text)
+                    val raw = if (cfgObj.isNull("subscriptionSources")) ""
+                    else cfgObj.optString("subscriptionSources", "")
                     if (raw.isNotBlank()) {
                         val arr = JSONArray(raw)
                         val direct = mutableListOf<Source>()
@@ -227,7 +239,7 @@ class Api {
                             val o = arr.optJSONObject(i) ?: continue
                             val s = sourceOf(o)
                             if (s != null) direct.add(s) else {
-                                val u = o.optString("url", "")
+                                val u = jsStr(o, "url", "")
                                 if (u.isNotBlank()) subUrls.add(u)
                             }
                         }
@@ -260,18 +272,18 @@ class Api {
 
     private fun sourceOf(o: JSONObject?): Source? {
         if (o == null) return null
-        val baseUrl = o.optString("baseUrl", "")
+        val baseUrl = jsStr(o, "baseUrl", "")
         if (baseUrl.isBlank()) return null
         return Source(
-            id = o.optString("id", baseUrl),
-            name = o.optString("name", o.optString("id", "源")),
+            id = jsStr(o, "id", baseUrl),
+            name = jsStr(o, "name", jsStr(o, "id", "源")),
             baseUrl = baseUrl,
-            group = o.optString("group", "normal").ifBlank { "normal" },
+            group = jsStr(o, "group", "normal").ifBlank { "normal" },
             enabled = o.optBoolean("enabled", true),
             priority = o.optInt("priority", 0),
-            tag = o.optString("source", ""),
-            searchPath = o.optString("searchPath", ""),
-            detailPath = o.optString("detailPath", "")
+            tag = jsStr(o, "source", ""),
+            searchPath = jsStr(o, "searchPath", ""),
+            detailPath = jsStr(o, "detailPath", "")
         )
     }
 
@@ -295,10 +307,10 @@ class Api {
                 (0 until arr.length()).mapNotNull { i ->
                     val o = arr.optJSONObject(i) ?: return@mapNotNull null
                     DoubanItem(
-                        id = o.optString("id"),
-                        title = o.optString("title"),
-                        cover = Net.abs(o.optString("cover")),
-                        rate = o.optString("rate")
+                        id = jsStr(o, "id"),
+                        title = jsStr(o, "title"),
+                        cover = Net.abs(jsStr(o, "cover")),
+                        rate = jsStr(o, "rate")
                     )
                 }
             }
@@ -363,7 +375,7 @@ class Api {
                         val json = line.removePrefix("data:").trim()
                         if (json.isEmpty()) continue
                         val obj = try { JSONObject(json) } catch (e: Exception) { continue }
-                        when (obj.optString("type")) {
+                        when (jsStr(obj, "type")) {
                             "videos" -> onVideos(parseVideos(obj.optJSONArray("videos")))
                             "progress" -> onProgress(
                                 obj.optInt("completedSources", 0),
@@ -384,19 +396,19 @@ class Api {
         return (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             VideoItem(
-                id = o.optString("vod_id"),
-                name = o.optString("vod_name"),
-                poster = Net.abs(o.optString("vod_pic")),
-                remarks = o.optString("vod_remarks"),
-                year = o.optString("vod_year"),
-                sourceId = o.optString("source"),
-                sourceName = o.optString("sourceDisplayName", o.optString("source")),
-                typeName = o.optString("type_name").ifBlank {
-                    o.optString("vod_class").substringBefore(",")
+                id = jsStr(o, "vod_id"),
+                name = jsStr(o, "vod_name"),
+                poster = Net.abs(jsStr(o, "vod_pic")),
+                remarks = jsStr(o, "vod_remarks"),
+                year = jsStr(o, "vod_year"),
+                sourceId = jsStr(o, "source"),
+                sourceName = jsStr(o, "sourceDisplayName", jsStr(o, "source")),
+                typeName = jsStr(o, "type_name").ifBlank {
+                    jsStr(o, "vod_class").substringBefore(",")
                 },
-                className = o.optString("vod_class"),
-                lang = o.optString("vod_lang"),
-                area = o.optString("vod_area")
+                className = jsStr(o, "vod_class"),
+                lang = jsStr(o, "vod_lang"),
+                area = jsStr(o, "vod_area")
             )
         }
     }
@@ -426,22 +438,22 @@ class Api {
                         val o = epsArr.optJSONObject(i) ?: return@mapNotNull null
                         Episode(
                             index = o.optInt("index", i),
-                            name = o.optString("name", "第 ${i + 1} 集"),
-                            url = o.optString("url")
+                            name = jsStr(o, "name", "第 ${i + 1} 集"),
+                            url = jsStr(o, "url")
                         )
                     }
                     Detail(
-                        id = d.optString("vod_id", id),
-                        name = d.optString("vod_name"),
-                        poster = Net.abs(d.optString("vod_pic")),
-                        remarks = d.optString("vod_remarks"),
-                        year = d.optString("vod_year"),
-                        area = d.optString("vod_area"),
-                        typeName = d.optString("type_name"),
-                        actors = d.optString("vod_actor"),
-                        intro = d.optString("vod_content"),
+                        id = jsStr(d, "vod_id", id),
+                        name = jsStr(d, "vod_name"),
+                        poster = Net.abs(jsStr(d, "vod_pic")),
+                        remarks = jsStr(d, "vod_remarks"),
+                        year = jsStr(d, "vod_year"),
+                        area = jsStr(d, "vod_area"),
+                        typeName = jsStr(d, "type_name"),
+                        actors = jsStr(d, "vod_actor"),
+                        intro = jsStr(d, "vod_content"),
                         episodes = eps,
-                        sourceId = d.optString("source", source.id)
+                        sourceId = jsStr(d, "source", source.id)
                     )
                 }
         } catch (e: Exception) {
