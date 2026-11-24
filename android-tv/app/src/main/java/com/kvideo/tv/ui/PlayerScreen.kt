@@ -677,14 +677,14 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             }
         }
 
-        // 锁定键固定在右缘中部（拇指自然落点，离全屏最远）：
+        // 锁定键固定在左缘中部（用户左手操作，这里最好按）：
         // 未锁时跟控制层一起显隐，锁定时同位置浮出实心锁 2.5 秒后淡掉。
         val lockEdgeVisible = (visible && !inPip && hudKind.isEmpty()) || (locked && lockChipVisible)
         if (lockEdgeVisible) {
             Box(
                 Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 10.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(start = 10.dp)
                     .size(if (locked) 40.dp else 36.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(if (locked) 0xB3000000 else 0x66000000))
