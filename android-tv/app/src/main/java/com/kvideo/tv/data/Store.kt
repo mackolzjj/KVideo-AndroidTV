@@ -35,11 +35,6 @@ class Store(ctx: Context) {
         get() = sp.getStringSet("blocked_categories", setOf("伦理"))?.toSet() ?: setOf("伦理")
         set(v) = sp.edit().putStringSet("blocked_categories", v).apply()
 
-    /** 画面比例档位：0 适应 / 1 填充 / 2 16:9 / 3 4:3 */
-    var ratioMode: Int
-        get() = sp.getInt("ratio_mode", 0)
-        set(v) = sp.edit().putInt("ratio_mode", v).apply()
-
     /** 收藏的直播频道（按 url 记，频道名会变） */
     var favChannels: Set<String>
         get() = sp.getStringSet("fav_channels", emptySet())?.toSet() ?: emptySet()
