@@ -120,8 +120,11 @@ class Api {
                 (0 until tags.length()).mapNotNull { i ->
                     val o = tags.optJSONObject(i) ?: return@mapNotNull null
                     val label = o.optString("label")
-                    val value = o.optString("value")
-                    if (label.isBlank() || value.isBlank()) null else label to value
+                    // 官方 types/route.ts 的第一条固定是 {id:'recommend', label:'今日推荐', value:''}，
+                    // value 为空代表「所有 premium 源、不带 t 参数」。之前把空 value 丢掉，
+                    // 等于永远不会走这条「全部源」的路径，只能点开某个具体分类（覆盖的源很少）。
+                    val value = o.optString("value", "")
+                    if (label.isBlank()) null else label to value
                 }
             }
         } catch (e: Exception) {

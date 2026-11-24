@@ -167,8 +167,12 @@ fun PremiumScreen(vm: AppVm) {
             when {
                 vm.premiumLoading -> KvEmpty("正在取内容…")
                 vm.premiumVideos.isEmpty() -> KvEmpty(
-                    if (vm.premiumSources.isEmpty()) "订阅里没有 group=premium 的源"
-                    else "没有内容，换个分类试试"
+                    when {
+                        vm.premiumSources.isEmpty() -> "订阅里没有 group=premium 的源"
+                        // 官方 types 的第一条「今日推荐」value=''，代表所有 premium 源一起取
+                        vm.premiumTagValue.isEmpty() -> "今日推荐没返回内容：这些源这会儿可能都不可达"
+                        else -> "这个分类没返回内容，换个分类试试"
+                    }
                 )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -205,7 +209,7 @@ fun PremiumScreen(vm: AppVm) {
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    if (vm.premiumLoading) "加载中…" else "加载更多（第 ${vm.premiumPage} 页）· 点这里",
+                                    if (vm.premiumLoading) "加载中…" else "加载更多（第 ${vm.premiumPage + 1} 页）· 点这里",
                                     fontSize = 12.sp,
                                     color = Kv.Ink
                                 )

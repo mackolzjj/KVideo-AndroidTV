@@ -77,6 +77,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var premiumVideos by mutableStateOf<List<VideoItem>>(emptyList())
     var premiumLoading by mutableStateOf(false)
     var premiumTagValue by mutableStateOf("")
+    /** 分类是否已选定（今日推荐的 value 就是空串，不能用 isBlank 判） */
+    private var premiumTagReady by mutableStateOf(false)
 
     val premiumSources: List<Source>
         get() = sources.filter { it.group == "premium" && it.enabled }
@@ -129,6 +131,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
 
     fun loadPremiumCategory(value: String, page: Int = 1, append: Boolean = false) {
         premiumTagValue = value
+        premiumTagReady = true
         premiumPage = page
         premiumLoading = true
         viewModelScope.launch {
@@ -141,7 +144,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadMorePremium() {
-        if (premiumLoading || !premiumHasMore || premiumTagValue.isBlank()) return
+        if (premiumLoading || !premiumHasMore || !premiumTagReady) return
         loadPremiumCategory(premiumTagValue, premiumPage + 1, append = true)
     }
 
