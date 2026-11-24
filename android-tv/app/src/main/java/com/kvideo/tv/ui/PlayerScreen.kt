@@ -805,8 +805,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     }
 }
 
-/** 倍速列表：竖屏弹在控制条上方，横屏弹在按钮上方 */
-@Composable
+/** 倍速按钮 + 弹出的倍速列表（横竖屏共用） */
 @Composable
 private fun SpeedChip(
     speed: Float,
@@ -839,6 +838,8 @@ private fun SpeedChip(
     }
 }
 
+/** 倍速列表：竖屏弹在控制条上方，横屏弹在按钮上方 */
+@Composable
 private fun SpeedList(speed: Float, onPick: (Float) -> Unit) {
     Column(
         Modifier
