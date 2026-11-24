@@ -82,12 +82,17 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug -PkvideoUrl="$KVIDEO_URL"
 
+      # 版本号唯一来源是 android-tv/version.properties；lint 作为质量门，
+      # 新引入的 UnstableApi / 空指针 / 资源问题会在这里失败（历史 67 条 warning 不挡）。
+      - name: Lint (debug)
+        run: ./gradlew --no-daemon lintDebug
+
       - name: Resolve APK version name
         id: apk_version
         run: |
-          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n 1 | tr -d '\r\n ')"
+          version_name="$(grep -m1 '^versionName=' version.properties | cut -d= -f2 | tr -d '\r\n ')"
           if [ -z "$version_name" ]; then
-            echo "::error::versionName not found in app/build.gradle.kts"
+            echo "::error::versionName not found in android-tv/version.properties"
             exit 1
           fi
           echo "value=$version_name" >> "$GITHUB_OUTPUT"

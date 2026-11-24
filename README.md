@@ -61,8 +61,12 @@
 
 ```bash
 cd android-tv
+./gradlew bumpVersion     # 版本号 +1（唯一来源：version.properties）
 ./gradlew assembleDebug
+./gradlew lintDebug       # CI 也会跑；历史 67 条 warning 不挡，新引入的错误会失败
 ```
+
+版本号只改 `android-tv/version.properties` 一处，`app/build.gradle.kts` 不再手写 `versionCode` / `versionName`。
 
 推 `v*` 标签触发 GitHub Actions 建 Release，资产名 `KVideo-Android-<versionName>.apk`。
 

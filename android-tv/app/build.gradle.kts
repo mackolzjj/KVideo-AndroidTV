@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application") version "8.2.0"
     id("org.jetbrains.kotlin.android") version "1.9.22"
@@ -10,6 +12,30 @@ val defaultKVideoUrl = providers
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 
+// 版本号唯一来源：android-tv/version.properties（`./gradlew bumpVersion` 自动 +1），
+// 不要再在 app/build.gradle.kts 里手写两行 —— 以前每次都要改两个数字，容易漏一个。
+val verProps = Properties().apply {
+    val f = rootProject.file("version.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val appVersionCode = (verProps.getProperty("versionCode") ?: "1").toInt()
+val appVersionName = verProps.getProperty("versionName") ?: "0.0.0"
+
+tasks.register("bumpVersion") {
+    doLast {
+        val f = rootProject.file("version.properties")
+        val p = Properties().apply { if (f.exists()) f.inputStream().use { load(it) } }
+        val cur = p.getProperty("versionName") ?: "0.0.0"
+        val parts = cur.split(".")
+        val next = if (parts.size == 3) "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}" else "1.0.0"
+        val nextCode = (p.getProperty("versionCode") ?: "0").toInt() + 1
+        p.setProperty("versionName", next)
+        p.setProperty("versionCode", nextCode.toString())
+        f.outputStream().use { p.store(it, null) }
+        println("version -> $next ($nextCode)")
+    }
+}
+
 android {
     namespace = "com.kvideo.tv"
     compileSdk = 34
@@ -18,8 +44,8 @@ android {
         applicationId = "com.kvideo.tv"
         minSdk = 26
         targetSdk = 34
-        versionCode = 267
-        versionName = "2.0.67"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         buildConfigField("String", "DEFAULT_KVIDEO_URL", "\"$defaultKVideoUrl\"")
     }

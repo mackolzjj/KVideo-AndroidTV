@@ -223,7 +223,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         get() = sources.filter { it.group != "premium" }
 
     /** 探活结果：实测 63 个普通源里只有十来个真的能返回内容，其余是死源 */
-    var aliveSources by mutableStateOf<Set<String>>(emptySet())
+    // 探活结果落盘：重启后不必重新探；超过 6 小时自动重探（死源不会被永久剔除）
+    var aliveSources by mutableStateOf(store.aliveIds)
     var probing by mutableStateOf(false)
 
     /** 真正参与搜索的源：可见 + 启用 + 探活通过（还没探过就先用全部可见的） */
@@ -253,6 +254,8 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 }.forEach { it.join() }
             }
             aliveSources = alive.toSet()
+            store.aliveIds = alive.toSet()
+            store.aliveAt = System.currentTimeMillis()
             lineLatency = lineLatency + lat
             probing = false
         }
@@ -656,7 +659,11 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 }
                 sources = api.sources()
                 recommend = api.recommend()
-                if (sources.isNotEmpty()) probeSources()
+                if (sources.isNotEmpty()) {
+                    // 没探过、或者上次探活超过 6 小时 → 重探一次（探活结果已落盘）
+                    val stale = System.currentTimeMillis() - store.aliveAt > 6 * 3600_000L
+                    if (aliveSources.isEmpty() || stale) probeSources()
+                }
                 if (sources.isEmpty() && recommend.isEmpty()) {
                     error = "连上了，但没拿到内容：检查服务器地址"
                 }

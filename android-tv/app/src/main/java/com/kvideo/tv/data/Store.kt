@@ -35,6 +35,15 @@ class Store(ctx: Context) {
         get() = sp.getStringSet("blocked_categories", setOf("伦理"))?.toSet() ?: setOf("伦理")
         set(v) = sp.edit().putStringSet("blocked_categories", v).apply()
 
+    /** 探活结果（源 id 集合）与探活时间：6 小时后自动重探，死源不会被永久剔除 */
+    var aliveIds: Set<String>
+        get() = sp.getStringSet("alive_ids", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("alive_ids", v).apply()
+
+    var aliveAt: Long
+        get() = sp.getLong("alive_at", 0L)
+        set(v) = sp.edit().putLong("alive_at", v).apply()
+
     /** 收藏的直播频道（按 url 记，频道名会变） */
     var favChannels: Set<String>
         get() = sp.getStringSet("fav_channels", emptySet())?.toSet() ?: emptySet()
