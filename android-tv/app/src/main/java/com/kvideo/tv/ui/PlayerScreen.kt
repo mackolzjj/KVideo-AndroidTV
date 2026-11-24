@@ -540,96 +540,51 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     modifier = Modifier.fillMaxWidth().height(24.dp)
                 )
 
-                // 按钮组：横竖屏都是单行。锁已移到右缘中部，底部只留播放相关 + 剧集/倍速/全屏
-                if (compact) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 34) {
-                            exo.seekTo((position - 10_000).coerceAtLeast(0))
-                        }
-                        KvIconBtn(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            if (playing) "暂停" else "播放",
-                            size = 38
-                        ) {
-                            if (playing) exo.pause() else exo.play()
-                            playing = !playing
-                        }
-                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 34) {
-                            exo.seekTo(
-                                (position + 10_000).coerceAtMost(
-                                    if (duration > 0) duration else position + 10_000
-                                )
-                            )
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "${fmt(position)} / ${fmt(duration)}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 1
-                        )
-                        Spacer(Modifier.weight(1f))
-                        if (route.episodes.isNotEmpty()) {
-                            KvIconBtn(Icons.AutoMirrored.Filled.PlaylistPlay, "剧集", size = 34) { epDialog = true }
-                        }
-                        SpeedChip(speed, true, speedOpen, { speedOpen = !speedOpen }) { s ->
-                            speed = s
-                            vm.playSpeed = s
-                            exo.setPlaybackSpeed(s)
-                            speedOpen = false
-                        }
-                        KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 34) {
-                            activity?.requestedOrientation = if (isLandscape)
-                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                            else
-                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        }
+                // 按钮组：横竖屏共用同一段布局，只有尺寸不同（PlayerBarSpec），
+                // 以前是两段复制粘贴，改一处必须记得改两遍。
+                val bar = if (compact) PlayerBarSpec(icon = 34, play = 38) else PlayerBarSpec(icon = 42, play = 46)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = bar.icon) {
+                        exo.seekTo((position - 10_000).coerceAtLeast(0))
                     }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        KvIconBtn(Icons.Filled.FastRewind, "后退10秒", size = 42) {
-                            exo.seekTo((position - 10_000).coerceAtLeast(0))
-                        }
-                        KvIconBtn(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            if (playing) "暂停" else "播放",
-                            size = 46
-                        ) {
-                            if (playing) exo.pause() else exo.play()
-                            playing = !playing
-                        }
-                        KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = 42) {
-                            exo.seekTo(
-                                (position + 10_000).coerceAtMost(
-                                    if (duration > 0) duration else position + 10_000
-                                )
+                    KvIconBtn(
+                        if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        if (playing) "暂停" else "播放",
+                        size = bar.play
+                    ) {
+                        if (playing) exo.pause() else exo.play()
+                        playing = !playing
+                    }
+                    KvIconBtn(Icons.Filled.FastForward, "前进10秒", size = bar.icon) {
+                        exo.seekTo(
+                            (position + 10_000).coerceAtMost(
+                                if (duration > 0) duration else position + 10_000
                             )
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "${fmt(position)} / ${fmt(duration)}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 1
                         )
-                        Spacer(Modifier.weight(1f))
-                        if (route.episodes.isNotEmpty()) {
-                            KvIconBtn(Icons.AutoMirrored.Filled.PlaylistPlay, "剧集", size = 42) { epDialog = true }
-                        }
-                        SpeedChip(speed, false, speedOpen, { speedOpen = !speedOpen }) { s ->
-                            speed = s
-                            vm.playSpeed = s
-                            exo.setPlaybackSpeed(s)
-                            speedOpen = false
-                        }
-                        KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = 40) {
-                            activity?.requestedOrientation = if (isLandscape)
-                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                            else
-                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        }
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "${fmt(position)} / ${fmt(duration)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (route.episodes.isNotEmpty()) {
+                        KvIconBtn(Icons.AutoMirrored.Filled.PlaylistPlay, "剧集", size = bar.icon) { epDialog = true }
+                    }
+                    SpeedChip(speed, compact, speedOpen, { speedOpen = !speedOpen }) { s ->
+                        speed = s
+                        vm.playSpeed = s
+                        exo.setPlaybackSpeed(s)
+                        speedOpen = false
+                    }
+                    KvIconBtn(Icons.Filled.Fullscreen, "全屏", size = bar.icon) {
+                        activity?.requestedOrientation = if (isLandscape)
+                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        else
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     }
                 }
             }
@@ -888,6 +843,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         }
     }
 }
+
+/** 控制条尺寸：横竖屏只差这几个数 */
+private data class PlayerBarSpec(val icon: Int, val play: Int)
 
 /** 倍速按钮 + 弹出的倍速列表（横竖屏共用） */
 @Composable
