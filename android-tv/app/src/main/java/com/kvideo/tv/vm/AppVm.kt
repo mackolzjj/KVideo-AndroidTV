@@ -904,6 +904,16 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         loadDetail(item.id, item.sourceId)
     }
 
+    /** 收藏的直播频道（url 集合） */
+    var favChannels by mutableStateOf(store.favChannels)
+
+    fun toggleFavChannel(url: String) {
+        if (url.isBlank()) return
+        val next = if (url in favChannels) favChannels - url else favChannels + url
+        store.favChannels = next
+        favChannels = next
+    }
+
     /** 上次看的台（直播页顶部「继续看」用） */
     val lastChannelName: String
         get() = store.lastChannelName

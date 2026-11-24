@@ -32,6 +32,7 @@ import com.kvideo.tv.vm.AppVm
  * 入口：设置页连点「版本」7 次 → 输 PIN（首次让你设一个）→ 进这里。
  */
 @Composable
+@OptIn(coil.annotation.ExperimentalCoilApi::class)
 fun AdvancedScreen(vm: AppVm) {
     var server by remember { mutableStateOf(vm.serverUrl) }
     var pw by remember { mutableStateOf(vm.password) }
@@ -42,6 +43,7 @@ fun AdvancedScreen(vm: AppVm) {
     var pinMsg by remember { mutableStateOf<String?>(null) }
     var blockedText by remember { mutableStateOf(vm.blockedCategories.joinToString("、")) }
     var blockedMsg by remember { mutableStateOf<String?>(null) }
+    var cacheMsg by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
     var crash by remember { mutableStateOf(com.kvideo.tv.KvApplication.lastCrash(ctx)) }
 
@@ -114,6 +116,28 @@ fun AdvancedScreen(vm: AppVm) {
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(if (vm.probing) "正在探活…" else "重新探活源", fontSize = 12.sp, color = Kv.Ink)
+            }
+
+            Spacer(Modifier.height(KvSpace.s))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(KvRadius.s))
+                        .background(Kv.Surface2)
+                        .clickable {
+                            val loader = coil.Coil.imageLoader(ctx)
+                            loader.memoryCache?.clear()
+                            loader.diskCache?.clear()
+                            cacheMsg = "已清除"
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text("清除图片缓存", fontSize = 12.sp, color = Kv.Ink)
+                }
+                cacheMsg?.let {
+                    Spacer(Modifier.width(KvSpace.s))
+                    Text(it, style = Kv.Tiny)
+                }
             }
 
             Spacer(Modifier.height(26.dp))

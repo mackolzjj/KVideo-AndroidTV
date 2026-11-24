@@ -61,9 +61,12 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
             if (vm.detailLoading) {
                 Text("正在取详情…", style = Kv.Body)
             } else if (d == null) {
-                Text("没取到详情", style = Kv.Title.copy(fontSize = 22.sp))
-                Spacer(Modifier.height(8.dp))
-                Text("这个源可能挂了，回搜索结果换一条线路。", style = Kv.Body)
+                KvState(
+                    title = "没取到详情",
+                    detail = "这个源可能挂了，回搜索结果换一条线路。",
+                    actionLabel = "返回",
+                    onAction = { vm.back() }
+                )
             } else {
                 Text(d.name, style = Kv.Title.copy(fontSize = 28.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(9.dp))

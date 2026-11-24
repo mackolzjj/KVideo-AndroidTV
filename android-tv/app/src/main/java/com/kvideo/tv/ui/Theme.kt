@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Netflix 语言：纯黑底、唯一强调色 #e50914 只给进度；文字靠字号与字重分层 */
@@ -26,6 +27,24 @@ object Kv {
     val Meta = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = Ink2)
     val Tiny = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = Ink3)
     val Mono = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+}
+
+/**
+ * 间距 / 圆角令牌：新代码一律用这些，别再手写 4/6/8/10/12/14/18/22。
+ * 4 的倍数为主，xl 用 22 是因为段落之间留白要更大一档（历史值，保留）。
+ */
+object KvSpace {
+    val xs = 4.dp
+    val s = 8.dp
+    val m = 12.dp
+    val l = 16.dp
+    val xl = 22.dp
+}
+
+object KvRadius {
+    val s = 3.dp
+    val m = 6.dp
+    val l = 12.dp
 }
 
 private val scheme = darkColorScheme(

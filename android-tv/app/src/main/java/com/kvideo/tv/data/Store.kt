@@ -35,6 +35,11 @@ class Store(ctx: Context) {
         get() = sp.getStringSet("blocked_categories", setOf("伦理"))?.toSet() ?: setOf("伦理")
         set(v) = sp.edit().putStringSet("blocked_categories", v).apply()
 
+    /** 收藏的直播频道（按 url 记，频道名会变） */
+    var favChannels: Set<String>
+        get() = sp.getStringSet("fav_channels", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("fav_channels", v).apply()
+
     /** EPG（XMLTV）地址，选填：填了直播列表会显示「正在播 / 下一档」 */
     var epgUrl: String
         get() = sp.getString("epg_url", "") ?: ""

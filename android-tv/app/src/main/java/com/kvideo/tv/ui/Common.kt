@@ -30,7 +30,7 @@ import com.kvideo.tv.data.VideoItem
 @Composable
 fun KvIconBtn(icon: ImageVector, label: String, size: Int = 38, onClick: () -> Unit) {
     Box(
-        Modifier.size(size.dp).clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick),
+        Modifier.size(size.dp).clip(RoundedCornerShape(KvRadius.s)).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = label, tint = Kv.Ink, modifier = Modifier.size((size * 0.6f).dp))
@@ -148,7 +148,6 @@ fun WideCard(
     title: String,
     subtitle: String,
     poster: String,
-    badge: String? = null,
     cornerTag: String? = null,
     remainText: String? = null,
     progress: Float = 0f,
@@ -164,15 +163,6 @@ fun WideCard(
                     placeholder = ColorPainter(Color(0xFF1B1D21)),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
-                )
-            }
-            if (badge != null) {
-                Text(
-                    badge,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xCCFFFFFF),
-                    modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 7.dp)
                 )
             }
             // 左上角：集数胶囊；右上角：剩余时长
@@ -236,7 +226,7 @@ fun VideoCard(item: VideoItem, onClick: () -> Unit) {
 fun KvChip(text: String, selected: Boolean = false, onClick: () -> Unit = {}) {
     Box(
         Modifier
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RoundedCornerShape(KvRadius.s))
             .background(if (selected) Kv.Ink else Kv.Surface)
             .clickable(onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 7.dp)
@@ -251,9 +241,50 @@ fun KvChip(text: String, selected: Boolean = false, onClick: () -> Unit = {}) {
 }
 
 @Composable
-fun KvEmpty(text: String, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = Kv.Body.copy(color = Kv.Ink3), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+fun KvEmpty(text: String, modifier: Modifier = Modifier) = KvState(title = text, modifier = modifier)
+
+/**
+ * 统一的空态 / 错误态：标题 + 可选说明 + 可选操作。
+ * 之前「没取到详情」「没有结果」「没填直播源」各写一套排版，这里收成一种。
+ */
+@Composable
+fun KvState(
+    title: String,
+    detail: String? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier.fillMaxWidth().padding(KvSpace.xl), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                title,
+                style = Kv.Title.copy(fontSize = 16.sp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            if (!detail.isNullOrBlank()) {
+                Spacer(Modifier.height(KvSpace.s))
+                Text(
+                    detail,
+                    style = Kv.Body.copy(color = Kv.Ink3),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+            if (actionLabel != null && onAction != null) {
+                Spacer(Modifier.height(KvSpace.m))
+                Text(
+                    actionLabel,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Kv.Ink,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(KvRadius.s))
+                        .background(Kv.Surface)
+                        .clickable(onClick = onAction)
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
+        }
     }
 }
 

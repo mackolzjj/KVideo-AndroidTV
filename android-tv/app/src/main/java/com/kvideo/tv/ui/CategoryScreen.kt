@@ -102,9 +102,12 @@ fun CategoryScreen(vm: AppVm, route: Route.Category) {
                 }
             } else if (vm.categoryItems.isEmpty()) {
                 item(span = { GridItemSpan(3) }) {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                        Text("这个分类暂时没有返回内容，换一个看看。", style = Kv.Body)
-                    }
+                    KvState(
+                        title = "这个分类暂时没内容",
+                        detail = "换个分类，或者点右上角「换一批」再试。",
+                        actionLabel = "换一批",
+                        onAction = { vm.refreshCategory() }
+                    )
                 }
             } else {
                 item(span = { GridItemSpan(3) }) {

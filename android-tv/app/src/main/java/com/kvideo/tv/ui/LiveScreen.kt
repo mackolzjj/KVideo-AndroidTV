@@ -40,10 +40,18 @@ fun LiveScreen(vm: AppVm) {
     }
 
     var group by remember { mutableStateOf("全部") }
-    val groups = remember(vm.channels) {
-        listOf("全部") + vm.channels.map { it.group }.distinct()
+    val groups = remember(vm.channels, vm.favChannels) {
+        buildList {
+            add("全部")
+            if (vm.favChannels.isNotEmpty()) add("收藏")
+            addAll(vm.channels.map { it.group }.distinct())
+        }
     }
-    val shown = if (group == "全部") vm.channels else vm.channels.filter { it.group == group }
+    val shown = when (group) {
+        "全部" -> vm.channels
+        "收藏" -> vm.channels.filter { it.url in vm.favChannels }
+        else -> vm.channels.filter { it.group == group }
+    }
 
     Column(Modifier.fillMaxSize().background(Kv.Bg)) {
         KvTopBar(title = "直播")
@@ -137,6 +145,17 @@ fun LiveScreen(vm: AppVm) {
                         }
                     }
                     Text(c.group, style = Kv.Tiny)
+                    Spacer(Modifier.width(8.dp))
+                    val fav = c.url in vm.favChannels
+                    Text(
+                        if (fav) "★" else "☆",
+                        fontSize = 16.sp,
+                        color = if (fav) Kv.Red else Kv.Ink3,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { vm.toggleFavChannel(c.url) }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
                 }
             }
         }
