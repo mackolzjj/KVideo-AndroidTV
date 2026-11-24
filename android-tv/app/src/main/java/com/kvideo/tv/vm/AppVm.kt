@@ -313,6 +313,15 @@ class AppVm(app: Application) : AndroidViewModel(app) {
         loadMoreCategory()
     }
 
+    /** 换一批：随机跳一个页号重新取，原地替换（豆瓣没有「随机」参数） */
+    fun refreshCategory() {
+        categoryJob?.cancel()
+        categoryLoading = false
+        categoryItems = emptyList()
+        categoryPage = (0..5).random()
+        loadMoreCategory()
+    }
+
     fun loadMoreCategory() {
         if (categoryLoading) return
         categoryLoading = true
@@ -480,9 +489,22 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     val langBadges: List<String>
         get() = relevantList().map { it.lang }.filter { it.isNotBlank() }.distinct().take(8)
 
+    /**
+     * 源筛选：**只列真的出了片子的源**，并在名字后面带命中条数（「非凡 12」）。
+     * 以前是从源列表派生，122 个源全铺出来、一个都没命中也能点。
+     */
     val sourceBadges: List<Pair<String, String>>
-        get() = relevantList().map { it.sourceId to it.sourceName.ifBlank { it.sourceId } }
-            .distinctBy { it.first }.take(20)
+        get() {
+            val rows = relevantList()
+            return rows.groupBy { it.sourceId }
+                .map { (id, list) ->
+                    val name = list.first().sourceName.ifBlank { id }
+                    Triple(id, if (list.size > 1) "$name ${list.size}" else name, list.size)
+                }
+                .sortedByDescending { it.third }
+                .take(20)
+                .map { it.first to it.second }
+        }
 
     /** 当前点开的那一组（详情页据此给出「换源」） */
     var currentGroup by mutableStateOf<ResultGroup?>(null)

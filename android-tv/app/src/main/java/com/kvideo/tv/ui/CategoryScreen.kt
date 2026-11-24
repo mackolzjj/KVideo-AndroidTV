@@ -65,6 +65,15 @@ fun CategoryScreen(vm: AppVm, route: Route.Category) {
                     style = Kv.Tiny
                 )
             }
+            Text(
+                if (vm.categoryLoading) "取片中…" else "换一批 ↻",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Kv.Ink2,
+                modifier = Modifier
+                    .clickable { if (!vm.categoryLoading) vm.refreshCategory() }
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            )
         }
 
         LazyVerticalGrid(

@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import com.kvideo.tv.data.Channel
 import com.kvideo.tv.vm.AppVm
 
+private fun clockHm(ms: Long): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(ms))
+
 @Composable
 fun LiveScreen(vm: AppVm) {
     // 直播源完全由用户自己填（高级设置里），App 不再内置任何频道清单。
@@ -122,6 +125,15 @@ fun LiveScreen(vm: AppVm) {
                                 style = Kv.Tiny.copy(fontSize = 10.sp),
                                 maxLines = 1
                             )
+                            val next = vm.epg[c.tvgId.ifBlank { c.name }]
+                                ?.firstOrNull { it.startMs > nowMs }
+                            if (next != null) {
+                                Text(
+                                    "${clockHm(next.startMs)} ${next.title}",
+                                    style = Kv.Tiny.copy(fontSize = 9.5.sp),
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                     Text(c.group, style = Kv.Tiny)
