@@ -610,7 +610,8 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             )
         }
 
-        if (errorText != null) {
+        val err = errorText
+        if (err != null) {
             Column(
                 Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -624,7 +625,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     Text("直播线路多半是中继限流或临时 404，等 5 秒重试，或换个频道", fontSize = 11.sp, color = Kv.Ink3)
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(errorText!!, fontSize = 11.5.sp, color = Kv.Ink2)
+                Text(err, fontSize = 11.5.sp, color = Kv.Ink2)
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(

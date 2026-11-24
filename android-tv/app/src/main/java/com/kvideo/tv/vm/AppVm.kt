@@ -655,12 +655,13 @@ class AppVm(app: Application) : AndroidViewModel(app) {
                 if (cur == null || cur.items.none { it.id == d.id && it.sourceId == d.sourceId }) {
                     val same = allResults.filter { it.name.trim() == d.name.trim() }
                     if (same.size > 1) {
-                        currentGroup = ResultGroup(
+                        val g = ResultGroup(
                             title = d.name,
                             poster = d.poster,
                             items = same
                         )
-                        pingGroup(currentGroup!!)
+                        currentGroup = g
+                        pingGroup(g)
                     } else {
                         currentGroup = null
                     }

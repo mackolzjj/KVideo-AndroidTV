@@ -260,7 +260,7 @@ fun SetupScreen(vm: AppVm) {
         Spacer(Modifier.height(8.dp))
         Text("填写服务器地址和访问密码，App 会直接读服务端的接口，不再套网页。", style = Kv.Body)
         Spacer(Modifier.height(24.dp))
-        Field("服务器地址", server, "http://192.168.1.250:81", { server = it })
+        Field("服务器地址", server, "http://192.168.1.2:81", { server = it })
         Field("访问密码", pw, "每个账户一个密码，服务器按密码识别身份", { pw = it }, password = true)
         Box(
             Modifier

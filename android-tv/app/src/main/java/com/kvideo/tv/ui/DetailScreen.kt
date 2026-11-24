@@ -125,7 +125,7 @@ fun DetailScreen(vm: AppVm, route: Route.Detail) {
                         Icon(
                             if (fav) Icons.Filled.Bookmark else Icons.Filled.Add,
                             if (fav) "已收藏（点一下取消）" else "收藏",
-                            tint = if (vm.isFav(d.id, d.sourceId)) Kv.Red else Kv.Ink,
+                            tint = if (fav) Kv.Red else Kv.Ink,
                             modifier = Modifier.size(20.dp)
                         )
                     }
