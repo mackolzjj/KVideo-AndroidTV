@@ -62,6 +62,8 @@ data class Channel(
     val group: String,
     /** M3U 里的 tvg-id，用来对 EPG 节目单 */
     val tvgId: String = "",
+    /** M3U 里的 tvg-logo：抽屉里显示台标，空着就退回文字台号 */
+    val logo: String = "",
     /** 上游 m3u-parser 会从 #EXTINF / #EXTVLCOPT 里读这两个头，逐频道带上 */
     val userAgent: String = "",
     val referrer: String = "",
