@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.abs
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -116,6 +118,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
     var seekPreview by remember { mutableStateOf<Long?>(null) }
     var doubleHint by remember { mutableStateOf<String?>(null) }
     var lockChipVisible by remember { mutableStateOf(false) }
+    // 播放页内换台：频道抽屉（仅直播）
+    var chOpen by remember { mutableStateOf(false) }
+    // 长按频道选线路 / 直播回看面板
+    var pickRoutes by remember { mutableStateOf<com.kvideo.tv.data.Channel?>(null) }
+    var replayOpen by remember { mutableStateOf(false) }
     // 视频真实分辨率：用来算左右黑边，把叠加控件贴到画面边缘（而不是屏幕边缘）
     var videoW by remember { mutableStateOf(0) }
     var videoH by remember { mutableStateOf(0) }
@@ -398,12 +405,17 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         }
     }
 
-    // 3 秒无操作自动收起控制层
-    LaunchedEffect(showControls, locked, playing) {
-        if (showControls && !locked && playing) {
+    // 3 秒无操作自动收起控制层（频道抽屉打开时不收）
+    LaunchedEffect(showControls, locked, playing, chOpen) {
+        if (showControls && !locked && playing && !chOpen) {
             delay(3200)
             showControls = false
         }
+    }
+
+    // 抽屉里要显示「正在播」。从直播列表进来时 EPG 已加载；从历史/收藏直接进播放页时补拉一次。
+    LaunchedEffect(vm.epgUrl, vm.channels.size) {
+        if (vm.epgUrl.isNotBlank() && vm.epg.isEmpty() && vm.channels.isNotEmpty()) vm.loadEpg()
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -464,9 +476,10 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 .pointerInput(locked) {
                     if (locked) return@pointerInput
                     var startX = 0f
-                    var mode = 0 // 0 未定 · 1 横滑进度 · 2 亮度 · 3 音量
+                    var mode = 0 // 0 未定 · 1 横滑进度 · 2 亮度 · 3 音量 · 4 直播横滑切台
                     var baseSeek = 0L
                     var lastSeekAt = 0L
+                    var swipeAcc = 0f
                     detectDragGestures(
                         onDragStart = { p ->
                             startX = p.x
@@ -476,7 +489,10 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                         onDrag = { change, drag ->
                             change.consume()
                             if (mode == 0) {
-                                mode = if (abs(drag.x) > abs(drag.y)) 1 else if (startX < size.width / 2f) 2 else 3
+                                // 直播没有「快进」的概念，横滑改成切上一台/下一台
+                                mode = if (abs(drag.x) > abs(drag.y)) {
+                                    if (route.isLive) 4 else 1
+                                } else if (startX < size.width / 2f) 2 else 3
                             }
                             when (mode) {
                                 1 -> {
@@ -494,6 +510,11 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                         lastSeekAt = now
                                         exo.seekTo(target)
                                     }
+                                }
+                                4 -> {
+                                    // 直播横滑：左滑下一台、右滑上一台，松手才真的切
+                                    swipeAcc += drag.x
+                                    hudText = if (swipeAcc < 0) "下一台 ›" else "‹ 上一台"
                                 }
                                 2 -> {
                                     // 上滑变亮、下滑变暗（之前符号写反了）
@@ -516,6 +537,13 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                             showControls = true
                         },
                         onDragEnd = {
+                            if (mode == 4) {
+                                // 超过屏宽 12% 才算一次切台，避免误触
+                                if (abs(swipeAcc) > size.width * 0.12f) {
+                                    vm.switchChannelBy(if (swipeAcc < 0) 1 else -1)
+                                }
+                                swipeAcc = 0f
+                            }
                             if (mode == 1) {
                                 seekPreview?.let { exo.seekTo(it) }
                                 position = seekPreview ?: position
@@ -553,6 +581,12 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 startPad = topPadStart,
                 endPad = topPadEnd,
                 topPad = topPadTop,
+                channelsAvailable = route.isLive && vm.channels.isNotEmpty(),
+                channelsOpen = chOpen,
+                onChannels = {
+                    chOpen = !chOpen
+                    showControls = true
+                },
                 onBack = { vm.back() }
             )
 
@@ -567,6 +601,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     speed = speed,
                     speedOpen = speedOpen,
                     hasEpisodes = route.episodes.isNotEmpty(),
+                    onReplay = if (route.isLive) ({ replayOpen = true }) else null,
                     onPreview = { v ->
                         if (v == null) {
                             seekPreview?.let {
@@ -605,6 +640,156 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     }
                 )
+            }
+        }
+
+        // 频道抽屉：只在直播页、且控制层可见（未锁屏）时出现；盖在画面之上、控制层之下
+        if (route.isLive && chOpen && !locked) {
+            ChannelDrawerPanel(
+                channels = vm.channels,
+                currentUrl = vm.lastChannelUrl,
+                favUrls = vm.favChannels,
+                isLandscape = isLandscape,
+                nowPlaying = { c ->
+                    // 台名→EPG：取「正在播」那一档的标题；没节目单就返回空，抽屉里退回分组
+                    val key = c.tvgId.ifBlank { c.name }
+                    val nowMs = System.currentTimeMillis()
+                    vm.epg[key]
+                        ?.firstOrNull { it.startMs <= nowMs && nowMs < it.stopMs }
+                        ?.title
+                        ?: ""
+                },
+                onPick = { c ->
+                    chOpen = false
+                    speedOpen = false
+                    // 用 switchChannel：只换内容、不进返回栈，否则返回键会一台台往回跳
+                    if (c.url != vm.lastChannelUrl) vm.switchChannel(c)
+                },
+                onToggleFav = { url -> vm.toggleFavChannel(url) },
+                onLongPress = { c -> pickRoutes = c },
+                onClose = { chOpen = false }
+            )
+        }
+
+        // 长按频道 → 选线路（同一台多线路时才有意义）
+        pickRoutes?.let { ch ->
+            val all = (listOf(ch.url) + ch.routes.filter { it != ch.url })
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xAA000000))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { pickRoutes = null },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    Modifier
+                        .width(280.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Kv.Surface)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { }
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        ch.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Kv.Ink,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text("选线路 · 共 ${all.size} 条", style = Kv.Tiny)
+                    Spacer(Modifier.height(8.dp))
+                    if (all.size <= 1) {
+                        Text("这个台只有一条线路", fontSize = 11.5.sp, color = Kv.Ink3)
+                    }
+                    all.forEachIndexed { i, u ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(KvRadius.s))
+                                .background(if (i == 0) Kv.Surface2 else Color.Transparent)
+                                .clickable {
+                                    pickRoutes = null
+                                    vm.switchChannelUrl(ch, u)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("线路 ${i + 1}", fontSize = 12.sp, color = Kv.Ink, fontWeight = FontWeight.Medium)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                u.removePrefix("http://").removePrefix("https://").take(28),
+                                fontSize = 9.5.sp,
+                                color = Kv.Ink3,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 直播回看：选日期 + 起始小时，走 catchup 的 playseek
+        if (replayOpen) {
+            val ch = vm.channels.firstOrNull { it.url == vm.lastChannelUrl }
+            val dayLabels = listOf("今天", "昨天", "前天", "3 天前", "4 天前", "5 天前", "6 天前")
+            var dayIdx by remember { mutableStateOf(0) }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xAA000000))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { replayOpen = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    Modifier
+                        .width(300.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Kv.Surface)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { }
+                        .padding(14.dp)
+                ) {
+                    Text("回看 · ${ch?.name ?: route.title}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Kv.Ink)
+                    Spacer(Modifier.height(4.dp))
+                    Text("选日期和起始时间，每次 1 小时", style = Kv.Tiny)
+                    Spacer(Modifier.height(9.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        itemsIndexed(dayLabels) { i, d ->
+                            KvChip(d, selected = i == dayIdx) { dayIdx = i }
+                        }
+                    }
+                    Spacer(Modifier.height(9.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items((0..23).toList()) { h ->
+                            KvChip(String.format("%02d:00", h)) {
+                                val c = ch
+                                if (c != null) {
+                                    val cal = java.util.Calendar.getInstance()
+                                    cal.add(java.util.Calendar.DAY_OF_YEAR, -dayIdx)
+                                    cal.set(java.util.Calendar.HOUR_OF_DAY, h)
+                                    cal.set(java.util.Calendar.MINUTE, 0)
+                                    cal.set(java.util.Calendar.SECOND, 0)
+                                    cal.set(java.util.Calendar.MILLISECOND, 0)
+                                    replayOpen = false
+                                    vm.playCatchup(c, cal.timeInMillis / 1000, 60)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

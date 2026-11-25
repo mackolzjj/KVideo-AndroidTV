@@ -946,6 +946,69 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * 播放页内换台：直接替换 route，**不往返回栈里堆**。
+     *
+     * go() 对 Route.Player 一律 push，所以以前在播放页连换 3 个台之后按返回，
+     * 会一台一台往回跳（CCTV3 → CCTV2 → CCTV1），而不是回到直播列表。
+     * 换台属于同一个播放页里的内容变更，返回栈应该保持「直播列表」那一层。
+     */
+    fun switchChannel(c: Channel) {
+        store.lastChannelUrl = c.url
+        store.lastChannelName = c.name
+        route = Route.Player(
+            url = api.streamProxy(c.url, c.userAgent, c.referrer),
+            title = c.name,
+            subtitle = c.group.ifBlank { "直播" },
+            mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
+            isLive = true,
+            fallbacks = listOf(c.url) + c.routes.filter { it != c.url }
+        )
+    }
+
+    /** 换到同一个台的指定线路（长按抽屉选线路用） */
+    fun switchChannelUrl(c: Channel, url: String) {
+        store.lastChannelUrl = c.url
+        store.lastChannelName = c.name
+        route = Route.Player(
+            url = api.streamProxy(url, c.userAgent, c.referrer),
+            title = c.name,
+            subtitle = c.group.ifBlank { "直播" },
+            mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
+            isLive = true,
+            fallbacks = c.routes.filter { it != url } + listOf(c.url).filter { it != url }
+        )
+    }
+
+    /** 顺/逆着频道列表切相邻台：delta = +1 下一台，-1 上一台 */
+    fun switchChannelBy(delta: Int) {
+        val list = channels
+        if (list.isEmpty()) return
+        val i = list.indexOfFirst { it.url == lastChannelUrl }
+        val next = when {
+            i < 0 -> list.firstOrNull()
+            else -> list.getOrNull((i + delta).coerceIn(0, list.size - 1))
+        } ?: return
+        if (next.url == lastChannelUrl) return
+        switchChannel(next)
+    }
+
+    /** 直播回看：同一个台的指定时段（catchup-source 用 playseek），title 带时间方便看清在回看 */
+    fun playCatchup(c: Channel, startSec: Long, durMin: Int) {
+        val f = java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.getDefault())
+        val s = f.format(java.util.Date(startSec * 1000))
+        val e = f.format(java.util.Date((startSec + durMin * 60L) * 1000))
+        val url = c.url + (if (c.url.contains("?")) "&" else "?") + "playseek=$s-$e"
+        route = Route.Player(
+            url = api.streamProxy(url, c.userAgent, c.referrer),
+            title = c.name,
+            subtitle = "回看 ${s.substring(8, 10)}:${s.substring(10, 12)}",
+            mime = androidx.media3.common.MimeTypes.APPLICATION_M3U8,
+            isLive = true,
+            fallbacks = listOf(url)
+        )
+    }
+
+    /**
      * 直播自动跳台：当前频道所有线路都失败时，顺着频道列表找下一个再试。
      * tries 每次 +1，超过 3 次就停手，交给用户自己挑（不然会一路跳到底）。
      */

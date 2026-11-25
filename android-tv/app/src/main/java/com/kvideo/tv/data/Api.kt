@@ -489,10 +489,11 @@ class Api {
         var ua = ""
         var ref = ""
         var tvg = ""
+        var logo = ""
         val base = runCatching { java.net.URI(playlistUrl) }.getOrNull()
 
         fun reset() {
-            name = ""; group = ""; ua = ""; ref = ""; tvg = ""
+            name = ""; group = ""; ua = ""; ref = ""; tvg = ""; logo = ""
         }
 
         text.lineSequence().forEach { raw ->
@@ -511,6 +512,8 @@ class Api {
                     ref = Regex("http-referrer=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
                         .find(line)?.groupValues?.get(1) ?: ""
                     tvg = Regex("tvg-id=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1) ?: ""
+                    logo = Regex("tvg-logo=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
                         .find(line)?.groupValues?.get(1) ?: ""
                 }
                 line.startsWith("#EXTVLCOPT", true) -> {
@@ -534,6 +537,7 @@ class Api {
                                 url = url,
                                 group = group.ifBlank { "其他" },
                                 tvgId = tvg,
+                                logo = logo,
                                 userAgent = ua,
                                 referrer = ref
                             )
