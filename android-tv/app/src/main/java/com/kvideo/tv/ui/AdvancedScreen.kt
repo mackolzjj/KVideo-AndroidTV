@@ -195,6 +195,53 @@ fun AdvancedScreen(vm: AppVm) {
             }
 
             Spacer(Modifier.height(26.dp))
+            // ---- 源健康：连续失败的源会被临时停用 ----
+            Spacer(Modifier.height(18.dp))
+            Text("源健康", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
+            Spacer(Modifier.height(6.dp))
+            val blocked = vm.blockedSources
+            Text(
+                if (blocked.isEmpty())
+                    "没有被停用的源。详情或播放连续失败会自动临时停用（30 分钟 → 24 小时 → 7 天），到期自动恢复。"
+                else
+                    "以下 ${blocked.size} 个源连续失败，搜索时会跳过它们：",
+                style = Kv.Tiny
+            )
+            blocked.forEach { (src, until) ->
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(src.name, fontSize = 12.sp, color = Kv.Ink, maxLines = 1)
+                        Text(remainText(until), style = Kv.Tiny)
+                    }
+                    Text(
+                        "恢复",
+                        fontSize = 12.sp,
+                        color = Kv.Red,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(KvRadius.s))
+                            .background(Kv.Surface)
+                            .clickable { vm.restoreSource(src.id) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            if (blocked.size > 1) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "全部恢复（${blocked.size}）",
+                    fontSize = 12.sp,
+                    color = Kv.Ink,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(KvRadius.s))
+                        .background(Kv.Surface)
+                        .clickable { vm.restoreAllSources() }
+                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+            }
+
             Text("上次崩溃", style = Kv.Tiny.copy(letterSpacing = 1.5.sp))
             Spacer(Modifier.height(6.dp))
             if (crash.isBlank()) {
@@ -289,5 +336,17 @@ fun AdvancedScreen(vm: AppVm) {
 
             Spacer(Modifier.height(40.dp))
         }
+    }
+}
+
+/** 停用剩余时间 */
+private fun remainText(until: Long): String {
+    val left = (until - System.currentTimeMillis()).coerceAtLeast(0L)
+    val mins = left / 60_000L
+    return when {
+        mins < 1 -> "即将恢复"
+        mins < 60 -> "剩余 ${mins} 分钟"
+        mins < 1440 -> "剩余 ${mins / 60} 小时"
+        else -> "剩余 ${mins / 1440} 天"
     }
 }

@@ -227,11 +227,78 @@ class AppVm(app: Application) : AndroidViewModel(app) {
     var aliveSources by mutableStateOf(store.aliveIds)
     var probing by mutableStateOf(false)
 
-    /** 真正参与搜索的源：可见 + 启用 + 探活通过（还没探过就先用全部可见的） */
+    /** 真正参与搜索的源：可见 + 启用 + 探活通过（还没探过就先用全部可见的）+ 不在停用期 */
     val searchableSources: List<Source>
         get() {
             val base = visibleSources.filter { it.enabled }.sortedBy { it.priority }
-            return if (aliveSources.isEmpty()) base else base.filter { it.id in aliveSources }
+            val alive = if (aliveSources.isEmpty()) base else base.filter { it.id in aliveSources }
+            val now = System.currentTimeMillis()
+            return alive.filter { (health[it.id]?.getOrNull(1) ?: 0L) <= now }
+        }
+
+    // ---------- 源健康度：失败阶梯停用（30 分钟 → 24 小时 → 7 天），到期自动恢复 ----------
+
+    /** id -> [失败次数, 停用到期时间戳] */
+    private val health: MutableMap<String, LongArray> = run {
+        val m = mutableMapOf<String, LongArray>()
+        runCatching {
+            val o = org.json.JSONObject(store.sourceHealthRaw)
+            o.keys().forEach { k ->
+                val parts = o.optString(k, "").split(",")
+                if (parts.size == 2) {
+                    m[k] = longArrayOf(parts[0].toLongOrNull() ?: 0L, parts[1].toLongOrNull() ?: 0L)
+                }
+            }
+        }
+        m
+    }
+
+    var healthVersion by mutableStateOf(0)
+
+    private fun saveHealth() {
+        val o = org.json.JSONObject()
+        health.forEach { (k, v) -> o.put(k, "${v[0]},${v[1]}") }
+        store.sourceHealthRaw = o.toString()
+    }
+
+    /** 详情/播放失败时记一笔：连续失败越多停越久 */
+    fun noteSourceFail(id: String?) {
+        if (id.isNullOrBlank()) return
+        val now = System.currentTimeMillis()
+        val prev = health[id]
+        val fails = (prev?.getOrNull(0) ?: 0L) + 1L
+        val dur = when {
+            fails <= 1L -> 30 * 60_000L
+            fails == 2L -> 24 * 3600_000L
+            else -> 7 * 24 * 3600_000L
+        }
+        health[id] = longArrayOf(fails, now + dur)
+        saveHealth(); healthVersion++
+        aliveSources = aliveSources - id
+    }
+
+    /** 播成功一次就把这个源洗干净 */
+    fun noteSourceOk(id: String?) {
+        if (id.isNullOrBlank()) return
+        if (health.remove(id) != null) { saveHealth(); healthVersion++ }
+    }
+
+    fun restoreSource(id: String) {
+        if (health.remove(id) != null) { saveHealth(); healthVersion++ }
+    }
+
+    fun restoreAllSources() {
+        health.clear(); saveHealth(); healthVersion++
+    }
+
+    /** 当前处于停用期的源（设置页展示用） */
+    val blockedSources: List<Pair<Source, Long>>
+        get() {
+            val _v = healthVersion
+            val now = System.currentTimeMillis()
+            return health.entries
+                .filter { (it.value.getOrNull(1) ?: 0L) > now }
+                .mapNotNull { e -> visibleSources.firstOrNull { it.id == e.key }?.let { it to e.value[1] } }
         }
 
     fun probeSources() {
@@ -779,6 +846,7 @@ class AppVm(app: Application) : AndroidViewModel(app) {
             val d = api.detail(id, src)
             detail = d
             detailLoading = false
+            if (d == null) noteSourceFail(sourceId) else noteSourceOk(sourceId)
             // 换源列表：搜索结果点进来的用点击时那一组；从收藏/首页进来的没有，
             // 就用本次搜索结果里同名的那批补上，不然详情页永远没有「换源」
             if (d != null) {

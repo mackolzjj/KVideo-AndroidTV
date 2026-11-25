@@ -214,12 +214,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
             play(proxyUrlOf(route.url))
             return
         }
-        // 直播：这个频道的线路全挂了就自动换下一个台（最多 3 次）
-        if (route.isLive && route.liveTries < 3) {
-            val before = route.url
-            vm.playNextLive(route.url, route.liveTries + 1)
-            if (vm.route !== route && (vm.route as? Route.Player)?.url != before) return
-        }
+        // 以前这里会自动跳到下一个台（最多 3 次），已经按需求去掉：
+        // 线路全挂就停在当前台报错，由用户自己决定换台还是等一会儿重试。
+        vm.noteSourceFail(route.sourceId)
         errorText = reason
     }
 
@@ -243,6 +240,7 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                 duration = exo.duration.coerceAtLeast(0L)
                 if (state == Player.STATE_READY) {
                     ready = true
+                    vm.noteSourceOk(route.sourceId)
                     // 记住的倍速要在这里应用：只改 state 不会作用到已经 prepare 的 exo
                     exo.setPlaybackSpeed(speed)
                 }

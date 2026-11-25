@@ -63,6 +63,11 @@ class Store(ctx: Context) {
         get() = sp.getString("last_channel_name", "") ?: ""
         set(v) = sp.edit().putString("last_channel_name", v).apply()
 
+    /** 源健康度：id → "失败次数,停用到期ms"，整体存成 JSON 字符串 */
+    var sourceHealthRaw: String
+        get() = sp.getString("source_health", "{}") ?: "{}"
+        set(v) = sp.edit().putString("source_health", v).apply()
+
     /** 上次用的播放倍速（1.0 / 1.25 / 1.5 / 2.0 …），下次进播放页沿用 */
     var playSpeed: Float
         get() = sp.getFloat("play_speed", 1f)
