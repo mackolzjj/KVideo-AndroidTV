@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -57,6 +59,13 @@ import com.kvideo.tv.vm.AppVm
 import com.kvideo.tv.vm.Route
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+
+
+/**
+ * 竖向手势灵敏度（音量 / 亮度共用同一系数，保证手感一致）。
+ * 含义：手指划过整屏高度的 1/1.6 ≈ 62%，就走满量程。
+ */
+private const val GESTURE_SENS = 1.6f
 
 private fun fmt(ms: Long): String {
     val total = (ms / 1000).coerceAtLeast(0)
@@ -112,6 +121,9 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
         mutableStateOf(w?.attributes?.screenBrightness?.takeIf { it > 0f } ?: 0.5f)
     }
     var volumePct by remember { mutableStateOf(0) }
+    // 音量句柄一次性取出：原来每帧 getSystemService + 两次系统调用，横屏 60fps 下会掉帧
+    val am = remember { ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
+    val maxVol = remember { am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) }
     var hudText by remember { mutableStateOf<String?>(null) }
     // 亮度/音量改用贴在对应半屏的竖条 HUD："" 无 · "bright" 亮度 · "vol" 音量
     var hudKind by remember { mutableStateOf("") }
@@ -478,27 +490,44 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                     var baseSeek = 0L
                     var lastSeekAt = 0L
                     var swipeAcc = 0f
+                    // 关键：音量/亮度按「起手值 + 累计位移」算绝对目标，不再每帧读回系统音量。
+                    // 原来每帧 getStreamVolume → (cur - 小位移).toInt() 被截断成 0 → 慢划完全不跟手。
+                    var accX = 0f
+                    var accY = 0f
+                    var startVol = 0
+                    var startBright = 1f
                     detectDragGestures(
                         onDragStart = { p ->
                             startX = p.x
                             mode = 0
                             baseSeek = exo.currentPosition
+                            accX = 0f
+                            accY = 0f
+                            swipeAcc = 0f
+                            startVol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                            startBright = brightness
                         },
                         onDrag = { change, drag ->
                             change.consume()
+                            accX += drag.x
+                            accY += drag.y
                             if (mode == 0) {
-                                // 直播没有「快进」的概念，横滑改成切上一台/下一台
-                                mode = if (abs(drag.x) > abs(drag.y)) {
-                                    if (route.isLive) 4 else 1
-                                } else if (startX < size.width / 2f) 2 else 3
+                                // 用累计位移判方向，且要超过 14px 才锁定，避免第一帧的手抖把音量手势判成快进
+                                val ax = abs(accX)
+                                val ay = abs(accY)
+                                if (max(ax, ay) > 14f) {
+                                    // 直播没有「快进」的概念，横滑改成切上一台/下一台
+                                    mode = if (ax > ay) {
+                                        if (route.isLive) 4 else 1
+                                    } else if (startX < size.width / 2f) 2 else 3
+                                }
                             }
                             when (mode) {
                                 1 -> {
                                     // 跟手：位移实时累加到预览位置，整屏宽 ≈ ±3 分钟
-                                    val max = if (duration > 0) duration else Long.MAX_VALUE
-                                    val target = ((seekPreview ?: baseSeek) +
-                                        ((drag.x / size.width) * 180_000f).toLong())
-                                        .coerceIn(0L, max)
+                                    val maxPos = if (duration > 0) duration else Long.MAX_VALUE
+                                    val target = (baseSeek + ((accX / size.width) * 180_000f).toLong())
+                                        .coerceIn(0L, maxPos)
                                     seekPreview = target
                                     position = target
                                     hudText = "${fmt(target)} / ${fmt(duration)}"
@@ -511,24 +540,23 @@ fun PlayerScreen(vm: AppVm, route: Route.Player) {
                                 }
                                 4 -> {
                                     // 直播横滑：左滑下一台、右滑上一台，松手才真的切
-                                    swipeAcc += drag.x
+                                    swipeAcc = accX
                                     hudText = if (swipeAcc < 0) "下一台 ›" else "‹ 上一台"
                                 }
                                 2 -> {
                                     // 上滑变亮、下滑变暗（之前符号写反了）
-                                    brightness = (brightness - drag.y / size.height * 1.6f).coerceIn(0.05f, 1f)
+                                    brightness = (startBright - accY / size.height * GESTURE_SENS).coerceIn(0.05f, 1f)
                                     applyBrightness(activity, brightness)
                                     hudKind = "bright"
                                 }
                                 else -> {
-                                    val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
-                                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                                    val cur = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                                    val next = (cur - drag.y / size.height * max * 1.6f).toInt().coerceIn(0, max)
-                                    if (next != cur) {
+                                    // 整屏高 ≈ 满量程 1.6 倍：横屏 1080px 一档约 27px，慢划也能一档一档走
+                                    val next = (startVol - accY / size.height * maxVol * GESTURE_SENS)
+                                        .roundToInt().coerceIn(0, maxVol)
+                                    if (next != startVol || accY != 0f) {
                                         am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, next, 0)
                                     }
-                                    volumePct = if (max > 0) next * 100 / max else 0
+                                    volumePct = if (maxVol > 0) next * 100 / maxVol else 0
                                     hudKind = "vol"
                                 }
                             }
